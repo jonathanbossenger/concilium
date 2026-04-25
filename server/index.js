@@ -9,6 +9,7 @@ const cfg = getConfig();
 const agentsRoute = require('./routes/agents');
 const tasksRoute = require('./routes/tasks');
 const streamRoute = require('./routes/stream');
+const systemRoute = require('./routes/system');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -20,6 +21,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/agents', agentsRoute);
 app.use('/api/tasks', tasksRoute);
 app.use('/api/stream', streamRoute);
+app.use('/api/system', systemRoute);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

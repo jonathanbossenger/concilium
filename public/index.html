@@ -29,12 +29,16 @@
       <header class="card-header">
         <select class="card-agent" required></select>
         <span class="card-status"></span>
+        <button type="button" class="card-expand" title="Expand">&#x2922;</button>
         <button type="button" class="card-close" title="Close session">&times;</button>
       </header>
       <form class="card-form">
         <label>
           <span>Working directory</span>
-          <input type="text" class="card-cwd" placeholder="(default: $HOME)">
+          <div class="cwd-row">
+            <input type="text" class="card-cwd" placeholder="(default: $HOME)">
+            <button type="button" class="card-cwd-browse" title="Browse…">Browse…</button>
+          </div>
         </label>
         <label>
           <span>Prompt / stdin</span>

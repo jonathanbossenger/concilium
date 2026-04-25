@@ -1,0 +1,74 @@
+const express = require('express');
+const { execFile } = require('child_process');
+
+const router = express.Router();
+
+function pickDirectoryMac() {
+  return new Promise((resolve, reject) => {
+    const script =
+      'try\n' +
+      '  set f to choose folder with prompt "Select working directory"\n' +
+      '  POSIX path of f\n' +
+      'on error number -128\n' +
+      '  return ""\n' +
+      'end try';
+    execFile('osascript', ['-e', script], (err, stdout) => {
+      if (err) return reject(err);
+      const path = stdout.toString().trim();
+      resolve(path || null);
+    });
+  });
+}
+
+function pickDirectoryLinux() {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'zenity',
+      ['--file-selection', '--directory', '--title=Select working directory'],
+      (err, stdout) => {
+        if (err) {
+          // zenity exits 1 on cancel — treat as "no selection".
+          if (err.code === 1) return resolve(null);
+          return reject(err);
+        }
+        const path = stdout.toString().trim();
+        resolve(path || null);
+      },
+    );
+  });
+}
+
+function pickDirectoryWindows() {
+  return new Promise((resolve, reject) => {
+    const script =
+      'Add-Type -AssemblyName System.Windows.Forms | Out-Null;' +
+      '$d = New-Object System.Windows.Forms.FolderBrowserDialog;' +
+      '$d.Description = "Select working directory";' +
+      'if ($d.ShowDialog() -eq "OK") { Write-Output $d.SelectedPath }';
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      (err, stdout) => {
+        if (err) return reject(err);
+        const path = stdout.toString().trim();
+        resolve(path || null);
+      },
+    );
+  });
+}
+
+router.post('/pick-directory', async (req, res) => {
+  try {
+    let path = null;
+    if (process.platform === 'darwin') path = await pickDirectoryMac();
+    else if (process.platform === 'linux') path = await pickDirectoryLinux();
+    else if (process.platform === 'win32') path = await pickDirectoryWindows();
+    else return res.status(501).json({ error: `picker not supported on ${process.platform}` });
+
+    res.json({ path });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+module.exports = router;

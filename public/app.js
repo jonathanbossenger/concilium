@@ -47,11 +47,13 @@ class Card {
     this.el = tpl.content.firstElementChild.cloneNode(true);
     this.agentSelect = $('.card-agent', this.el);
     this.cwd = $('.card-cwd', this.el);
+    this.cwdBrowse = $('.card-cwd-browse', this.el);
     this.prompt = $('.card-prompt', this.el);
     this.runBtn = $('.card-run', this.el);
     this.killBtn = $('.card-kill', this.el);
     this.clearBtn = $('.card-clear', this.el);
     this.closeBtn = $('.card-close', this.el);
+    this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
     this.output = $('.card-output', this.el);
     this.inputForm = $('.card-input-form', this.el);
@@ -65,9 +67,11 @@ class Card {
     this.refreshAgentSelect();
 
     this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); this.run(); });
+    this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.killBtn.addEventListener('click', () => this.kill());
     this.clearBtn.addEventListener('click', () => { this.output.replaceChildren(); });
     this.closeBtn.addEventListener('click', () => this.close());
+    this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.inputForm.addEventListener('submit', (e) => { e.preventDefault(); this.sendInput(); });
     this.inputLine.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key === 'c' && this.currentTaskId) {
@@ -159,6 +163,40 @@ class Card {
     };
   }
 
+  toggleExpand() {
+    const main = $('#cards');
+    const willExpand = !this.el.classList.contains('expanded');
+    const apply = () => {
+      for (const c of cards) c.el.classList.remove('expanded');
+      if (willExpand) {
+        this.el.classList.add('expanded');
+        main.classList.add('has-expanded');
+        this.expandBtn.innerHTML = '&#x2921;';
+        this.expandBtn.title = 'Collapse';
+      } else {
+        main.classList.remove('has-expanded');
+        this.expandBtn.innerHTML = '&#x2922;';
+        this.expandBtn.title = 'Expand';
+      }
+    };
+    if (!document.startViewTransition) { apply(); return; }
+    this.el.style.viewTransitionName = 'card-active';
+    const t = document.startViewTransition(apply);
+    t.finished.finally(() => { this.el.style.viewTransitionName = ''; });
+  }
+
+  async browseCwd() {
+    this.cwdBrowse.disabled = true;
+    try {
+      const r = await fetch('/api/system/pick-directory', { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
+      if (data.path) this.cwd.value = data.path;
+    } finally {
+      this.cwdBrowse.disabled = false;
+    }
+  }
+
   async kill() {
     if (!this.currentTaskId) return;
     await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
@@ -181,6 +219,9 @@ class Card {
 
   async close() {
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
+    if (this.el.classList.contains('expanded')) {
+      $('#cards').classList.remove('has-expanded');
+    }
     const ids = [...this.taskIds];
     this.taskIds.clear();
     cards.delete(this);

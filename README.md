@@ -10,6 +10,10 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 - **Card-based session UI** — each card is an independent agent session with
   its own selector, working directory, prompt, output, and (for interactive
   agents) input line. Add cards with **+ New session**, close them when done.
+  Each card has a **Browse…** button that opens the OS folder picker for the
+  working directory, plus an expand/collapse toggle (**⤢**) that zooms a
+  single card to fill the main area, with a smooth View Transitions
+  animation between states.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
 - **Live streaming** of stdout/stderr to the browser via Server-Sent Events
@@ -143,6 +147,7 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
 | `POST`   | `/api/tasks/:id/input` | send stdin to interactive task `{data}` |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
+| `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 
 ## Project layout
 
@@ -162,7 +167,8 @@ agent-dashboard/
     └── routes/
         ├── agents.js
         ├── tasks.js
-        └── stream.js
+        ├── stream.js
+        └── system.js           # native OS folder picker
 ```
 
 Four runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`.

@@ -190,7 +190,7 @@ main {
 .card-status.running { color: var(--status-running); }
 .card-status.ok { color: var(--status-ok); }
 .card-status.err { color: var(--status-err); }
-.card-close {
+.card-close, .card-expand {
   background: transparent;
   color: var(--text-dim);
   font-size: 1.3em;
@@ -199,7 +199,32 @@ main {
   border: 1px solid transparent;
   border-radius: 4px;
 }
+.card-expand:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 .card-close:hover { background: var(--bg-danger-soft); color: var(--stderr); border-color: var(--border-danger); }
+
+main.has-expanded {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+main.has-expanded > .card:not(.expanded) { display: none; }
+.card.expanded { min-height: 0; }
+.card.expanded .card-output {
+  max-height: none;
+  flex: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(card-active),
+  ::view-transition-new(card-active) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
+  }
+}
 
 .card-form {
   display: flex;
@@ -214,6 +239,12 @@ main {
   font-size: 0.78em;
   color: var(--text-dim);
 }
+.cwd-row {
+  display: flex;
+  gap: 0.4em;
+}
+.cwd-row .card-cwd { flex: 1; }
+.cwd-row .card-cwd-browse { flex: 0 0 auto; }
 
 .card-output {
   background: var(--bg-output);
