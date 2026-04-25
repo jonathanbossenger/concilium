@@ -7,11 +7,18 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 
 ## Features
 
+- **Card-based session UI** — each card is an independent agent session with
+  its own selector, working directory, prompt, output, and (for interactive
+  agents) input line. Add cards with **+ New session**, close them when done.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
 - **Live streaming** of stdout/stderr to the browser via Server-Sent Events
 - **Persistent history** in SQLite, plus per-task plain-text logs under
-  `~/.agent-dashboard/logs/`
+  `~/.agent-dashboard/logs/`. Closing a card kills any running task and
+  deletes that session's tasks + logs.
+- **Light / dark / auto theme** — defaults to your OS preference
+  (`prefers-color-scheme`); the **Auto** button in the header cycles to
+  Light or Dark and persists in `localStorage`.
 - **Apache-style lifecycle** — `agentctl start | stop | restart | status`,
   with optional install as a launchd or systemd `--user` service
 - **PATH-based agent discovery** — scans `$PATH` for known CLIs and lets you
@@ -70,11 +77,17 @@ agents installed via Homebrew, nvm, etc.
 
 ### Web UI
 
-Open <http://127.0.0.1:7878> after starting. The gear icon (top-right) opens
-a settings dialog where you can:
+Open <http://127.0.0.1:7878> after starting. The page boots with one empty
+session card; click **+ New session** to add more, or the **×** on a card
+to close it (kills any running task in that card and deletes its history).
 
-- Add, edit, or delete agents
-- Scan `$PATH` for known CLI agents and add the ones found
+Header controls:
+
+- **+ New session** — adds another card.
+- **Auto / Light / Dark** — cycles theme; defaults to your OS preference.
+- **Gear (⚙)** — opens a settings dialog where you can:
+  - Add, edit, or delete agents
+  - Scan `$PATH` for known CLI agents and add the ones found
 
 ## Configuration
 
@@ -126,6 +139,7 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/tasks` | task history (newest first) |
 | `POST`   | `/api/tasks` | start task `{agent_id, prompt?, cwd?}` → `{task_id}` |
 | `GET`    | `/api/tasks/:id` | task + all events |
+| `DELETE` | `/api/tasks/:id` | remove task (kills first if live), drops events + log file |
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
 | `POST`   | `/api/tasks/:id/input` | send stdin to interactive task `{data}` |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |

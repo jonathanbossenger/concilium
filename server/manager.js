@@ -29,8 +29,21 @@ function launch(agent, prompt, cwd) {
     live.delete(task_id);
   });
 
-  live.set(task_id, { broadcast, runner });
+  live.set(task_id, { broadcast, runner, logStream });
   return task_id;
+}
+
+function remove(task_id) {
+  const e = live.get(task_id);
+  if (e) {
+    // Detach so the end handler doesn't write to a row we're about to delete.
+    e.runner.removeAllListeners();
+    try { e.runner.kill(); } catch (_) {}
+    try { e.logStream.end(); } catch (_) {}
+    live.delete(task_id);
+  }
+  try { fs.unlinkSync(path.join(LOG_DIR, `${task_id}.log`)); } catch (_) {}
+  store.deleteTask(task_id);
 }
 
 function kill(task_id) {
@@ -54,4 +67,4 @@ function getLive(task_id) {
   return live.get(task_id);
 }
 
-module.exports = { launch, kill, sendInput, getLive };
+module.exports = { launch, kill, sendInput, getLive, remove };

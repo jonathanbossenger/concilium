@@ -37,7 +37,14 @@ const stmts = {
   listTasks: db.prepare(`SELECT * FROM tasks ORDER BY id DESC LIMIT ?`),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id = ?`),
   listEvents: db.prepare(`SELECT * FROM events WHERE task_id = ? ORDER BY id ASC`),
+  deleteEvents: db.prepare(`DELETE FROM events WHERE task_id = ?`),
+  deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
 };
+
+const deleteTaskTxn = db.transaction((id) => {
+  stmts.deleteEvents.run(id);
+  stmts.deleteTaskRow.run(id);
+});
 
 module.exports = {
   createTask: (agent_id, prompt, cwd) => stmts.insertTask.run(agent_id, prompt, cwd, Date.now()).lastInsertRowid,
@@ -46,4 +53,5 @@ module.exports = {
   listTasks: (limit = 100) => stmts.listTasks.all(limit),
   getTask: (id) => stmts.getTask.get(id),
   listEvents: (task_id) => stmts.listEvents.all(task_id),
+  deleteTask: (id) => deleteTaskTxn(id),
 };

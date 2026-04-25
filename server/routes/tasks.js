@@ -40,6 +40,13 @@ router.post('/:id/kill', (req, res) => {
   res.json({ killed: ok });
 });
 
+router.delete('/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!store.getTask(id)) return res.status(404).json({ error: 'task not found' });
+  manager.remove(id);
+  res.json({ ok: true });
+});
+
 router.post('/:id/input', (req, res) => {
   const id = parseInt(req.params.id);
   const { data } = req.body || {};

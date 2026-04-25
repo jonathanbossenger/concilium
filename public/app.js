@@ -1,12 +1,11 @@
-const $ = (sel) => document.querySelector(sel);
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => root.querySelectorAll(sel);
 
 const ANSI_RE = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 const stripAnsi = (s) => s.replace(ANSI_RE, '');
 
 let agentsById = new Map();
-let currentTaskId = null;
-let currentAgentId = null;
-let currentSource = null;
+const cards = new Set();
 
 async function loadHealth() {
   try {
@@ -22,163 +21,182 @@ async function loadAgents() {
   const r = await fetch('/api/agents');
   const agents = await r.json();
   agentsById = new Map(agents.map((a) => [a.id, a]));
+  for (const card of cards) card.refreshAgentSelect();
+}
 
-  const list = $('#agent-list');
-  const select = $('#agent-select');
-  list.replaceChildren();
+function fillAgentSelect(select, currentValue) {
   select.replaceChildren();
-
-  for (const a of agents) {
-    const li = document.createElement('li');
-    li.textContent = a.name;
-    if (a.interactive) li.classList.add('interactive');
-    const sub = document.createElement('small');
-    sub.textContent = `${a.command}${a.interactive ? ' · interactive' : ''}`;
-    li.appendChild(sub);
-    list.appendChild(li);
-
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '— select agent —';
+  placeholder.disabled = true;
+  placeholder.selected = !currentValue;
+  select.appendChild(placeholder);
+  for (const a of agentsById.values()) {
     const opt = document.createElement('option');
     opt.value = a.id;
     opt.textContent = a.name + (a.interactive ? ' · interactive' : '');
+    if (currentValue === a.id) opt.selected = true;
     select.appendChild(opt);
   }
 }
 
-function fmtTime(ms) {
-  if (!ms) return '';
-  return new Date(ms).toLocaleTimeString();
-}
+class Card {
+  constructor() {
+    const tpl = $('#card-template');
+    this.el = tpl.content.firstElementChild.cloneNode(true);
+    this.agentSelect = $('.card-agent', this.el);
+    this.cwd = $('.card-cwd', this.el);
+    this.prompt = $('.card-prompt', this.el);
+    this.runBtn = $('.card-run', this.el);
+    this.killBtn = $('.card-kill', this.el);
+    this.clearBtn = $('.card-clear', this.el);
+    this.closeBtn = $('.card-close', this.el);
+    this.statusEl = $('.card-status', this.el);
+    this.output = $('.card-output', this.el);
+    this.inputForm = $('.card-input-form', this.el);
+    this.inputLine = $('.card-input-line', this.el);
+    this.taskForm = $('.card-form', this.el);
 
-async function loadHistory() {
-  const r = await fetch('/api/tasks');
-  const tasks = await r.json();
-  const list = $('#history-list');
-  list.replaceChildren();
+    this.taskIds = new Set();
+    this.currentTaskId = null;
+    this.currentSource = null;
 
-  for (const t of tasks) {
-    const li = document.createElement('li');
-    if (t.id === currentTaskId) li.classList.add('active');
+    this.refreshAgentSelect();
 
-    const left = document.createElement('span');
-    left.innerHTML = `#${t.id} <span class="task-meta">${t.agent_id}</span>`;
-    const right = document.createElement('span');
-    right.className = `status-${t.status}`;
-    right.textContent = t.status;
+    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); this.run(); });
+    this.killBtn.addEventListener('click', () => this.kill());
+    this.clearBtn.addEventListener('click', () => { this.output.replaceChildren(); });
+    this.closeBtn.addEventListener('click', () => this.close());
+    this.inputForm.addEventListener('submit', (e) => { e.preventDefault(); this.sendInput(); });
+    this.inputLine.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'c' && this.currentTaskId) {
+        e.preventDefault();
+        this.sendRaw('\x03');
+      }
+    });
 
-    li.appendChild(left);
-    li.appendChild(right);
-    li.title = `${fmtTime(t.started_at)} → ${fmtTime(t.ended_at) || '…'}`;
-    li.addEventListener('click', () => attachTask(t.id, t.agent_id));
-    list.appendChild(li);
+    cards.add(this);
   }
-}
 
-function appendOutput(ev) {
-  const out = $('#output');
-  const span = document.createElement('span');
-  if (ev.stream === 'stderr') span.className = 'stderr';
-  else if (ev.stream === 'stdin') span.className = 'stdin';
-  span.textContent = stripAnsi(ev.data);
-  out.appendChild(span);
-  out.scrollTop = out.scrollHeight;
-}
-
-function setRunning(running, agentId) {
-  $('#kill-btn').hidden = !running;
-  $('#task-status').textContent = running ? 'running…' : '';
-  const agent = agentsById.get(agentId);
-  const showInput = running && agent && agent.interactive;
-  $('#input-form').hidden = !showInput;
-  if (showInput) $('#input-line').focus();
-}
-
-function attachTask(taskId, agentId) {
-  if (currentSource) {
-    currentSource.close();
-    currentSource = null;
+  refreshAgentSelect() {
+    fillAgentSelect(this.agentSelect, this.agentSelect.value);
   }
-  currentTaskId = taskId;
-  currentAgentId = agentId;
-  $('#output-title').textContent = `Output — Task #${taskId}`;
-  $('#output').replaceChildren();
-  setRunning(true, agentId);
-  loadHistory();
 
-  const src = new EventSource(`/api/stream/${taskId}`);
-  currentSource = src;
-
-  src.addEventListener('output', (e) => {
-    try { appendOutput(JSON.parse(e.data)); } catch (_) {}
-  });
-  src.addEventListener('end', (e) => {
-    let info = {};
-    try { info = JSON.parse(e.data); } catch (_) {}
-    const tag = document.createElement('span');
-    tag.className = 'stderr';
-    tag.textContent = `\n[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\n`;
-    $('#output').appendChild(tag);
-    setRunning(false, agentId);
-    src.close();
-    if (currentSource === src) currentSource = null;
-    loadHistory();
-  });
-  src.onerror = () => {
-    setRunning(false, agentId);
-    src.close();
-    if (currentSource === src) currentSource = null;
-  };
-}
-
-$('#task-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const agentId = $('#agent-select').value;
-  const body = { agent_id: agentId, prompt: $('#prompt').value };
-  const cwd = $('#cwd').value.trim();
-  if (cwd) body.cwd = cwd;
-
-  const r = await fetch('/api/tasks', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.error || 'failed to start task');
-    return;
+  setStatus(text, cls) {
+    this.statusEl.textContent = text;
+    this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
   }
-  attachTask(data.task_id, agentId);
-});
 
-$('#kill-btn').addEventListener('click', async () => {
-  if (!currentTaskId) return;
-  await fetch(`/api/tasks/${currentTaskId}/kill`, { method: 'POST' });
-});
+  setRunning(running) {
+    this.killBtn.hidden = !running;
+    this.runBtn.disabled = running;
+    const agent = agentsById.get(this.agentSelect.value);
+    const showInput = running && agent && agent.interactive;
+    this.inputForm.hidden = !showInput;
+    if (showInput) this.inputLine.focus();
+  }
 
-$('#refresh-btn').addEventListener('click', loadHistory);
+  appendOutput(ev) {
+    const span = document.createElement('span');
+    if (ev.stream === 'stderr') span.className = 'stderr';
+    else if (ev.stream === 'stdin') span.className = 'stdin';
+    span.textContent = stripAnsi(ev.data);
+    this.output.appendChild(span);
+    this.output.scrollTop = this.output.scrollHeight;
+  }
 
-$('#input-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!currentTaskId) return;
-  const line = $('#input-line').value;
-  $('#input-line').value = '';
-  await fetch(`/api/tasks/${currentTaskId}/input`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data: line + '\r' }),
-  });
-});
+  async run() {
+    const agentId = this.agentSelect.value;
+    if (!agentId) { this.setStatus('select an agent', 'err'); return; }
 
-// ⌃C support: when input box is focused, Ctrl-C sends \x03 instead of copying.
-$('#input-line').addEventListener('keydown', async (e) => {
-  if (e.ctrlKey && e.key === 'c' && currentTaskId) {
-    e.preventDefault();
-    await fetch(`/api/tasks/${currentTaskId}/input`, {
+    if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
+    this.output.replaceChildren();
+
+    const body = { agent_id: agentId, prompt: this.prompt.value };
+    const cwd = this.cwd.value.trim();
+    if (cwd) body.cwd = cwd;
+
+    const r = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ data: '\x03' }),
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
+
+    this.taskIds.add(data.task_id);
+    this.attach(data.task_id);
+  }
+
+  attach(taskId) {
+    this.currentTaskId = taskId;
+    this.setStatus(`task #${taskId} running…`, 'running');
+    this.setRunning(true);
+
+    const src = new EventSource(`/api/stream/${taskId}`);
+    this.currentSource = src;
+
+    src.addEventListener('output', (e) => {
+      try { this.appendOutput(JSON.parse(e.data)); } catch (_) {}
+    });
+    src.addEventListener('end', (e) => {
+      let info = {};
+      try { info = JSON.parse(e.data); } catch (_) {}
+      const tag = document.createElement('span');
+      tag.className = 'stderr';
+      tag.textContent = `\n[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\n`;
+      this.output.appendChild(tag);
+      this.setStatus(`task #${taskId} ${info.status || 'ended'}`, info.status === 'done' ? 'ok' : 'err');
+      this.setRunning(false);
+      src.close();
+      if (this.currentSource === src) this.currentSource = null;
+    });
+    src.onerror = () => {
+      this.setRunning(false);
+      src.close();
+      if (this.currentSource === src) this.currentSource = null;
+    };
+  }
+
+  async kill() {
+    if (!this.currentTaskId) return;
+    await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
+  }
+
+  async sendInput() {
+    const line = this.inputLine.value;
+    this.inputLine.value = '';
+    await this.sendRaw(line + '\r');
+  }
+
+  async sendRaw(data) {
+    if (!this.currentTaskId) return;
+    await fetch(`/api/tasks/${this.currentTaskId}/input`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ data }),
     });
   }
-});
+
+  async close() {
+    if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
+    const ids = [...this.taskIds];
+    this.taskIds.clear();
+    cards.delete(this);
+    this.el.remove();
+    // Fire-and-forget deletes; server will kill any still-running tasks first.
+    await Promise.all(ids.map((id) =>
+      fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
+    ));
+  }
+}
+
+function addCard() {
+  const card = new Card();
+  $('#cards').appendChild(card.el);
+  return card;
+}
 
 // --- settings dialog -------------------------------------------------------
 
@@ -325,7 +343,43 @@ $('#open-settings').addEventListener('click', async () => {
   dlg.showModal();
 });
 
-loadHealth();
-loadAgents();
-loadHistory();
-setInterval(loadHealth, 10000);
+$('#new-card-btn').addEventListener('click', () => addCard());
+
+// --- theme ----------------------------------------------------------------
+
+const THEME_ORDER = ['auto', 'light', 'dark'];
+const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+function currentTheme() {
+  return document.documentElement.dataset.theme || 'auto';
+}
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  } else {
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem('theme');
+  }
+  updateThemeButton();
+}
+function updateThemeButton() {
+  const t = currentTheme();
+  const btn = $('#theme-toggle');
+  btn.textContent = THEME_LABEL[t];
+  btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
+}
+$('#theme-toggle').addEventListener('click', () => {
+  const i = THEME_ORDER.indexOf(currentTheme());
+  applyTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
+});
+updateThemeButton();
+
+// --- bootstrap -------------------------------------------------------------
+
+(async () => {
+  await loadHealth();
+  await loadAgents();
+  addCard();
+  setInterval(loadHealth, 10000);
+})();
