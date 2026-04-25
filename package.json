@@ -1,0 +1,19 @@
+{
+  "name": "agent-dashboard",
+  "version": "0.1.0",
+  "description": "Local multi-agent orchestration dashboard",
+  "main": "server/index.js",
+  "bin": {
+    "agentctl": "./bin/agentctl"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "postinstall": "node scripts/fix-pty-perms.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "express": "^4.21.2",
+    "js-yaml": "^4.1.0",
+    "node-pty": "^1.1.0"
+  }
+}

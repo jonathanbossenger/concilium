@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>@LABEL@</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@NODE_BIN@</string>
+        <string>@PROJECT_ROOT@/server/index.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>@PROJECT_ROOT@</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>@LOG_FILE@</string>
+
+    <key>StandardErrorPath</key>
+    <string>@LOG_FILE@</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>@USER_PATH@</string>
+    </dict>
+</dict>
+</plist>

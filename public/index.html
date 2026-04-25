@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Agent Dashboard</h1>
+    <div class="header-right">
+      <span id="health"></span>
+      <button type="button" id="open-settings" title="Settings">&#x2699;</button>
+    </div>
+  </header>
+  <main>
+    <aside id="agents-pane">
+      <h2>Agents</h2>
+      <ul id="agent-list"></ul>
+    </aside>
+
+    <section id="workspace">
+      <form id="task-form">
+        <label>
+          Agent
+          <select id="agent-select" required></select>
+        </label>
+        <label>
+          Working directory
+          <input type="text" id="cwd" placeholder="(default: $HOME)">
+        </label>
+        <label>
+          Prompt / stdin
+          <textarea id="prompt" rows="6" placeholder="text sent to the agent's stdin"></textarea>
+        </label>
+        <div class="row">
+          <button type="submit">Run</button>
+          <button type="button" id="kill-btn" hidden>Kill</button>
+          <span id="task-status"></span>
+        </div>
+      </form>
+
+      <h2 id="output-title">Output</h2>
+      <pre id="output"></pre>
+
+      <form id="input-form" hidden>
+        <input type="text" id="input-line" placeholder="send to agent (Enter to send, ⌃C to interrupt)" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <aside id="history-pane">
+      <h2>History
+        <button type="button" id="refresh-btn" title="Refresh">&#x21bb;</button>
+      </h2>
+      <ul id="history-list"></ul>
+    </aside>
+  </main>
+  <dialog id="settings-dialog">
+    <form method="dialog" class="dialog-body">
+      <div class="dialog-head">
+        <h2>Settings</h2>
+        <button type="button" class="close-btn" id="close-settings" title="Close">&times;</button>
+      </div>
+
+      <section>
+        <h3>Configured agents</h3>
+        <table id="agents-table">
+          <thead><tr><th>ID</th><th>Name</th><th>Command</th><th>Mode</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h3 id="agent-form-title">Add agent</h3>
+        <form id="agent-form" class="agent-form">
+          <div class="grid">
+            <label>ID<input type="text" name="id" required pattern="[A-Za-z0-9_-]+"></label>
+            <label>Name<input type="text" name="name"></label>
+            <label>Command<input type="text" name="command" required placeholder="/usr/local/bin/foo or just foo"></label>
+            <label>Args (space-separated)<input type="text" name="args"></label>
+            <label class="check"><input type="checkbox" name="interactive"> Interactive (PTY)</label>
+          </div>
+          <div class="row">
+            <button type="submit" id="agent-submit">Add</button>
+            <button type="button" id="agent-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <h3>Discover from PATH <button type="button" id="discover-btn">Scan</button></h3>
+        <table id="discover-table">
+          <thead><tr><th>ID</th><th>Command</th><th>Path</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="footnote">
+        Config file: <code>~/.agent-dashboard/config.yaml</code> · Port changes require server restart.
+      </section>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

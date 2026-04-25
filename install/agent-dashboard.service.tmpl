@@ -1,0 +1,16 @@
+[Unit]
+Description=Agent Dashboard
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=@NODE_BIN@ @PROJECT_ROOT@/server/index.js
+Environment=PATH=@USER_PATH@
+Restart=on-failure
+RestartSec=2
+StandardOutput=append:@LOG_FILE@
+StandardError=append:@LOG_FILE@
+
+[Install]
+WantedBy=default.target

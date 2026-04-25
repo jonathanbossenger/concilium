@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# agentctl — Apache-style lifecycle for agent-dashboard.
+#
+#   agentctl start | stop | restart | status | logs
+#   agentctl install | uninstall   (registers a launchd or systemd --user service)
+
+set -euo pipefail
+
+# Resolve script location through symlinks (npm link creates one).
+SCRIPT="$0"
+while [[ -L "$SCRIPT" ]]; do
+  SCRIPT="$(readlink "$SCRIPT")"
+  [[ "$SCRIPT" != /* ]] && SCRIPT="$(cd "$(dirname "$0")" && pwd)/$SCRIPT"
+done
+BIN_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+PROJECT_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+NODE_BIN="$(command -v node || true)"
+
+STATE_DIR="$HOME/.agent-dashboard"
+PID_FILE="$STATE_DIR/run.pid"
+LOG_FILE="$STATE_DIR/server.log"
+CONFIG_FILE="$STATE_DIR/config.yaml"
+
+PLATFORM="$(uname -s)"
+SERVICE_LABEL="com.user.agent-dashboard"
+PLIST_PATH="$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist"
+SYSTEMD_DIR="$HOME/.config/systemd/user"
+SYSTEMD_UNIT="$SYSTEMD_DIR/agent-dashboard.service"
+
+mkdir -p "$STATE_DIR"
+
+# --- helpers --------------------------------------------------------------
+
+read_port() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    awk '/^port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo 7878
+  else
+    echo 7878
+  fi
+}
+PORT="$(read_port)"
+PORT="${PORT:-7878}"
+
+is_service_installed() {
+  case "$PLATFORM" in
+    Darwin) [[ -f "$PLIST_PATH" ]] ;;
+    Linux)  [[ -f "$SYSTEMD_UNIT" ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+is_standalone_running() {
+  [[ -f "$PID_FILE" ]] || return 1
+  local pid
+  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+is_responding() {
+  curl -sf -m 1 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1
+}
+
+# --- standalone mode ------------------------------------------------------
+
+start_standalone() {
+  if is_standalone_running; then
+    echo "already running (pid $(cat "$PID_FILE"))"
+    return 0
+  fi
+  if [[ -z "$NODE_BIN" ]]; then
+    echo "error: node not found in PATH" >&2
+    return 1
+  fi
+  cd "$PROJECT_ROOT"
+  nohup "$NODE_BIN" "$PROJECT_ROOT/server/index.js" >> "$LOG_FILE" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$PID_FILE"
+  disown 2>/dev/null || true
+  # wait briefly for it to bind the port
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if is_responding; then
+      echo "started (pid $pid, port $PORT, mode standalone)"
+      return 0
+    fi
+    sleep 0.2
+  done
+  if is_standalone_running; then
+    echo "started (pid $pid, port $PORT, mode standalone — not yet responding; tail $LOG_FILE)"
+  else
+    rm -f "$PID_FILE"
+    echo "error: failed to start; tail $LOG_FILE" >&2
+    return 1
+  fi
+}
+
+stop_standalone() {
+  if ! is_standalone_running; then
+    rm -f "$PID_FILE"
+    echo "not running"
+    return 0
+  fi
+  local pid
+  pid="$(cat "$PID_FILE")"
+  kill "$pid" 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.3
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE"
+  echo "stopped (was pid $pid)"
+}
+
+# --- service mode ---------------------------------------------------------
+
+start_service() {
+  case "$PLATFORM" in
+    Darwin) launchctl load -w "$PLIST_PATH" 2>/dev/null || launchctl start "$SERVICE_LABEL" ;;
+    Linux)  systemctl --user start agent-dashboard ;;
+  esac
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    is_responding && { echo "started (mode service, port $PORT)"; return 0; }
+    sleep 0.3
+  done
+  echo "service started but not responding yet; tail $LOG_FILE"
+}
+
+stop_service() {
+  case "$PLATFORM" in
+    Darwin) launchctl unload "$PLIST_PATH" 2>/dev/null || true ;;
+    Linux)  systemctl --user stop agent-dashboard 2>/dev/null || true ;;
+  esac
+  echo "stopped (service)"
+}
+
+# --- commands -------------------------------------------------------------
+
+cmd_start() {
+  if is_responding; then echo "already running (port $PORT)"; return 0; fi
+  if is_service_installed; then start_service; else start_standalone; fi
+}
+
+cmd_stop() {
+  if is_service_installed; then stop_service; else stop_standalone; fi
+}
+
+cmd_restart() {
+  cmd_stop || true
+  sleep 0.4
+  cmd_start
+}
+
+cmd_status() {
+  if is_responding; then
+    local body mode
+    body="$(curl -s "http://127.0.0.1:$PORT/api/health" 2>/dev/null || echo '{}')"
+    if is_service_installed; then
+      mode="service"
+    elif is_standalone_running; then
+      mode="standalone"
+    else
+      mode="external (not managed by agentctl)"
+    fi
+    echo "running"
+    echo "  port:   $PORT"
+    echo "  mode:   $mode"
+    echo "  health: $body"
+  elif is_standalone_running; then
+    echo "stale: pid file present (pid $(cat "$PID_FILE")) but not responding"
+  else
+    [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
+    echo "stopped"
+    if is_service_installed; then
+      echo "  service installed but not running"
+    fi
+  fi
+}
+
+cmd_logs() {
+  touch "$LOG_FILE"
+  exec tail -n 200 -f "$LOG_FILE"
+}
+
+cmd_install() {
+  if [[ -z "$NODE_BIN" ]]; then
+    echo "error: node not found in PATH" >&2
+    return 1
+  fi
+  if is_standalone_running; then
+    echo "stopping standalone instance first…"
+    stop_standalone
+  fi
+
+  local user_path="$PATH"
+
+  case "$PLATFORM" in
+    Darwin)
+      mkdir -p "$(dirname "$PLIST_PATH")"
+      sed -e "s|@LABEL@|$SERVICE_LABEL|g" \
+          -e "s|@NODE_BIN@|$NODE_BIN|g" \
+          -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
+          -e "s|@LOG_FILE@|$LOG_FILE|g" \
+          -e "s|@USER_PATH@|$user_path|g" \
+          "$PROJECT_ROOT/install/com.user.agent-dashboard.plist.tmpl" > "$PLIST_PATH"
+      launchctl unload "$PLIST_PATH" 2>/dev/null || true
+      launchctl load -w "$PLIST_PATH"
+      echo "installed launchd agent"
+      echo "  plist: $PLIST_PATH"
+      echo "  log:   $LOG_FILE"
+      echo "service starts on login. To start now: agentctl start"
+      ;;
+    Linux)
+      mkdir -p "$SYSTEMD_DIR"
+      sed -e "s|@NODE_BIN@|$NODE_BIN|g" \
+          -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
+          -e "s|@LOG_FILE@|$LOG_FILE|g" \
+          -e "s|@USER_PATH@|$user_path|g" \
+          "$PROJECT_ROOT/install/agent-dashboard.service.tmpl" > "$SYSTEMD_UNIT"
+      systemctl --user daemon-reload
+      systemctl --user enable --now agent-dashboard
+      echo "installed systemd --user unit"
+      echo "  unit: $SYSTEMD_UNIT"
+      echo "  log:  $LOG_FILE"
+      ;;
+    *)
+      echo "unsupported platform: $PLATFORM" >&2
+      return 1
+      ;;
+  esac
+}
+
+cmd_uninstall() {
+  case "$PLATFORM" in
+    Darwin)
+      if [[ -f "$PLIST_PATH" ]]; then
+        launchctl unload "$PLIST_PATH" 2>/dev/null || true
+        rm -f "$PLIST_PATH"
+        echo "uninstalled (removed $PLIST_PATH)"
+      else
+        echo "not installed"
+      fi
+      ;;
+    Linux)
+      if [[ -f "$SYSTEMD_UNIT" ]]; then
+        systemctl --user disable --now agent-dashboard 2>/dev/null || true
+        rm -f "$SYSTEMD_UNIT"
+        systemctl --user daemon-reload
+        echo "uninstalled (removed $SYSTEMD_UNIT)"
+      else
+        echo "not installed"
+      fi
+      ;;
+  esac
+}
+
+usage() {
+  cat <<EOF
+agentctl — agent-dashboard service control
+
+Usage:
+  agentctl start        start (service if installed, standalone otherwise)
+  agentctl stop         stop
+  agentctl restart      restart
+  agentctl status       show running status and port
+  agentctl logs         tail $LOG_FILE
+  agentctl install      install as a user service (launchd / systemd --user)
+  agentctl uninstall    remove the user service
+
+Project: $PROJECT_ROOT
+State:   $STATE_DIR
+EOF
+}
+
+case "${1:-}" in
+  start)     cmd_start ;;
+  stop)      cmd_stop ;;
+  restart)   cmd_restart ;;
+  status)    cmd_status ;;
+  logs)      cmd_logs ;;
+  install)   cmd_install ;;
+  uninstall) cmd_uninstall ;;
+  -h|--help|help|"") usage ;;
+  *) echo "unknown command: $1" >&2; usage; exit 2 ;;
+esac
