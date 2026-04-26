@@ -307,7 +307,7 @@ function saveLayout() {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(currentLayoutState()),
-  }).catch(() => {});
+  }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
 }
 
 async function restoreLayout() {

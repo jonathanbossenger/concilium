@@ -77,7 +77,8 @@ router.get('/layout', (req, res) => {
   if (!raw) return res.json([]);
   try {
     res.json(JSON.parse(raw));
-  } catch (_) {
+  } catch (err) {
+    console.error('[agent-dashboard] failed to parse stored layout:', err);
     res.json([]);
   }
 });
