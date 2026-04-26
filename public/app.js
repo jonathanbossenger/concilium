@@ -4,6 +4,9 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 
+const LAYOUT_KEY = 'agent-dashboard:layout';
+let layoutReady = false;
+
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
   return {
@@ -65,6 +68,7 @@ class Card {
 
     this.taskIds = new Set();
     this.currentTaskId = null;
+    this.lastTaskId = null;
     this.currentSource = null;
     this.term = null;
     this.fitAddon = null;
@@ -78,6 +82,8 @@ class Card {
     this.killBtn.addEventListener('click', () => this.kill());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
+    this.agentSelect.addEventListener('change', () => saveLayout());
+    this.cwd.addEventListener('input', () => saveLayout());
 
     cards.add(this);
   }
@@ -166,6 +172,8 @@ class Card {
     if (!r.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
 
     this.taskIds.add(data.task_id);
+    this.lastTaskId = data.task_id;
+    saveLayout();
     this.attach(data.task_id);
     // Push our current dimensions to the freshly spawned PTY.
     this.fitAndResize();
@@ -199,6 +207,10 @@ class Card {
       this.currentTaskId = null;
     });
     src.onerror = () => {
+      if (this.currentTaskId) {
+        this.setStatus(`task #${this.currentTaskId} lost connection`, 'err');
+        this.currentTaskId = null;
+      }
       this.setRunning(false);
       src.close();
       if (this.currentSource === src) this.currentSource = null;
@@ -264,6 +276,7 @@ class Card {
     this.taskIds.clear();
     cards.delete(this);
     this.el.remove();
+    saveLayout();
     // Fire-and-forget deletes; server will kill any still-running tasks first.
     await Promise.all(ids.map((id) =>
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
@@ -275,8 +288,49 @@ function addCard() {
   const card = new Card();
   $('#cards').appendChild(card.el);
   card.initTerminal();
+  saveLayout();
   return card;
 }
+
+// --- session persistence ---------------------------------------------------
+
+function saveLayout() {
+  if (!layoutReady) return;
+  const state = [...cards].map((c) => ({
+    agentId: c.agentSelect.value,
+    cwd: c.cwd.value,
+    lastTaskId: c.lastTaskId || null,
+  }));
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(state));
+}
+
+async function restoreLayout() {
+  let states;
+  try {
+    states = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
+  } catch (_) {}
+  if (!Array.isArray(states) || states.length === 0) {
+    addCard();
+  } else {
+    for (const s of states) {
+      const card = addCard();
+      if (s.agentId) card.agentSelect.value = s.agentId;
+      if (s.cwd) card.cwd.value = s.cwd;
+      if (s.lastTaskId) {
+        try {
+          const r = await fetch(`/api/tasks/${s.lastTaskId}`);
+          if (r.ok) {
+            card.term.reset();
+            card.attach(s.lastTaskId);
+          }
+        } catch (_) {}
+      }
+    }
+  }
+  layoutReady = true;
+}
+
+window.addEventListener('beforeunload', () => saveLayout());
 
 // --- settings dialog -------------------------------------------------------
 
@@ -466,6 +520,6 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
 (async () => {
   await loadHealth();
   await loadAgents();
-  addCard();
+  await restoreLayout();
   setInterval(loadHealth, 10000);
 })();
