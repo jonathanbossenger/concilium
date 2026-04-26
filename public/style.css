@@ -209,9 +209,10 @@ main.has-expanded {
 }
 main.has-expanded > .card:not(.expanded) { display: none; }
 .card.expanded { min-height: 0; }
-.card.expanded .card-output {
-  max-height: none;
+.card.expanded .card-term {
   flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -246,42 +247,15 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 .cwd-row .card-cwd { flex: 1; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; }
 
-.card-output {
-  background: var(--bg-output);
+.card-term {
+  background: #000;
   border: 1px solid var(--border-soft);
   border-radius: 4px;
-  padding: 0.6em 0.8em;
-  margin: 0;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 140px;
-  max-height: 320px;
-  overflow-y: auto;
-  color: var(--text);
+  height: 360px;
+  overflow: hidden;
+  position: relative;
 }
-.card-output .stderr { color: var(--stderr); }
-.card-output .stdin {
-  color: var(--stdin);
-  background: var(--stdin-bg);
-  border-left: 2px solid var(--stdin-border);
-  padding-left: 4px;
-  margin-left: -6px;
-  display: inline-block;
-}
-
-.card-input-form {
-  display: flex;
-  gap: 0.5em;
-  margin: 0;
-}
-.card-input-line {
-  flex: 1;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-}
+.card-term .terminal { padding: 4px; }
 
 /* --- common form controls ------------------------------------------- */
 select, input, textarea {

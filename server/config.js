@@ -11,10 +11,10 @@ const DEFAULT_CONFIG = {
   port: 7878,
   agents: [
     { id: 'echo', name: 'Echo (test)', command: 'cat', interactive: false },
-    { id: 'claude', name: 'Claude Code', command: 'claude', interactive: false },
+    { id: 'claude', name: 'Claude Code', command: 'claude', interactive: true },
     { id: 'codex', name: 'Codex CLI', command: 'codex', interactive: true },
     { id: 'aider', name: 'Aider', command: 'aider', interactive: true },
-    { id: 'gemini', name: 'Gemini CLI', command: 'gemini', interactive: false },
+    { id: 'gemini', name: 'Gemini CLI', command: 'gemini', interactive: true },
   ],
 };
 

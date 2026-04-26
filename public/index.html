@@ -10,7 +10,10 @@
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     })();
   </script>
+  <link rel="stylesheet" href="/vendor/xterm/css/xterm.css">
   <link rel="stylesheet" href="/style.css">
+  <script src="/vendor/xterm/lib/xterm.js"></script>
+  <script src="/vendor/xterm-addon-fit/lib/addon-fit.js"></script>
 </head>
 <body>
   <header>
@@ -33,28 +36,14 @@
         <button type="button" class="card-close" title="Close session">&times;</button>
       </header>
       <form class="card-form">
-        <label>
-          <span>Working directory</span>
-          <div class="cwd-row">
-            <input type="text" class="card-cwd" placeholder="(default: $HOME)">
-            <button type="button" class="card-cwd-browse" title="Browse…">Browse…</button>
-          </div>
-        </label>
-        <label>
-          <span>Prompt / stdin</span>
-          <textarea class="card-prompt" rows="4" placeholder="text sent to the agent's stdin"></textarea>
-        </label>
-        <div class="row">
-          <button type="submit" class="card-run">Run</button>
+        <div class="cwd-row">
+          <input type="text" class="card-cwd" placeholder="working directory (default: $HOME)">
+          <button type="button" class="card-cwd-browse" title="Browse…">Browse…</button>
+          <button type="submit" class="card-run">Start</button>
           <button type="button" class="card-kill" hidden>Kill</button>
-          <button type="button" class="card-clear" title="Clear output">Clear</button>
         </div>
       </form>
-      <pre class="card-output"></pre>
-      <form class="card-input-form" hidden>
-        <input type="text" class="card-input-line" placeholder="send to agent (Enter to send, ⌃C to interrupt)" autocomplete="off">
-        <button type="submit">Send</button>
-      </form>
+      <div class="card-term"></div>
     </article>
   </template>
 

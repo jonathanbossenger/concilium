@@ -1,17 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 
-// Known CLI agents we can suggest. `interactive: true` means we should default
-// to PTY mode (the tool runs a long-lived REPL); `interactive: false` means
-// piped stdin (one-shot prompt → output).
+// Known CLI agents we can suggest. `interactive: true` means we default to
+// PTY mode (the tool runs an agentic/REPL session); `interactive: false`
+// means piped stdin (true one-shot CLIs only).
 const KNOWN = [
-  { id: 'claude',  name: 'Claude Code',        command: 'claude',       interactive: false },
-  { id: 'codex',   name: 'Codex CLI',          command: 'codex',        interactive: true  },
-  { id: 'aider',   name: 'Aider',              command: 'aider',        interactive: true  },
-  { id: 'gemini',  name: 'Gemini CLI',         command: 'gemini',       interactive: false },
-  { id: 'copilot', name: 'GitHub Copilot CLI', command: 'copilot',      interactive: true  },
-  { id: 'ollama',  name: 'Ollama',             command: 'ollama',       interactive: false },
-  { id: 'cursor',  name: 'Cursor CLI',         command: 'cursor-agent', interactive: true  },
+  { id: 'claude',  name: 'Claude Code',        command: 'claude',       interactive: true },
+  { id: 'codex',   name: 'Codex CLI',          command: 'codex',        interactive: true },
+  { id: 'aider',   name: 'Aider',              command: 'aider',        interactive: true },
+  { id: 'gemini',  name: 'Gemini CLI',         command: 'gemini',       interactive: true },
+  { id: 'copilot', name: 'GitHub Copilot CLI', command: 'copilot',      interactive: true },
+  { id: 'ollama',  name: 'Ollama',             command: 'ollama',       interactive: true },
+  { id: 'cursor',  name: 'Cursor CLI',         command: 'cursor-agent', interactive: true },
 ];
 
 function which(cmd) {

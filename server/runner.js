@@ -23,6 +23,7 @@ function startPiped(agent, prompt, cwd) {
     try { child.kill(sig); } catch (_) { /* gone */ }
   };
   emitter.write = null; // not supported in piped mode
+  emitter.resize = null; // not a PTY
 
   child.stdout.on('data', (d) => {
     emitter.emit('event', { stream: 'stdout', data: d.toString(), ts: Date.now() });
@@ -65,6 +66,7 @@ function startPty(agent, prompt, cwd) {
     });
     emitter.kill = () => {};
     emitter.write = () => false;
+    emitter.resize = () => false;
     return emitter;
   }
 
@@ -74,6 +76,9 @@ function startPty(agent, prompt, cwd) {
   };
   emitter.write = (data) => {
     try { term.write(data); return true; } catch (_) { return false; }
+  };
+  emitter.resize = (cols, rows) => {
+    try { term.resize(cols, rows); return true; } catch (_) { return false; }
   };
 
   term.onData((data) => {

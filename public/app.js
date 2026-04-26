@@ -1,11 +1,15 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => root.querySelectorAll(sel);
 
-const ANSI_RE = /\x1b\[[0-9;?]*[a-zA-Z]/g;
-const stripAnsi = (s) => s.replace(ANSI_RE, '');
-
 let agentsById = new Map();
 const cards = new Set();
+
+const TERM_THEME = {
+  background: '#000000',
+  foreground: '#dddddd',
+  cursor: '#dddddd',
+  selectionBackground: '#264f78',
+};
 
 async function loadHealth() {
   try {
@@ -48,39 +52,75 @@ class Card {
     this.agentSelect = $('.card-agent', this.el);
     this.cwd = $('.card-cwd', this.el);
     this.cwdBrowse = $('.card-cwd-browse', this.el);
-    this.prompt = $('.card-prompt', this.el);
     this.runBtn = $('.card-run', this.el);
     this.killBtn = $('.card-kill', this.el);
-    this.clearBtn = $('.card-clear', this.el);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
-    this.output = $('.card-output', this.el);
-    this.inputForm = $('.card-input-form', this.el);
-    this.inputLine = $('.card-input-line', this.el);
+    this.termEl = $('.card-term', this.el);
     this.taskForm = $('.card-form', this.el);
 
     this.taskIds = new Set();
     this.currentTaskId = null;
     this.currentSource = null;
+    this.term = null;
+    this.fitAddon = null;
+    this.resizeObserver = null;
+    this.lastSentSize = null;
 
     this.refreshAgentSelect();
 
     this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); this.run(); });
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.killBtn.addEventListener('click', () => this.kill());
-    this.clearBtn.addEventListener('click', () => { this.output.replaceChildren(); });
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
-    this.inputForm.addEventListener('submit', (e) => { e.preventDefault(); this.sendInput(); });
-    this.inputLine.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'c' && this.currentTaskId) {
-        e.preventDefault();
-        this.sendRaw('\x03');
-      }
-    });
 
     cards.add(this);
+  }
+
+  // Must be called AFTER the card element is attached to the DOM, so the
+  // FitAddon can measure the container.
+  initTerminal() {
+    this.term = new Terminal({
+      theme: TERM_THEME,
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+      fontSize: 12,
+      cursorBlink: true,
+      convertEol: true,
+      scrollback: 5000,
+    });
+    this.fitAddon = new FitAddon.FitAddon();
+    this.term.loadAddon(this.fitAddon);
+    this.term.open(this.termEl);
+    this.term.writeln('\x1b[2m(select an agent and click Start)\x1b[0m');
+
+    // User keystrokes → server stdin (only when a task is live).
+    this.term.onData((data) => {
+      if (this.currentTaskId) this.sendRaw(data);
+    });
+
+    // Refit + push new size to the PTY when the container changes.
+    this.resizeObserver = new ResizeObserver(() => this.fitAndResize());
+    this.resizeObserver.observe(this.termEl);
+    requestAnimationFrame(() => this.fitAndResize());
+  }
+
+  fitAndResize() {
+    if (!this.fitAddon || !this.termEl.isConnected) return;
+    if (this.termEl.clientWidth === 0 || this.termEl.clientHeight === 0) return;
+    try { this.fitAddon.fit(); } catch (_) { return; }
+    const cols = this.term.cols;
+    const rows = this.term.rows;
+    const sig = `${cols}x${rows}`;
+    if (sig === this.lastSentSize) return;
+    this.lastSentSize = sig;
+    if (!this.currentTaskId) return;
+    fetch(`/api/tasks/${this.currentTaskId}/resize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cols, rows }),
+    }).catch(() => {});
   }
 
   refreshAgentSelect() {
@@ -95,19 +135,7 @@ class Card {
   setRunning(running) {
     this.killBtn.hidden = !running;
     this.runBtn.disabled = running;
-    const agent = agentsById.get(this.agentSelect.value);
-    const showInput = running && agent && agent.interactive;
-    this.inputForm.hidden = !showInput;
-    if (showInput) this.inputLine.focus();
-  }
-
-  appendOutput(ev) {
-    const span = document.createElement('span');
-    if (ev.stream === 'stderr') span.className = 'stderr';
-    else if (ev.stream === 'stdin') span.className = 'stdin';
-    span.textContent = stripAnsi(ev.data);
-    this.output.appendChild(span);
-    this.output.scrollTop = this.output.scrollHeight;
+    if (running) this.term.focus();
   }
 
   async run() {
@@ -115,9 +143,10 @@ class Card {
     if (!agentId) { this.setStatus('select an agent', 'err'); return; }
 
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
-    this.output.replaceChildren();
+    this.term.reset();
+    this.lastSentSize = null;
 
-    const body = { agent_id: agentId, prompt: this.prompt.value };
+    const body = { agent_id: agentId };
     const cwd = this.cwd.value.trim();
     if (cwd) body.cwd = cwd;
 
@@ -131,6 +160,8 @@ class Card {
 
     this.taskIds.add(data.task_id);
     this.attach(data.task_id);
+    // Push our current dimensions to the freshly spawned PTY.
+    this.fitAndResize();
   }
 
   attach(taskId) {
@@ -142,19 +173,23 @@ class Card {
     this.currentSource = src;
 
     src.addEventListener('output', (e) => {
-      try { this.appendOutput(JSON.parse(e.data)); } catch (_) {}
+      let ev;
+      try { ev = JSON.parse(e.data); } catch (_) { return; }
+      // Skip stdin events: the PTY echoes user input back as stdout, so
+      // rendering stdin would double-print every keystroke.
+      if (ev.stream === 'stdin') return;
+      this.term.write(ev.data);
     });
     src.addEventListener('end', (e) => {
       let info = {};
       try { info = JSON.parse(e.data); } catch (_) {}
-      const tag = document.createElement('span');
-      tag.className = 'stderr';
-      tag.textContent = `\n[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\n`;
-      this.output.appendChild(tag);
+      const tail = `\r\n\x1b[2m[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\x1b[0m\r\n`;
+      this.term.write(tail);
       this.setStatus(`task #${taskId} ${info.status || 'ended'}`, info.status === 'done' ? 'ok' : 'err');
       this.setRunning(false);
       src.close();
       if (this.currentSource === src) this.currentSource = null;
+      this.currentTaskId = null;
     });
     src.onerror = () => {
       this.setRunning(false);
@@ -202,23 +237,19 @@ class Card {
     await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
   }
 
-  async sendInput() {
-    const line = this.inputLine.value;
-    this.inputLine.value = '';
-    await this.sendRaw(line + '\r');
-  }
-
-  async sendRaw(data) {
+  sendRaw(data) {
     if (!this.currentTaskId) return;
-    await fetch(`/api/tasks/${this.currentTaskId}/input`, {
+    fetch(`/api/tasks/${this.currentTaskId}/input`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ data }),
-    });
+    }).catch(() => {});
   }
 
   async close() {
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
+    if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
+    if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
     if (this.el.classList.contains('expanded')) {
       $('#cards').classList.remove('has-expanded');
     }
@@ -236,6 +267,7 @@ class Card {
 function addCard() {
   const card = new Card();
   $('#cards').appendChild(card.el);
+  card.initTerminal();
   return card;
 }
 
