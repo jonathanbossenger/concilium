@@ -1,5 +1,7 @@
 const express = require('express');
 const { execFile } = require('child_process');
+const { getConfig, saveConfig } = require('../config');
+const { isValidBind } = require('../auth');
 
 const router = express.Router();
 
@@ -69,6 +71,28 @@ router.post('/pick-directory', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }
+});
+
+/** GET /api/system/network — return current bind address. */
+router.get('/network', (req, res) => {
+  const cfg = getConfig();
+  res.json({ bind: cfg.bind || '127.0.0.1' });
+});
+
+/** PATCH /api/system/network — update bind address (requires restart to take effect). */
+router.patch('/network', (req, res) => {
+  const { bind } = req.body || {};
+  if (!bind || typeof bind !== 'string') {
+    return res.status(400).json({ error: 'bind is required' });
+  }
+  const trimmed = bind.trim();
+  if (!isValidBind(trimmed)) {
+    return res.status(400).json({ error: 'bind must be a valid IP address or "localhost"' });
+  }
+  const cfg = getConfig();
+  cfg.bind = trimmed;
+  saveConfig(cfg);
+  res.json({ ok: true, bind: trimmed });
 });
 
 module.exports = router;

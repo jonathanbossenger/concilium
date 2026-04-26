@@ -25,6 +25,10 @@ db.exec(`
     data TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_events_task ON events(task_id, id);
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    expires INTEGER NOT NULL
+  );
 `);
 
 // Mark any tasks left "running" from a prior process as crashed.
@@ -39,6 +43,12 @@ const stmts = {
   listEvents: db.prepare(`SELECT * FROM events WHERE task_id = ? ORDER BY id ASC`),
   deleteEvents: db.prepare(`DELETE FROM events WHERE task_id = ?`),
   deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
+  // Sessions
+  insertSession: db.prepare(`INSERT OR REPLACE INTO sessions (token, expires) VALUES (?, ?)`),
+  getSession: db.prepare(`SELECT * FROM sessions WHERE token = ?`),
+  refreshSession: db.prepare(`UPDATE sessions SET expires = ? WHERE token = ?`),
+  deleteSession: db.prepare(`DELETE FROM sessions WHERE token = ?`),
+  deleteExpiredSessions: db.prepare(`DELETE FROM sessions WHERE expires <= ?`),
 };
 
 const deleteTaskTxn = db.transaction((id) => {
@@ -54,4 +64,10 @@ module.exports = {
   getTask: (id) => stmts.getTask.get(id),
   listEvents: (task_id) => stmts.listEvents.all(task_id),
   deleteTask: (id) => deleteTaskTxn(id),
+  // Sessions
+  createSession: (token, expires) => stmts.insertSession.run(token, expires),
+  getSession: (token) => stmts.getSession.get(token),
+  refreshSession: (token, expires) => stmts.refreshSession.run(expires, token),
+  deleteSession: (token) => stmts.deleteSession.run(token),
+  deleteExpiredSessions: () => stmts.deleteExpiredSessions.run(Date.now()),
 };

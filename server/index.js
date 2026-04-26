@@ -13,6 +13,9 @@ const streamRoute = require('./routes/stream');
 const systemRoute = require('./routes/system');
 
 const app = express();
+// Trust X-Forwarded-* headers from reverse proxies so req.secure reflects
+// TLS termination upstream and the Secure cookie flag works correctly.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 
 // Public auth routes and pages — no authentication required.
@@ -24,12 +27,13 @@ app.get('/setup', (req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'setup.html')),
 );
 
-// All routes below this point require authentication.
-app.use(requireAuth);
-
+// Health endpoint is intentionally exempt from auth for liveness/monitoring probes.
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, pid: process.pid, uptime: process.uptime() });
 });
+
+// All routes below this point require authentication.
+app.use(requireAuth);
 
 app.use('/api/agents', agentsRoute);
 app.use('/api/tasks', tasksRoute);

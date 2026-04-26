@@ -420,3 +420,8 @@ dialog section h3 {
 }
 .footnote { color: var(--text-muted); font-size: 0.8em; }
 .footnote code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+.footnote-inline { color: var(--text-muted); font-size: 0.8em; margin: 0 0 0.5em; }
+.footnote-inline code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+.network-status { font-size: 0.85em; margin-left: 0.75em; color: var(--text-muted); }
+.network-status.ok { color: var(--ok, #4caf50); }
+.network-status.err { color: var(--stderr, #f96); }

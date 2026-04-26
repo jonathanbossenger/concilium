@@ -421,7 +421,45 @@ $('#open-settings').addEventListener('click', async () => {
   setFormMode('add');
   $('#discover-table tbody').replaceChildren();
   await refreshAgentsTable();
+  // Load current bind address.
+  try {
+    const r = await fetch('/api/system/network');
+    if (r.ok) {
+      const data = await r.json();
+      document.getElementById('network-form').bind.value = data.bind || '127.0.0.1';
+    }
+  } catch (_) {}
+  $('#network-status').textContent = '';
   dlg.showModal();
+});
+
+// --- network (bind address) form ------------------------------------------
+
+document.getElementById('network-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const statusEl = document.getElementById('network-status');
+  const bind = e.target.bind.value.trim();
+  if (!bind) { statusEl.textContent = 'Bind address is required.'; statusEl.className = 'network-status err'; return; }
+  statusEl.textContent = 'Saving\u2026';
+  statusEl.className = 'network-status';
+  try {
+    const r = await fetch('/api/system/network', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bind }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      statusEl.textContent = data.error || 'Save failed.';
+      statusEl.className = 'network-status err';
+    } else {
+      statusEl.textContent = `Saved. Restart the server for \u201c${data.bind}\u201d to take effect.`;
+      statusEl.className = 'network-status ok';
+    }
+  } catch (_) {
+    statusEl.textContent = 'Network error.';
+    statusEl.className = 'network-status err';
+  }
 });
 
 $('#new-card-btn').addEventListener('click', () => addCard());

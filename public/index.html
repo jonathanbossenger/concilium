@@ -91,6 +91,22 @@
       <section class="footnote">
         Config file: <code>~/.agent-dashboard/config.yaml</code> · Port changes require server restart.
       </section>
+
+      <section>
+        <h3>Network</h3>
+        <form id="network-form" class="agent-form">
+          <div class="grid">
+            <label>Bind address
+              <input type="text" name="bind" placeholder="127.0.0.1">
+            </label>
+          </div>
+          <p class="footnote-inline">Use <code>127.0.0.1</code> for loopback-only (default) or <code>0.0.0.0</code> for all interfaces. Requires server restart to take effect.</p>
+          <div class="row">
+            <button type="submit" id="network-submit">Save</button>
+            <span id="network-status" class="network-status"></span>
+          </div>
+        </form>
+      </section>
     </div>
   </dialog>
 

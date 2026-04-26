@@ -24,6 +24,7 @@ function ensureState() {
   if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
   if (!fs.existsSync(CONFIG_PATH)) {
     fs.writeFileSync(CONFIG_PATH, yaml.dump(DEFAULT_CONFIG));
+    try { fs.chmodSync(CONFIG_PATH, 0o600); } catch (_) {}
   }
 }
 
@@ -43,6 +44,8 @@ function saveConfig(newCfg) {
   const tmp = CONFIG_PATH + '.tmp';
   fs.writeFileSync(tmp, yaml.dump(newCfg, { sortKeys: false }));
   fs.renameSync(tmp, CONFIG_PATH);
+  // Restrict permissions so the password hash is not world-readable.
+  try { fs.chmodSync(CONFIG_PATH, 0o600); } catch (_) {}
   cached = newCfg;
   return cached;
 }

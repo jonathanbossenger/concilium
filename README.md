@@ -33,7 +33,18 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 - **PATH-based agent discovery** — scans `$PATH` for known CLIs and lets you
   add them with one click
 - **Vanilla web UI** — no framework, no build step, just HTML/CSS/JS
-- **Loopback only** (`127.0.0.1`) — single-user, no auth
+- **Authentication** — first-run setup wizard creates a username + scrypt-hashed
+  password; all subsequent visits require login. Sessions survive server
+  restarts (stored in SQLite) and use sliding 24-hour expiry. Configurable bind
+  address lets you restrict to loopback (`127.0.0.1`, the default) or open to
+  all interfaces for use behind a reverse proxy.
+
+> **⚠️ Security note:** A successful login grants the ability to run arbitrary
+> commands on the host as the server user (via `/api/tasks`). Before binding to
+> anything other than `127.0.0.1`, place the dashboard behind a TLS-terminating
+> reverse proxy (e.g. nginx, Caddy) and ensure firewall rules are in place.
+> The server sets `X-Forwarded-Proto`-aware `Secure` cookie flags automatically
+> when HTTPS is detected.
 
 ## Requirements
 

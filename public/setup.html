@@ -4,96 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent Dashboard — Setup</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    :root {
-      color-scheme: dark;
-      --bg: #1e1e1e;
-      --surface: #232323;
-      --text: #ddd;
-      --text-strong: #fff;
-      --text-dim: #999;
-      --border: #333;
-      --border-strong: #3a3a3a;
-      --accent: #0a84ff;
-      --accent-hover: #0066cc;
-      --button-text: #fff;
-      --input-bg: #2a2a2a;
-      --shadow: 0 10px 40px rgba(0,0,0,0.6);
-      --error: #f96;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        color-scheme: light;
-        --bg: #f4f4f5;
-        --surface: #ffffff;
-        --text: #1a1a1a;
-        --text-strong: #000;
-        --text-dim: #555;
-        --border: #d4d4d8;
-        --border-strong: #d4d4d8;
-        --input-bg: #ffffff;
-        --shadow: 0 10px 40px rgba(0,0,0,0.18);
-        --error: #c0392b;
-      }
-    }
-    html, body { height: 100%; margin: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1em;
-    }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border-strong);
-      border-radius: 10px;
-      padding: 2em 2.5em;
-      width: 100%;
-      max-width: 440px;
-      box-shadow: var(--shadow);
-    }
-    h1 { margin: 0 0 0.25em; font-size: 1.4em; color: var(--text-strong); }
-    .subtitle { margin: 0 0 1.75em; color: var(--text-dim); font-size: 0.9em; }
-    label { display: block; font-size: 0.9em; margin-bottom: 1em; }
-    label span { display: block; margin-bottom: 0.3em; font-weight: 500; }
-    input[type="text"],
-    input[type="password"] {
-      width: 100%;
-      padding: 0.55em 0.75em;
-      background: var(--input-bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.95em;
-    }
-    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .hint { font-size: 0.8em; color: var(--text-dim); margin-top: 0.3em; }
-    .error { color: var(--error); font-size: 0.88em; margin: 0.5em 0; min-height: 1.2em; }
-    button[type="submit"] {
-      width: 100%;
-      padding: 0.65em;
-      background: var(--accent);
-      color: var(--button-text);
-      border: none;
-      border-radius: 6px;
-      font-size: 1em;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 0.5em;
-    }
-    button[type="submit"]:hover { background: var(--accent-hover); }
-    button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
-    .section-divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 1.5em 0 1.25em;
-    }
-    .section-title { font-size: 0.85em; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 1em; }
-  </style>
+  <link rel="stylesheet" href="/auth.css">
 </head>
 <body>
   <div class="card">
@@ -118,10 +29,24 @@
       <hr class="section-divider">
       <p class="section-title">Network binding (optional)</p>
 
+      <div class="warning">
+        &#x26A0;&#xFE0F; <strong>Security notice:</strong> A successful login
+        grants the ability to run arbitrary commands on this server as the
+        current user. Only expose this dashboard on a trusted network or behind
+        a TLS-terminating reverse proxy (e.g. nginx, Caddy). Setting the bind
+        address to <code>0.0.0.0</code> makes the dashboard reachable from any
+        network interface — ensure firewall rules and HTTPS are in place before
+        doing so.
+      </div>
+
       <label>
         <span>Bind address</span>
         <input type="text" name="bind" placeholder="127.0.0.1" autocomplete="off">
-        <span class="hint">Use <code>0.0.0.0</code> to listen on all interfaces for public hosting. Requires a server restart to take effect.</span>
+        <span class="hint">
+          Use <code>0.0.0.0</code> to listen on all interfaces, or
+          <code>127.0.0.1</code> (default) for loopback only.
+          Requires a server restart to take effect.
+        </span>
       </label>
 
       <div class="error" id="error-msg" aria-live="polite"></div>
@@ -152,9 +77,13 @@
         if (!username) { errorMsg.textContent = 'Username is required.'; return; }
         if (password.length < 8) { errorMsg.textContent = 'Password must be at least 8 characters.'; return; }
         if (password !== confirm) { errorMsg.textContent = 'Passwords do not match.'; return; }
+        if (bind && !/^(localhost|(\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F:]+)$/.test(bind)) {
+          errorMsg.textContent = 'Bind address must be a valid IP address or "localhost".';
+          return;
+        }
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Setting up…';
+        submitBtn.textContent = 'Setting up\u2026';
 
         try {
           const body = { username, password };
