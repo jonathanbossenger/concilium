@@ -308,7 +308,9 @@ async function restoreLayout() {
   let states;
   try {
     states = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
-  } catch (_) {}
+  } catch (err) {
+    console.error('[agent-dashboard] failed to parse saved layout:', err);
+  }
   if (!Array.isArray(states) || states.length === 0) {
     addCard();
   } else {
@@ -323,7 +325,9 @@ async function restoreLayout() {
             card.term.reset();
             card.attach(s.lastTaskId);
           }
-        } catch (_) {}
+        } catch (err) {
+          console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
+        }
       }
     }
   }
