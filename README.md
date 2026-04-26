@@ -184,4 +184,4 @@ Runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`,
 
 ## License
 
-MIT
+GPL-2.0-or-later. Free as in freedom, not just free beer. See `LICENSE`.
