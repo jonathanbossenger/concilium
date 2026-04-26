@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 There is no build step, no linter, and no test suite. The frontend is hand-written HTML/CSS/JS served as static files.
 
-- `npm install` — installs the four runtime deps. Triggers `scripts/fix-pty-perms.js`, which restores the executable bit on `node-pty`'s `spawn-helper` (npm strips it; without this, PTY spawns fail with `posix_spawnp failed.`).
+- `npm install` — installs the runtime deps (`express`, `better-sqlite3`, `js-yaml`, `node-pty`, `@xterm/xterm`, `@xterm/addon-fit`). Triggers `scripts/fix-pty-perms.js`, which restores the executable bit on `node-pty`'s `spawn-helper` (npm strips it; without this, PTY spawns fail with `posix_spawnp failed.`). The xterm packages are served straight from `node_modules` via two static mounts in `server/index.js` (`/vendor/xterm`, `/vendor/xterm-addon-fit`) — no bundler.
 - `npm start` — runs `node server/index.js` in the foreground (useful when iterating; no daemonization).
 - `./bin/agentctl start | stop | restart | status | logs` — Apache-style lifecycle. `start` writes a PID file to `~/.agent-dashboard/run.pid` and logs to `~/.agent-dashboard/server.log`. After `agentctl install`, the same commands drive a launchd agent (macOS) or `systemd --user` unit (Linux) instead of the standalone PID-file path; `agentctl status` reports which mode is active.
 - Restart after editing `~/.agent-dashboard/config.yaml` by hand — `getConfig()` is process-cached. Edits made through the web UI bypass the cache via `saveConfig()` and take effect immediately.
@@ -26,7 +26,7 @@ The server only listens on `127.0.0.1`. Port comes from `config.yaml` (default 7
 - `false` → `child_process.spawn`, prompt is written to stdin, stdin is then closed. One-shot.
 - `true` → `node-pty` spawn, prompt is written but the PTY stays open for follow-up `write()` calls. Used for REPL-style agents.
 
-`runner.js` exposes a uniform `EventEmitter` interface (`event`, `end`, `kill()`, `write()`) so `manager.js` doesn't branch on mode. In PTY mode, stdout and stderr are merged by the kernel — everything is reported as `stream: 'stdout'`.
+`runner.js` exposes a uniform `EventEmitter` interface (`event`, `end`, `kill()`, `write()`, `resize(cols, rows)`) so `manager.js` doesn't branch on mode. `write` and `resize` are no-ops (return `false`) in piped mode — only the PTY emitter actually drives them. In PTY mode, stdout and stderr are merged by the kernel — everything is reported as `stream: 'stdout'`.
 
 ### Live tasks vs. historical tasks
 
@@ -42,9 +42,13 @@ When a task ends, `manager.js` deletes the entry from `live`. SSE subscribers th
 
 ### Card-based frontend
 
-`public/app.js` has one `Card` class; each card owns its own task lifecycle (agent select, cwd, prompt, run/kill, output pre, optional input line). `cards` is a `Set<Card>` so events like agent-list refreshes can iterate. Closing a card calls `DELETE /api/tasks/:id` for every task it ever launched, which kills any still-running task and drops its events + log file. There is no React, no bundler, no transpilation — edit the files in `public/` and reload.
+`public/app.js` has one `Card` class; each card owns its own task lifecycle (agent select, cwd, Start/Kill, and an embedded xterm.js terminal that is both the output surface and the input surface). `cards` is a `Set<Card>` so events like agent-list refreshes and theme changes can iterate. Closing a card calls `DELETE /api/tasks/:id` for every task it ever launched, which kills any still-running task and drops its events + log file. There is no React, no bundler, no transpilation — edit the files in `public/` and reload.
 
-ANSI escape codes are stripped client-side (`stripAnsi` in `app.js`). The PTY runs at fixed 120×30; there is no resize handshake, so wide output relies on terminal-side wrapping.
+`Card.initTerminal()` must run **after** the card element is appended to the DOM so `FitAddon` can measure the container; `addCard()` enforces this ordering. A `ResizeObserver` on the terminal container drives `fitAddon.fit()` and `POST /api/tasks/:id/resize` whenever the rendered cols/rows change (e.g. on expand/collapse or window resize).
+
+The SSE handler in `attach()` deliberately **skips events with `stream === 'stdin'`** — the PTY echoes user input back as stdout, so rendering stdin would double-print every keystroke. The DB still records stdin events (for history fidelity); we just don't render them.
+
+The terminal theme is sourced from CSS custom properties (`--term-bg`, `--term-fg`, `--term-cursor`, `--term-selection`) so it tracks the existing Auto/Light/Dark cycler and OS `prefers-color-scheme` flips. xterm.css hardcodes `#000` on `.xterm-viewport`; `style.css` overrides it to `var(--term-bg)` so light mode doesn't bleed black.
 
 ### Configuration & discovery
 

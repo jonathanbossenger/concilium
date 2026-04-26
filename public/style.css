@@ -40,6 +40,10 @@
   --health: #7aa;
   --code-bg: #1a1a1a;
   --found: #6c6;
+  --term-bg: #111111;
+  --term-fg: #dddddd;
+  --term-cursor: #dddddd;
+  --term-selection: rgba(120,180,255,0.30);
 }
 
 @media (prefers-color-scheme: light) {
@@ -83,6 +87,10 @@
     --health: #2a5a78;
     --code-bg: #ececef;
     --found: #2c7a2c;
+    --term-bg: #fafafa;
+    --term-fg: #1a1a1a;
+    --term-cursor: #1a1a1a;
+    --term-selection: rgba(10,132,255,0.20);
   }
 }
 
@@ -123,6 +131,10 @@
   --health: #2a5a78;
   --code-bg: #ececef;
   --found: #2c7a2c;
+  --term-bg: #fafafa;
+  --term-fg: #1a1a1a;
+  --term-cursor: #1a1a1a;
+  --term-selection: rgba(10,132,255,0.20);
 }
 
 html, body { height: 100%; margin: 0; }
@@ -248,14 +260,16 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; }
 
 .card-term {
-  background: #000;
+  background: var(--term-bg);
   border: 1px solid var(--border-soft);
   border-radius: 4px;
+  padding: 0.5em;
   height: 360px;
   overflow: hidden;
   position: relative;
 }
-.card-term .terminal { padding: 4px; }
+/* xterm.css hardcodes #000 on the viewport — override so light mode stays light. */
+.card-term .xterm-viewport { background-color: var(--term-bg) !important; }
 
 /* --- common form controls ------------------------------------------- */
 select, input, textarea {

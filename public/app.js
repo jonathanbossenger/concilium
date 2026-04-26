@@ -4,12 +4,15 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 
-const TERM_THEME = {
-  background: '#000000',
-  foreground: '#dddddd',
-  cursor: '#dddddd',
-  selectionBackground: '#264f78',
-};
+function currentTermTheme() {
+  const s = getComputedStyle(document.documentElement);
+  return {
+    background: s.getPropertyValue('--term-bg').trim() || '#111111',
+    foreground: s.getPropertyValue('--term-fg').trim() || '#dddddd',
+    cursor: s.getPropertyValue('--term-cursor').trim() || '#dddddd',
+    selectionBackground: s.getPropertyValue('--term-selection').trim() || 'rgba(120,180,255,0.30)',
+  };
+}
 
 async function loadHealth() {
   try {
@@ -83,7 +86,7 @@ class Card {
   // FitAddon can measure the container.
   initTerminal() {
     this.term = new Terminal({
-      theme: TERM_THEME,
+      theme: currentTermTheme(),
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: 12,
       cursorBlink: true,
@@ -125,6 +128,10 @@ class Card {
 
   refreshAgentSelect() {
     fillAgentSelect(this.agentSelect, this.agentSelect.value);
+  }
+
+  applyTermTheme() {
+    if (this.term) this.term.options.theme = currentTermTheme();
   }
 
   setStatus(text, cls) {
@@ -435,6 +442,7 @@ function applyTheme(theme) {
     localStorage.removeItem('theme');
   }
   updateThemeButton();
+  for (const card of cards) card.applyTermTheme();
 }
 function updateThemeButton() {
   const t = currentTheme();
@@ -447,6 +455,11 @@ $('#theme-toggle').addEventListener('click', () => {
   applyTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
 });
 updateThemeButton();
+
+// Re-theme terminals when the OS flips light/dark while we're on Auto.
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  if (currentTheme() === 'auto') for (const card of cards) card.applyTermTheme();
+});
 
 // --- bootstrap -------------------------------------------------------------
 
