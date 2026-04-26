@@ -6,6 +6,7 @@ ensureState();
 const cfg = getConfig();
 
 // Routes are required AFTER ensureState() so store.js can open the DB.
+const { router: authRoute, requireAuth } = require('./auth');
 const agentsRoute = require('./routes/agents');
 const tasksRoute = require('./routes/tasks');
 const streamRoute = require('./routes/stream');
@@ -13,6 +14,18 @@ const systemRoute = require('./routes/system');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+// Public auth routes and pages — no authentication required.
+app.use('/auth', authRoute);
+app.get('/login', (req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'public', 'login.html')),
+);
+app.get('/setup', (req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'public', 'setup.html')),
+);
+
+// All routes below this point require authentication.
+app.use(requireAuth);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, pid: process.pid, uptime: process.uptime() });
@@ -27,8 +40,9 @@ app.use('/vendor/xterm', express.static(path.join(__dirname, '..', 'node_modules
 app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, '..', 'node_modules', '@xterm', 'addon-fit')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const server = app.listen(cfg.port, '127.0.0.1', () => {
-  console.log(`agent-dashboard listening on http://127.0.0.1:${cfg.port}`);
+const bindAddress = cfg.bind || '127.0.0.1';
+const server = app.listen(cfg.port, bindAddress, () => {
+  console.log(`agent-dashboard listening on http://${bindAddress}:${cfg.port}`);
 });
 
 function shutdown(signal) {

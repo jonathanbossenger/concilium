@@ -9,6 +9,7 @@ const LOG_DIR = path.join(STATE_DIR, 'logs');
 
 const DEFAULT_CONFIG = {
   port: 7878,
+  bind: '127.0.0.1',
   agents: [
     { id: 'echo', name: 'Echo (test)', command: 'cat', interactive: false },
     { id: 'claude', name: 'Claude Code', command: 'claude', interactive: true },

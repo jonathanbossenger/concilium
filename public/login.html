@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Dashboard — Login</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      color-scheme: dark;
+      --bg: #1e1e1e;
+      --surface: #232323;
+      --text: #ddd;
+      --text-strong: #fff;
+      --text-dim: #999;
+      --border: #333;
+      --border-strong: #3a3a3a;
+      --accent: #0a84ff;
+      --accent-hover: #0066cc;
+      --button-text: #fff;
+      --input-bg: #2a2a2a;
+      --shadow: 0 10px 40px rgba(0,0,0,0.6);
+      --error: #f96;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --bg: #f4f4f5;
+        --surface: #ffffff;
+        --text: #1a1a1a;
+        --text-strong: #000;
+        --text-dim: #555;
+        --border: #d4d4d8;
+        --border-strong: #d4d4d8;
+        --input-bg: #ffffff;
+        --shadow: 0 10px 40px rgba(0,0,0,0.18);
+        --error: #c0392b;
+      }
+    }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1em;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 2em 2.5em;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: var(--shadow);
+    }
+    h1 { margin: 0 0 0.25em; font-size: 1.4em; color: var(--text-strong); }
+    .subtitle { margin: 0 0 1.75em; color: var(--text-dim); font-size: 0.9em; }
+    label { display: block; font-size: 0.9em; margin-bottom: 1em; }
+    label span { display: block; margin-bottom: 0.3em; font-weight: 500; }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.55em 0.75em;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95em;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .error { color: var(--error); font-size: 0.88em; margin: 0.5em 0; min-height: 1.2em; }
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.65em;
+      background: var(--accent);
+      color: var(--button-text);
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.5em;
+    }
+    button[type="submit"]:hover { background: var(--accent-hover); }
+    button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>&#x1F916; Agent Dashboard</h1>
+    <p class="subtitle">Sign in to continue.</p>
+
+    <form id="login-form" novalidate>
+      <label>
+        <span>Username</span>
+        <input type="text" name="username" autocomplete="username" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <div class="error" id="error-msg" aria-live="polite"></div>
+      <button type="submit" id="submit-btn">Sign in</button>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById('login-form');
+      const errorMsg = document.getElementById('error-msg');
+      const submitBtn = document.getElementById('submit-btn');
+
+      // If setup not yet done, redirect there.
+      fetch('/auth/status').then(r => r.json()).then(data => {
+        if (data.setupRequired) window.location.replace('/setup');
+        else if (data.authenticated) window.location.replace('/');
+      }).catch(() => {});
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorMsg.textContent = '';
+
+        const username = form.username.value.trim();
+        const password = form.password.value;
+
+        if (!username || !password) {
+          errorMsg.textContent = 'Username and password are required.';
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing in…';
+
+        try {
+          const r = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          });
+          const data = await r.json();
+          if (!r.ok) {
+            if (data.setupRequired) {
+              window.location.replace('/setup');
+            } else {
+              errorMsg.textContent = data.error || 'Login failed.';
+            }
+          } else {
+            window.location.replace('/');
+          }
+        } catch (err) {
+          errorMsg.textContent = 'Network error. Please try again.';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign in';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

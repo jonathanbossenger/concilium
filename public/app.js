@@ -17,6 +17,7 @@ function currentTermTheme() {
 async function loadHealth() {
   try {
     const r = await fetch('/api/health');
+    if (r.status === 401) { window.location.replace('/login'); return; }
     const data = await r.json();
     $('#health').textContent = `pid ${data.pid} · up ${Math.round(data.uptime)}s`;
   } catch (_) {
@@ -424,6 +425,13 @@ $('#open-settings').addEventListener('click', async () => {
 });
 
 $('#new-card-btn').addEventListener('click', () => addCard());
+
+// --- logout ---------------------------------------------------------------
+
+$('#logout-btn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method: 'POST' });
+  window.location.replace('/login');
+});
 
 // --- theme ----------------------------------------------------------------
 
