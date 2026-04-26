@@ -123,9 +123,11 @@ function isValidBind(addr) {
 // Per-IP login rate limiter
 // ---------------------------------------------------------------------------
 
-// tracks { attempts: number, lockedUntil: number } per IP string
+// Tracks { attempts: number, lockedUntil: number } per IP string.
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
+// Buffer size for timing-safe username comparison (bytes).
+const USERNAME_BUF_SIZE = 256;
 // Progressive lockout durations (ms): 15s, 30s, 60s, 120s, 300s, 900s max.
 const LOCKOUT_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 900_000];
 
@@ -155,11 +157,12 @@ function resetLoginAttempts(ip) {
   loginAttempts.delete(ip);
 }
 
-// Periodic cleanup of stale rate-limit entries (every 10 minutes).
+// Periodic cleanup of unlocked rate-limit entries (every 10 minutes).
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of loginAttempts) {
-    if (entry.lockedUntil < now && entry.attempts <= MAX_ATTEMPTS) {
+    // Remove any entry whose lockout has expired — regardless of attempt count.
+    if (entry.lockedUntil <= now) {
       loginAttempts.delete(ip);
     }
   }
@@ -277,7 +280,11 @@ router.post('/login', (req, res) => {
     return res.status(409).json({ error: 'Setup required', setupRequired: true });
   }
 
-  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const ip = req.ip || req.socket?.remoteAddress;
+  if (!ip) {
+    // Should not happen with trust proxy enabled, but guard defensively.
+    return res.status(400).json({ error: 'Cannot determine client IP' });
+  }
 
   // Per-IP rate limiting: check before touching credentials.
   const retryAfter = checkRateLimit(ip);
@@ -297,10 +304,10 @@ router.post('/login', (req, res) => {
   // the username check does not leak whether an account exists via timing.
   const storedUser = cfg.auth.username || '';
   const inputUser = (username || '').trim();
-  const uStored = Buffer.alloc(256);
-  const uInput = Buffer.alloc(256);
-  Buffer.from(storedUser).copy(uStored, 0, 0, Math.min(storedUser.length, 256));
-  Buffer.from(inputUser).copy(uInput, 0, 0, Math.min(inputUser.length, 256));
+  const uStored = Buffer.alloc(USERNAME_BUF_SIZE);
+  const uInput = Buffer.alloc(USERNAME_BUF_SIZE);
+  Buffer.from(storedUser).copy(uStored, 0, 0, Math.min(storedUser.length, USERNAME_BUF_SIZE));
+  Buffer.from(inputUser).copy(uInput, 0, 0, Math.min(inputUser.length, USERNAME_BUF_SIZE));
   const usernameMatch = crypto.timingSafeEqual(uStored, uInput);
 
   if (!usernameMatch || !passwordMatch) {
