@@ -82,7 +82,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('change', () => saveLayout());
+    this.cwd.addEventListener('input', () => saveLayout());
 
     cards.add(this);
   }
@@ -206,13 +206,27 @@ class Card {
       this.currentTaskId = null;
     });
     src.onerror = () => {
-      if (this.currentTaskId) {
-        this.setStatus(`task #${this.currentTaskId} lost connection`, 'err');
-        this.currentTaskId = null;
-      }
-      this.setRunning(false);
+      const taskId = this.currentTaskId;
       src.close();
       if (this.currentSource === src) this.currentSource = null;
+      if (!taskId) { this.setRunning(false); return; }
+      // Re-fetch once to distinguish a deleted task (404) from a transient
+      // network blip. EventSource onerror doesn't expose HTTP status directly.
+      fetch(`/api/tasks/${taskId}`).then((check) => {
+        if (!check.ok) {
+          this.setStatus(`task #${taskId} lost connection`, 'err');
+          this.currentTaskId = null;
+          this.setRunning(false);
+        } else {
+          // Task still alive — stream just dropped. Keep currentTaskId so
+          // keystrokes and kill still work; user can reload to resume output.
+          this.setStatus(`task #${taskId} — stream interrupted`, 'err');
+        }
+      }).catch(() => {
+        this.setStatus(`task #${taskId} lost connection`, 'err');
+        this.currentTaskId = null;
+        this.setRunning(false);
+      });
     };
   }
 
@@ -301,13 +315,18 @@ function currentLayoutState() {
   }));
 }
 
+let saveLayoutTimer = null;
+
 function saveLayout() {
   if (!layoutReady) return;
-  fetch('/api/system/layout', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(currentLayoutState()),
-  }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
+  clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = setTimeout(() => {
+    fetch('/api/system/layout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(currentLayoutState()),
+    }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
+  }, 150);
 }
 
 async function restoreLayout() {
@@ -321,28 +340,41 @@ async function restoreLayout() {
   if (!Array.isArray(states) || states.length === 0) {
     addCard();
   } else {
-    for (const s of states) {
+    // Create all cards synchronously so the DOM is populated in order.
+    const entries = states.map((s) => {
       const card = addCard();
-      if (s.agentId) {
-        card.agentSelect.value = s.agentId;
-        if (!agentsById.has(s.agentId)) {
-          card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
-        }
-      }
+      if (s.agentId) card.agentSelect.value = s.agentId;
       if (s.cwd) card.cwd.value = s.cwd;
-      if (s.lastTaskId) {
-        try {
-          const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
-          if (taskCheck.ok) {
-            card.taskIds.add(s.lastTaskId);
-            card.term.reset();
-            card.attach(s.lastTaskId);
-          }
-        } catch (err) {
-          console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
-        }
+      return { card, s };
+    });
+    // Fan out task-existence checks in parallel to avoid serial RTTs.
+    await Promise.all(entries.map(async ({ card, s }) => {
+      const agentMissing = s.agentId && !agentsById.has(s.agentId);
+      if (!s.lastTaskId) {
+        if (agentMissing) card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
+        return;
       }
-    }
+      try {
+        const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
+        if (taskCheck.ok) {
+          card.taskIds.add(s.lastTaskId);
+          card.term.reset();
+          // If the agent was deleted, write the warning to the terminal so it
+          // doesn't conflict with the running/ended status set by attach().
+          if (agentMissing) {
+            card.term.writeln(`\x1b[33m[agent "${s.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
+          }
+          card.attach(s.lastTaskId);
+        } else {
+          card.setStatus(
+            agentMissing ? `agent "${s.agentId}" no longer exists` : 'previous task no longer available',
+            'err',
+          );
+        }
+      } catch (err) {
+        console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
+      }
+    }));
   }
   layoutReady = true;
 }
