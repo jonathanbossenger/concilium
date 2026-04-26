@@ -1,5 +1,6 @@
 const express = require('express');
 const { execFile } = require('child_process');
+const store = require('../store');
 
 const router = express.Router();
 
@@ -69,6 +70,23 @@ router.post('/pick-directory', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }
+});
+
+router.get('/layout', (req, res) => {
+  const raw = store.getLayout();
+  if (!raw) return res.json([]);
+  try {
+    res.json(JSON.parse(raw));
+  } catch (_) {
+    res.json([]);
+  }
+});
+
+router.post('/layout', (req, res) => {
+  const body = req.body;
+  if (!Array.isArray(body)) return res.status(400).json({ error: 'array expected' });
+  store.saveLayout(JSON.stringify(body));
+  res.json({ ok: true });
 });
 
 module.exports = router;

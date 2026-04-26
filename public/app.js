@@ -4,7 +4,6 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 
-const LAYOUT_KEY = 'agent-dashboard:layout';
 let layoutReady = false;
 
 function currentTermTheme() {
@@ -294,22 +293,30 @@ function addCard() {
 
 // --- session persistence ---------------------------------------------------
 
-function saveLayout() {
-  if (!layoutReady) return;
-  const state = [...cards].map((c) => ({
+function currentLayoutState() {
+  return [...cards].map((c) => ({
     agentId: c.agentSelect.value,
     cwd: c.cwd.value,
     lastTaskId: c.lastTaskId || null,
   }));
-  localStorage.setItem(LAYOUT_KEY, JSON.stringify(state));
+}
+
+function saveLayout() {
+  if (!layoutReady) return;
+  fetch('/api/system/layout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(currentLayoutState()),
+  }).catch(() => {});
 }
 
 async function restoreLayout() {
   let states;
   try {
-    states = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
+    const r = await fetch('/api/system/layout');
+    if (r.ok) states = await r.json();
   } catch (err) {
-    console.error('[agent-dashboard] failed to parse saved layout:', err);
+    console.error('[agent-dashboard] failed to load saved layout:', err);
   }
   if (!Array.isArray(states) || states.length === 0) {
     addCard();
@@ -334,7 +341,15 @@ async function restoreLayout() {
   layoutReady = true;
 }
 
-window.addEventListener('beforeunload', () => saveLayout());
+// Safety-net save on page unload using sendBeacon so the request is queued
+// even as the document is being torn down.
+window.addEventListener('beforeunload', () => {
+  if (!layoutReady) return;
+  navigator.sendBeacon(
+    '/api/system/layout',
+    new Blob([JSON.stringify(currentLayoutState())], { type: 'application/json' }),
+  );
+});
 
 // --- settings dialog -------------------------------------------------------
 
