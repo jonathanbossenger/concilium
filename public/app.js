@@ -82,7 +82,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('input', () => saveLayout());
+    this.cwd.addEventListener('change', () => saveLayout());
 
     cards.add(this);
   }
@@ -323,12 +323,18 @@ async function restoreLayout() {
   } else {
     for (const s of states) {
       const card = addCard();
-      if (s.agentId) card.agentSelect.value = s.agentId;
+      if (s.agentId) {
+        card.agentSelect.value = s.agentId;
+        if (!agentsById.has(s.agentId)) {
+          card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
+        }
+      }
       if (s.cwd) card.cwd.value = s.cwd;
       if (s.lastTaskId) {
         try {
-          const r = await fetch(`/api/tasks/${s.lastTaskId}`);
-          if (r.ok) {
+          const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
+          if (taskCheck.ok) {
+            card.taskIds.add(s.lastTaskId);
             card.term.reset();
             card.attach(s.lastTaskId);
           }

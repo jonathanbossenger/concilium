@@ -44,7 +44,7 @@ const stmts = {
   deleteEvents: db.prepare(`DELETE FROM events WHERE task_id = ?`),
   deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
   getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
-  saveLayout: db.prepare(`INSERT OR REPLACE INTO layout (key, value) VALUES ('cards', ?)`),
+  saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
 };
 
 const deleteTaskTxn = db.transaction((id) => {
