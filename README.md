@@ -16,6 +16,11 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
   animation between states.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
+- **Real terminal in the browser** — each card embeds an
+  [xterm.js](https://xtermjs.org/) terminal. ANSI/colors/cursor moves render
+  natively, keystrokes go straight to the agent's stdin, and a
+  `ResizeObserver` + the fit addon drive a resize handshake to the PTY so
+  TUIs reflow correctly when you expand a card or resize the window.
 - **Live streaming** of stdout/stderr to the browser via Server-Sent Events
 - **Persistent history** in SQLite, plus per-task plain-text logs under
   `~/.agent-dashboard/logs/`. Closing a card kills any running task and
@@ -146,6 +151,7 @@ All endpoints are JSON; loopback only.
 | `DELETE` | `/api/tasks/:id` | remove task (kills first if live), drops events + log file |
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
 | `POST`   | `/api/tasks/:id/input` | send stdin to interactive task `{data}` |
+| `POST`   | `/api/tasks/:id/resize` | resize the PTY `{cols, rows}` (PTY mode only) |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 
@@ -171,7 +177,10 @@ agent-dashboard/
         └── system.js           # native OS folder picker
 ```
 
-Four runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`.
+Runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`,
+`@xterm/xterm`, `@xterm/addon-fit` (the latter two are served straight from
+`node_modules` via static mounts at `/vendor/xterm` and
+`/vendor/xterm-addon-fit` — no bundler).
 
 ## License
 

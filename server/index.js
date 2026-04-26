@@ -23,6 +23,8 @@ app.use('/api/tasks', tasksRoute);
 app.use('/api/stream', streamRoute);
 app.use('/api/system', systemRoute);
 
+app.use('/vendor/xterm', express.static(path.join(__dirname, '..', 'node_modules', '@xterm', 'xterm')));
+app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, '..', 'node_modules', '@xterm', 'addon-fit')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const server = app.listen(cfg.port, '127.0.0.1', () => {

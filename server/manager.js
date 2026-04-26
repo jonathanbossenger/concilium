@@ -63,8 +63,14 @@ function sendInput(task_id, data) {
   return true;
 }
 
+function resize(task_id, cols, rows) {
+  const e = live.get(task_id);
+  if (!e || typeof e.runner.resize !== 'function') return false;
+  return e.runner.resize(cols, rows) !== false;
+}
+
 function getLive(task_id) {
   return live.get(task_id);
 }
 
-module.exports = { launch, kill, sendInput, getLive, remove };
+module.exports = { launch, kill, sendInput, resize, getLive, remove };

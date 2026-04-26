@@ -56,4 +56,16 @@ router.post('/:id/input', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/:id/resize', (req, res) => {
+  const id = parseInt(req.params.id);
+  const cols = parseInt(req.body?.cols);
+  const rows = parseInt(req.body?.rows);
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+    return res.status(400).json({ error: 'cols and rows (positive integers) required' });
+  }
+  const ok = manager.resize(id, cols, rows);
+  if (!ok) return res.status(409).json({ error: 'task not active or not a PTY' });
+  res.json({ ok: true });
+});
+
 module.exports = router;
