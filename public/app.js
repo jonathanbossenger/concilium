@@ -266,7 +266,7 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) this.cwd.value = data.path;
+      if (data.path) { this.cwd.value = data.path; saveLayout(); }
     } finally {
       this.cwdBrowse.disabled = false;
     }
@@ -333,6 +333,8 @@ function saveLayout() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(currentLayoutState()),
+    }).then((r) => {
+      if (!r.ok) console.error('[agent-dashboard] failed to save layout: HTTP', r.status);
     }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
   }, 150);
 }
