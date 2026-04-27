@@ -186,6 +186,9 @@ class Card {
 
   attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
+    // A new source supersedes any previous recovery state — onopen for the new
+    // source must not overwrite the status that attach() is about to set.
+    this._reconnecting = false;
     // When restoring a finished task, don't pretend it is still running.
     // taskHint is the task row passed in by restoreLayout (already fetched);
     // null means a freshly-launched task, which is always live.
