@@ -178,10 +178,14 @@ class Card {
     this.fitAndResize();
   }
 
-  attach(taskId) {
+  attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
-    this.setStatus(`task #${taskId} running…`, 'running');
-    this.setRunning(true);
+    // When restoring a finished task, don't pretend it is still running.
+    // taskHint is the task row passed in by restoreLayout (already fetched).
+    // A null hint means a freshly-launched task, which is always live.
+    const isLive = !taskHint || taskHint.status === 'running';
+    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : '');
+    this.setRunning(isLive);
 
     const src = new EventSource(`/api/stream/${taskId}`);
     this.currentSource = src;
@@ -212,7 +216,10 @@ class Card {
       if (!taskId) { this.setRunning(false); return; }
       // Re-fetch once to distinguish a deleted task (404) from a transient
       // network blip. EventSource onerror doesn't expose HTTP status directly.
+      // All state mutations are guarded against the captured taskId so a
+      // newer task started in the meantime isn't clobbered.
       fetch(`/api/tasks/${taskId}`).then((check) => {
+        if (this.currentTaskId !== taskId) return; // a newer task owns the card
         if (!check.ok) {
           this.setStatus(`task #${taskId} lost connection`, 'err');
           this.currentTaskId = null;
@@ -223,6 +230,7 @@ class Card {
           this.setStatus(`task #${taskId} — stream interrupted`, 'err');
         }
       }).catch(() => {
+        if (this.currentTaskId !== taskId) return;
         this.setStatus(`task #${taskId} lost connection`, 'err');
         this.currentTaskId = null;
         this.setRunning(false);
@@ -357,14 +365,16 @@ async function restoreLayout() {
       try {
         const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
         if (taskCheck.ok) {
+          const taskData = await taskCheck.json();
           card.taskIds.add(s.lastTaskId);
+          card.lastTaskId = s.lastTaskId;
           card.term.reset();
           // If the agent was deleted, write the warning to the terminal so it
           // doesn't conflict with the running/ended status set by attach().
           if (agentMissing) {
             card.term.writeln(`\x1b[33m[agent "${s.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
           }
-          card.attach(s.lastTaskId);
+          card.attach(s.lastTaskId, taskData);
         } else {
           card.setStatus(
             agentMissing ? `agent "${s.agentId}" no longer exists` : 'previous task no longer available',
