@@ -201,6 +201,7 @@ main {
 }
 .card-status.running { color: var(--status-running); }
 .card-status.ok { color: var(--status-ok); }
+.card-status.warn { color: var(--status-warn); }
 .card-status.err { color: var(--status-err); }
 .card-close, .card-expand {
   background: transparent;

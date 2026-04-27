@@ -69,6 +69,7 @@ class Card {
     this.currentTaskId = null;
     this.lastTaskId = null;
     this.currentSource = null;
+    this.lastStreamTs = null;
     this.term = null;
     this.fitAddon = null;
     this.resizeObserver = null;
@@ -156,6 +157,7 @@ class Card {
 
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     this.term.reset();
+    this.lastStreamTs = null;
     this.lastSentSize = null;
 
     const body = { agent_id: agentId };
@@ -187,7 +189,13 @@ class Card {
     this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : undefined);
     this.setRunning(isLive);
 
-    const src = new EventSource(`/api/stream/${taskId}`);
+    // Include ?since= when we already have a lastStreamTs so the server skips
+    // events the terminal has already rendered (avoids duplicate output on
+    // manual reconnect after the EventSource was closed and recreated).
+    const streamUrl = this.lastStreamTs !== null
+      ? `/api/stream/${taskId}?since=${this.lastStreamTs}`
+      : `/api/stream/${taskId}`;
+    const src = new EventSource(streamUrl);
     this.currentSource = src;
 
     src.addEventListener('output', (e) => {
@@ -196,6 +204,9 @@ class Card {
       // Skip stdin events: the PTY echoes user input back as stdout, so
       // rendering stdin would double-print every keystroke.
       if (ev.stream === 'stdin') return;
+      // Track the latest event timestamp so we can resume from here if the
+      // stream is interrupted and the EventSource needs to be recreated.
+      if (ev.ts) this.lastStreamTs = ev.ts;
       this.term.write(ev.data);
     });
     src.addEventListener('end', (e) => {
@@ -210,32 +221,48 @@ class Card {
       this.currentTaskId = null;
     });
     src.onerror = () => {
-      const taskId = this.currentTaskId;
-      src.close();
-      if (this.currentSource === src) this.currentSource = null;
-      if (!taskId) { this.setRunning(false); return; }
-      // Re-fetch once to distinguish a deleted task (404) from a transient
-      // network blip. EventSource onerror doesn't expose HTTP status directly.
-      // All state mutations are guarded against the captured taskId so a
-      // newer task started in the meantime isn't clobbered.
-      fetch(`/api/tasks/${taskId}`).then((check) => {
-        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
+      const capturedTaskId = this.currentTaskId;
+      if (!capturedTaskId) { this.setRunning(false); return; }
+      // Show reconnecting status but do NOT close the EventSource — the browser
+      // will automatically retry (sending Last-Event-ID so the server skips
+      // already-delivered events). This handles the common case of a laptop
+      // sleeping/locking which causes ERR_NETWORK_IO_SUSPENDED.
+      this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
+      // Re-fetch to check whether the task still exists. Close only on 404.
+      fetch(`/api/tasks/${capturedTaskId}`).then((check) => {
+        if (this.currentTaskId !== capturedTaskId) return; // superseded
         if (!check.ok) {
-          this.setStatus(`task #${taskId} lost connection`, 'err');
+          // Task is gone — nothing to reconnect to.
+          src.close();
+          if (this.currentSource === src) this.currentSource = null;
+          this.setStatus(`task #${capturedTaskId} lost connection`, 'err');
           this.currentTaskId = null;
           this.setRunning(false);
-        } else {
-          // Task still alive — stream just dropped. Keep currentTaskId so
-          // keystrokes and kill still work; user can reload to resume output.
-          this.setStatus(`task #${taskId} — stream interrupted`, 'err');
         }
+        // Task still alive — EventSource will reconnect on its own.
       }).catch(() => {
-        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
-        this.setStatus(`task #${taskId} lost connection`, 'err');
-        this.currentTaskId = null;
-        this.setRunning(false);
+        // fetch also failed — network is down; EventSource will keep retrying.
+        if (this.currentTaskId !== capturedTaskId) return; // superseded
+        this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
       });
     };
+  }
+
+  // Force-reconnect the stream for the current task. Called when the page
+  // becomes visible again or the network comes back online after a device
+  // sleep/lock, in case the EventSource ended up in a permanently closed state
+  // rather than auto-reconnecting.
+  reconnectStream() {
+    if (!this.currentTaskId) return;
+    if (this.currentSource && this.currentSource.readyState !== EventSource.CLOSED) return;
+    // Close any lingering source before recreating.
+    if (this.currentSource) {
+      this.currentSource.close();
+      this.currentSource = null;
+    }
+    // Re-attach using the same taskId. lastStreamTs is preserved so the new
+    // EventSource URL includes ?since= and avoids duplicate terminal output.
+    this.attach(this.currentTaskId, { status: 'running' });
   }
 
   toggleExpand() {
@@ -583,6 +610,18 @@ updateThemeButton();
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
   if (currentTheme() === 'auto') for (const card of cards) card.applyTermTheme();
 });
+
+// Reconnect any interrupted streams when the device wakes from sleep or the
+// network comes back. This is a safety net for cases where the EventSource
+// ends up permanently closed instead of auto-reconnecting (e.g. when the
+// browser aggressively kills connections while the page is hidden).
+function reconnectAllStreams() {
+  for (const card of cards) card.reconnectStream();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') reconnectAllStreams();
+});
+window.addEventListener('online', reconnectAllStreams);
 
 // --- bootstrap -------------------------------------------------------------
 
