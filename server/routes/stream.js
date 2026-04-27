@@ -19,6 +19,8 @@ router.get('/:id', (req, res) => {
   // EventSource automatically sends Last-Event-ID on reconnect when the server
   // includes id: fields. A ?since= query param is used when the client manually
   // recreates the EventSource (e.g. after visibilitychange / online events).
+  // Both values are the SQLite event row id — monotonic, unique, no same-ms
+  // collision — so resumption is exact even when multiple events share a ts.
   const rawLastId = req.headers['last-event-id'];
   const rawSince = req.query.since;
   const resumeAfter = rawLastId ? parseInt(rawLastId, 10)
@@ -41,7 +43,7 @@ router.get('/:id', (req, res) => {
     // before broadcast.emit in the runner handler, every event committed to the
     // DB at this moment is exactly the set of events that have been broadcast
     // before our subscription — no duplicates and no gaps.
-    const onEvent = (ev) => sse('output', ev, ev.ts);
+    const onEvent = (ev) => sse('output', ev, ev.id);
     const onEnd = (info) => {
       sse('end', info);
       entry.broadcast.off('event', onEvent);
@@ -54,8 +56,9 @@ router.get('/:id', (req, res) => {
     const events = store.listEvents(id);
     for (const ev of events) {
       // Skip events already delivered to this client (reconnect resumption).
-      if (resumeAfter !== null && ev.ts <= resumeAfter) continue;
-      sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts }, ev.ts);
+      // Compare by row id (not ts) — row ids are unique and monotonic.
+      if (resumeAfter !== null && ev.id <= resumeAfter) continue;
+      sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts, id: ev.id }, ev.id);
     }
 
     req.on('close', () => {
@@ -69,8 +72,8 @@ router.get('/:id', (req, res) => {
   const events = store.listEvents(id);
   for (const ev of events) {
     // Skip events already delivered to this client (reconnect resumption).
-    if (resumeAfter !== null && ev.ts <= resumeAfter) continue;
-    sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts }, ev.ts);
+    if (resumeAfter !== null && ev.id <= resumeAfter) continue;
+    sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts, id: ev.id }, ev.id);
   }
   sse('end', { exitCode: task.exit_code, signal: task.signal, status: task.status });
   res.end();
