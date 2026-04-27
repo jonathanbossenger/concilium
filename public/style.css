@@ -164,7 +164,7 @@ main {
   overflow-y: auto;
   padding: 1em;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: 1em;
   align-content: start;
 }
@@ -267,6 +267,9 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   height: 360px;
   overflow: hidden;
   position: relative;
+  resize: both;
+  min-width: 200px;
+  min-height: 120px;
 }
 /* xterm.css hardcodes #000 on the viewport — override so light mode stays light. */
 .card-term .xterm-viewport { background-color: var(--term-bg) !important; }
