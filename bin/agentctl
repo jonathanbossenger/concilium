@@ -61,6 +61,17 @@ is_responding() {
   curl -sf -m 1 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1
 }
 
+# Emit an OSC 8 hyperlink when stdout is a TTY; plain URL otherwise (so logs
+# and pipes stay readable). Clickable in iTerm2, Terminal.app, VS Code, etc.
+print_url() {
+  local url="http://127.0.0.1:$PORT"
+  if [[ -t 1 ]]; then
+    printf '  open:   \e]8;;%s\e\\%s\e]8;;\e\\\n' "$url" "$url"
+  else
+    echo "  open:   $url"
+  fi
+}
+
 # --- standalone mode ------------------------------------------------------
 
 start_standalone() {
@@ -81,12 +92,14 @@ start_standalone() {
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     if is_responding; then
       echo "started (pid $pid, port $PORT, mode standalone)"
+      print_url
       return 0
     fi
     sleep 0.2
   done
   if is_standalone_running; then
     echo "started (pid $pid, port $PORT, mode standalone — not yet responding; tail $LOG_FILE)"
+    print_url
   else
     rm -f "$PID_FILE"
     echo "error: failed to start; tail $LOG_FILE" >&2
@@ -122,10 +135,15 @@ start_service() {
     Linux)  systemctl --user start agent-dashboard ;;
   esac
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    is_responding && { echo "started (mode service, port $PORT)"; return 0; }
+    if is_responding; then
+      echo "started (mode service, port $PORT)"
+      print_url
+      return 0
+    fi
     sleep 0.3
   done
   echo "service started but not responding yet; tail $LOG_FILE"
+  print_url
 }
 
 stop_service() {
@@ -168,6 +186,7 @@ cmd_status() {
     echo "  port:   $PORT"
     echo "  mode:   $mode"
     echo "  health: $body"
+    print_url
   elif is_standalone_running; then
     echo "stale: pid file present (pid $(cat "$PID_FILE")) but not responding"
   else

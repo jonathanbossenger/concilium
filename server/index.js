@@ -28,7 +28,11 @@ app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, '..', 'no
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const server = app.listen(cfg.port, '127.0.0.1', () => {
-  console.log(`agent-dashboard listening on http://127.0.0.1:${cfg.port}`);
+  const url = `http://127.0.0.1:${cfg.port}`;
+  // OSC 8 hyperlink — clickable in supporting terminals (iTerm2, Terminal.app,
+  // VS Code, modern gnome-terminal); falls back to the visible URL elsewhere.
+  const link = `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\`;
+  console.log(`agent-dashboard listening — open ${link}`);
 });
 
 function shutdown(signal) {
