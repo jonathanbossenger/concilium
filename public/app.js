@@ -181,10 +181,10 @@ class Card {
   attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
     // When restoring a finished task, don't pretend it is still running.
-    // taskHint is the task row passed in by restoreLayout (already fetched).
-    // A null hint means a freshly-launched task, which is always live.
+    // taskHint is the task row passed in by restoreLayout (already fetched);
+    // null means a freshly-launched task, which is always live.
     const isLive = !taskHint || taskHint.status === 'running';
-    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : '');
+    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : undefined);
     this.setRunning(isLive);
 
     const src = new EventSource(`/api/stream/${taskId}`);
@@ -219,7 +219,7 @@ class Card {
       // All state mutations are guarded against the captured taskId so a
       // newer task started in the meantime isn't clobbered.
       fetch(`/api/tasks/${taskId}`).then((check) => {
-        if (this.currentTaskId !== taskId) return; // a newer task owns the card
+        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
         if (!check.ok) {
           this.setStatus(`task #${taskId} lost connection`, 'err');
           this.currentTaskId = null;
@@ -230,7 +230,7 @@ class Card {
           this.setStatus(`task #${taskId} — stream interrupted`, 'err');
         }
       }).catch(() => {
-        if (this.currentTaskId !== taskId) return;
+        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
         this.setStatus(`task #${taskId} lost connection`, 'err');
         this.currentTaskId = null;
         this.setRunning(false);
