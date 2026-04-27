@@ -15,8 +15,25 @@ router.get('/:id', (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  const sse = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // Support reconnection without duplicate output.
+  // EventSource automatically sends Last-Event-ID on reconnect when the server
+  // includes id: fields. A ?since= query param is used when the client manually
+  // recreates the EventSource (e.g. after visibilitychange / online events).
+  // Both values are the SQLite event row id — monotonic, unique, no same-ms
+  // collision — so resumption is exact even when multiple events share a ts.
+  const rawLastId = req.headers['last-event-id'];
+  const rawSince = req.query.since;
+  const resumeAfter = rawLastId ? parseInt(rawLastId, 10)
+    : rawSince ? parseInt(rawSince, 10)
+    : null;
+
+  // Include an id: field on output events so the browser tracks Last-Event-ID
+  // and sends it automatically when EventSource auto-reconnects.
+  const sse = (event, data, id = null) => {
+    let msg = '';
+    if (id !== null) msg += `id: ${id}\n`;
+    msg += `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    res.write(msg);
   };
 
   const entry = manager.getLive(id);
@@ -26,7 +43,7 @@ router.get('/:id', (req, res) => {
     // before broadcast.emit in the runner handler, every event committed to the
     // DB at this moment is exactly the set of events that have been broadcast
     // before our subscription — no duplicates and no gaps.
-    const onEvent = (ev) => sse('output', ev);
+    const onEvent = (ev) => sse('output', ev, ev.id);
     const onEnd = (info) => {
       sse('end', info);
       entry.broadcast.off('event', onEvent);
@@ -38,7 +55,10 @@ router.get('/:id', (req, res) => {
 
     const events = store.listEvents(id);
     for (const ev of events) {
-      sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts });
+      // Skip events already delivered to this client (reconnect resumption).
+      // Compare by row id (not ts) — row ids are unique and monotonic.
+      if (resumeAfter !== null && ev.id <= resumeAfter) continue;
+      sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts, id: ev.id }, ev.id);
     }
 
     req.on('close', () => {
@@ -51,7 +71,9 @@ router.get('/:id', (req, res) => {
   // Task already finished — replay from DB and close.
   const events = store.listEvents(id);
   for (const ev of events) {
-    sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts });
+    // Skip events already delivered to this client (reconnect resumption).
+    if (resumeAfter !== null && ev.id <= resumeAfter) continue;
+    sse('output', { stream: ev.stream, data: ev.data, ts: ev.ts, id: ev.id }, ev.id);
   }
   sse('end', { exitCode: task.exit_code, signal: task.signal, status: task.status });
   res.end();
