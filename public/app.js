@@ -4,6 +4,8 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 
+let layoutReady = false;
+
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
   return {
@@ -65,6 +67,7 @@ class Card {
 
     this.taskIds = new Set();
     this.currentTaskId = null;
+    this.lastTaskId = null;
     this.currentSource = null;
     this.term = null;
     this.fitAddon = null;
@@ -78,6 +81,8 @@ class Card {
     this.killBtn.addEventListener('click', () => this.kill());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
+    this.agentSelect.addEventListener('change', () => saveLayout());
+    this.cwd.addEventListener('input', () => saveLayout());
 
     cards.add(this);
   }
@@ -166,15 +171,21 @@ class Card {
     if (!r.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
 
     this.taskIds.add(data.task_id);
+    this.lastTaskId = data.task_id;
+    saveLayout();
     this.attach(data.task_id);
     // Push our current dimensions to the freshly spawned PTY.
     this.fitAndResize();
   }
 
-  attach(taskId) {
+  attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
-    this.setStatus(`task #${taskId} running…`, 'running');
-    this.setRunning(true);
+    // When restoring a finished task, don't pretend it is still running.
+    // taskHint is the task row passed in by restoreLayout (already fetched);
+    // null means a freshly-launched task, which is always live.
+    const isLive = !taskHint || taskHint.status === 'running';
+    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : undefined);
+    this.setRunning(isLive);
 
     const src = new EventSource(`/api/stream/${taskId}`);
     this.currentSource = src;
@@ -199,9 +210,31 @@ class Card {
       this.currentTaskId = null;
     });
     src.onerror = () => {
-      this.setRunning(false);
+      const taskId = this.currentTaskId;
       src.close();
       if (this.currentSource === src) this.currentSource = null;
+      if (!taskId) { this.setRunning(false); return; }
+      // Re-fetch once to distinguish a deleted task (404) from a transient
+      // network blip. EventSource onerror doesn't expose HTTP status directly.
+      // All state mutations are guarded against the captured taskId so a
+      // newer task started in the meantime isn't clobbered.
+      fetch(`/api/tasks/${taskId}`).then((check) => {
+        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
+        if (!check.ok) {
+          this.setStatus(`task #${taskId} lost connection`, 'err');
+          this.currentTaskId = null;
+          this.setRunning(false);
+        } else {
+          // Task still alive — stream just dropped. Keep currentTaskId so
+          // keystrokes and kill still work; user can reload to resume output.
+          this.setStatus(`task #${taskId} — stream interrupted`, 'err');
+        }
+      }).catch(() => {
+        if (this.currentTaskId !== taskId) return; // task ID changed — newer task or state cleared
+        this.setStatus(`task #${taskId} lost connection`, 'err');
+        this.currentTaskId = null;
+        this.setRunning(false);
+      });
     };
   }
 
@@ -233,7 +266,7 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) this.cwd.value = data.path;
+      if (data.path) { this.cwd.value = data.path; saveLayout(); }
     } finally {
       this.cwdBrowse.disabled = false;
     }
@@ -264,6 +297,7 @@ class Card {
     this.taskIds.clear();
     cards.delete(this);
     this.el.remove();
+    saveLayout();
     // Fire-and-forget deletes; server will kill any still-running tasks first.
     await Promise.all(ids.map((id) =>
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
@@ -275,8 +309,97 @@ function addCard() {
   const card = new Card();
   $('#cards').appendChild(card.el);
   card.initTerminal();
+  saveLayout();
   return card;
 }
+
+// --- session persistence ---------------------------------------------------
+
+function currentLayoutState() {
+  return [...cards].map((c) => ({
+    agentId: c.agentSelect.value,
+    cwd: c.cwd.value,
+    lastTaskId: c.lastTaskId || null,
+  }));
+}
+
+let saveLayoutTimer = null;
+
+function saveLayout() {
+  if (!layoutReady) return;
+  clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = setTimeout(() => {
+    fetch('/api/system/layout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(currentLayoutState()),
+    }).then((r) => {
+      if (!r.ok) console.error('[agent-dashboard] failed to save layout: HTTP', r.status);
+    }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
+  }, 150);
+}
+
+async function restoreLayout() {
+  let states;
+  try {
+    const r = await fetch('/api/system/layout');
+    if (r.ok) states = await r.json();
+  } catch (err) {
+    console.error('[agent-dashboard] failed to load saved layout:', err);
+  }
+  if (!Array.isArray(states) || states.length === 0) {
+    addCard();
+  } else {
+    // Create all cards synchronously so the DOM is populated in order.
+    const entries = states.map((s) => {
+      const card = addCard();
+      if (s.agentId) card.agentSelect.value = s.agentId;
+      if (s.cwd) card.cwd.value = s.cwd;
+      return { card, s };
+    });
+    // Fan out task-existence checks in parallel to avoid serial RTTs.
+    await Promise.all(entries.map(async ({ card, s }) => {
+      const agentMissing = s.agentId && !agentsById.has(s.agentId);
+      if (!s.lastTaskId) {
+        if (agentMissing) card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
+        return;
+      }
+      try {
+        const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
+        if (taskCheck.ok) {
+          const taskData = await taskCheck.json();
+          card.taskIds.add(s.lastTaskId);
+          card.lastTaskId = s.lastTaskId;
+          card.term.reset();
+          // If the agent was deleted, write the warning to the terminal so it
+          // doesn't conflict with the running/ended status set by attach().
+          if (agentMissing) {
+            card.term.writeln(`\x1b[33m[agent "${s.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
+          }
+          card.attach(s.lastTaskId, taskData);
+        } else {
+          card.setStatus(
+            agentMissing ? `agent "${s.agentId}" no longer exists` : 'previous task no longer available',
+            'err',
+          );
+        }
+      } catch (err) {
+        console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
+      }
+    }));
+  }
+  layoutReady = true;
+}
+
+// Safety-net save on page unload using sendBeacon so the request is queued
+// even as the document is being torn down.
+window.addEventListener('beforeunload', () => {
+  if (!layoutReady) return;
+  navigator.sendBeacon(
+    '/api/system/layout',
+    new Blob([JSON.stringify(currentLayoutState())], { type: 'application/json' }),
+  );
+});
 
 // --- settings dialog -------------------------------------------------------
 
@@ -466,6 +589,6 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
 (async () => {
   await loadHealth();
   await loadAgents();
-  addCard();
+  await restoreLayout();
   setInterval(loadHealth, 10000);
 })();

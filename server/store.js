@@ -25,6 +25,10 @@ db.exec(`
     data TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_events_task ON events(task_id, id);
+  CREATE TABLE IF NOT EXISTS layout (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 // Mark any tasks left "running" from a prior process as crashed.
@@ -39,6 +43,8 @@ const stmts = {
   listEvents: db.prepare(`SELECT * FROM events WHERE task_id = ? ORDER BY id ASC`),
   deleteEvents: db.prepare(`DELETE FROM events WHERE task_id = ?`),
   deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
+  getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
+  saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
 };
 
 const deleteTaskTxn = db.transaction((id) => {
@@ -54,4 +60,6 @@ module.exports = {
   getTask: (id) => stmts.getTask.get(id),
   listEvents: (task_id) => stmts.listEvents.all(task_id),
   deleteTask: (id) => deleteTaskTxn(id),
+  getLayout: () => { const row = stmts.getLayout.get(); return row ? row.value : null; },
+  saveLayout: (value) => stmts.saveLayout.run(value),
 };
