@@ -29,6 +29,10 @@ db.exec(`
     token TEXT PRIMARY KEY,
     expires INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS layout (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 // Mark any tasks left "running" from a prior process as crashed.
@@ -49,6 +53,9 @@ const stmts = {
   refreshSession: db.prepare(`UPDATE sessions SET expires = ? WHERE token = ?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE token = ?`),
   deleteExpiredSessions: db.prepare(`DELETE FROM sessions WHERE expires <= ?`),
+  // Layout
+  getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
+  saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
 };
 
 const deleteTaskTxn = db.transaction((id) => {
@@ -70,4 +77,7 @@ module.exports = {
   refreshSession: (token, expires) => stmts.refreshSession.run(expires, token),
   deleteSession: (token) => stmts.deleteSession.run(token),
   deleteExpiredSessions: () => stmts.deleteExpiredSessions.run(Date.now()),
+  // Layout
+  getLayout: () => { const row = stmts.getLayout.get(); return row ? row.value : null; },
+  saveLayout: (value) => stmts.saveLayout.run(value),
 };

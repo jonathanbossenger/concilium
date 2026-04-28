@@ -42,7 +42,7 @@ When a task ends, `manager.js` deletes the entry from `live`. SSE subscribers th
 
 ### Card-based frontend
 
-`public/app.js` has one `Card` class; each card owns its own task lifecycle (agent select, cwd, Start/Kill, and an embedded xterm.js terminal that is both the output surface and the input surface). `cards` is a `Set<Card>` so events like agent-list refreshes and theme changes can iterate. Closing a card calls `DELETE /api/tasks/:id` for every task it ever launched, which kills any still-running task and drops its events + log file. There is no React, no bundler, no transpilation — edit the files in `public/` and reload.
+`public/app.js` has one `Card` class; each card owns its own task lifecycle (agent select, cwd, Start/Kill, and an embedded xterm.js terminal that is both the output surface and the input surface). `cards` is a `Set<Card>` so events like agent-list refreshes and theme changes can iterate. Closing a card calls `DELETE /api/tasks/:id` for every task it ever launched, which kills any still-running task and drops its events + log file. This delete cascade applies to tasks restored from a saved layout as well — closing a card permanently removes all history for those tasks. There is no React, no bundler, no transpilation — edit the files in `public/` and reload.
 
 `Card.initTerminal()` must run **after** the card element is appended to the DOM so `FitAddon` can measure the container; `addCard()` enforces this ordering. A `ResizeObserver` on the terminal container drives `fitAddon.fit()` and `POST /api/tasks/:id/resize` whenever the rendered cols/rows change (e.g. on expand/collapse or window resize).
 

@@ -16,9 +16,9 @@ function launch(agent, prompt, cwd) {
   const runner = startTask(agent, prompt, cwd);
 
   runner.on('event', (ev) => {
-    store.appendEvent(task_id, ev.ts, ev.stream, ev.data);
+    const result = store.appendEvent(task_id, ev.ts, ev.stream, ev.data);
     logStream.write(ev.data);
-    broadcast.emit('event', ev);
+    broadcast.emit('event', { ...ev, id: result.lastInsertRowid });
   });
 
   runner.on('end', (info) => {

@@ -4,6 +4,8 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 
+let layoutReady = false;
+
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
   return {
@@ -66,7 +68,11 @@ class Card {
 
     this.taskIds = new Set();
     this.currentTaskId = null;
+    this.lastTaskId = null;
     this.currentSource = null;
+    this.lastEventId = null;
+    this._reconnecting = false;
+    this._errorCheckPending = false;
     this.term = null;
     this.fitAddon = null;
     this.resizeObserver = null;
@@ -79,6 +85,8 @@ class Card {
     this.killBtn.addEventListener('click', () => this.kill());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
+    this.agentSelect.addEventListener('change', () => saveLayout());
+    this.cwd.addEventListener('input', () => saveLayout());
 
     cards.add(this);
   }
@@ -152,6 +160,9 @@ class Card {
 
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     this.term.reset();
+    this.lastEventId = null;
+    this._reconnecting = false;
+    this._errorCheckPending = false;
     this.lastSentSize = null;
 
     const body = { agent_id: agentId };
@@ -167,18 +178,43 @@ class Card {
     if (!r.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
 
     this.taskIds.add(data.task_id);
+    this.lastTaskId = data.task_id;
+    saveLayout();
     this.attach(data.task_id);
     // Push our current dimensions to the freshly spawned PTY.
     this.fitAndResize();
   }
 
-  attach(taskId) {
+  attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
-    this.setStatus(`task #${taskId} running…`, 'running');
-    this.setRunning(true);
+    // A new source supersedes any previous recovery state — onopen for the new
+    // source must not overwrite the status that attach() is about to set.
+    this._reconnecting = false;
+    // When restoring a finished task, don't pretend it is still running.
+    // taskHint is the task row passed in by restoreLayout (already fetched);
+    // null means a freshly-launched task, which is always live.
+    const isLive = !taskHint || taskHint.status === 'running';
+    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : undefined);
+    this.setRunning(isLive);
 
-    const src = new EventSource(`/api/stream/${taskId}`);
+    // Include ?since= when we already have a lastEventId (SQLite row id) so
+    // the server skips events the terminal has already rendered (avoids
+    // duplicate output on manual reconnect after the EventSource was recreated).
+    const streamUrl = this.lastEventId !== null
+      ? `/api/stream/${taskId}?since=${this.lastEventId}`
+      : `/api/stream/${taskId}`;
+    const src = new EventSource(streamUrl);
     this.currentSource = src;
+
+    // Restore running status when the EventSource (re)opens successfully.
+    // Only do this when recovering from an onerror — on the initial connect
+    // attach() has already set the correct status above.
+    src.onopen = () => {
+      if (this.currentTaskId === taskId && this._reconnecting) {
+        this._reconnecting = false;
+        this.setStatus(`task #${taskId} running…`, 'running');
+      }
+    };
 
     src.addEventListener('output', (e) => {
       let ev;
@@ -186,6 +222,9 @@ class Card {
       // Skip stdin events: the PTY echoes user input back as stdout, so
       // rendering stdin would double-print every keystroke.
       if (ev.stream === 'stdin') return;
+      // Track the latest row id so we can resume from here if the stream is
+      // interrupted and the EventSource needs to be recreated (?since=).
+      if (ev.id) this.lastEventId = ev.id;
       this.term.write(ev.data);
     });
     src.addEventListener('end', (e) => {
@@ -200,10 +239,71 @@ class Card {
       this.currentTaskId = null;
     });
     src.onerror = () => {
-      this.setRunning(false);
-      src.close();
-      if (this.currentSource === src) this.currentSource = null;
+      const capturedTaskId = this.currentTaskId;
+      if (!capturedTaskId) { this.setRunning(false); return; }
+      // Show reconnecting status but do NOT close the EventSource — the browser
+      // will automatically retry (sending Last-Event-ID so the server skips
+      // already-delivered events). This handles the common case of a laptop
+      // sleeping/locking which causes ERR_NETWORK_IO_SUSPENDED.
+      this._reconnecting = true;
+      this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
+      // Guard against multiple in-flight checks during extended backoff retries.
+      if (this._errorCheckPending) return;
+      this._errorCheckPending = true;
+      // Re-fetch to check whether the task still exists. Close only on 404.
+      fetch(`/api/tasks/${capturedTaskId}`).then((check) => {
+        this._errorCheckPending = false;
+        if (this.currentTaskId !== capturedTaskId) return; // superseded
+        if (!check.ok) {
+          // Task is gone — nothing to reconnect to.
+          src.close();
+          if (this.currentSource === src) this.currentSource = null;
+          this.setStatus(`task #${capturedTaskId} lost connection`, 'err');
+          this.currentTaskId = null;
+          this.setRunning(false);
+        }
+        // Task still alive — EventSource will reconnect on its own.
+      }).catch(() => {
+        this._errorCheckPending = false;
+        // fetch also failed — network is down; EventSource will keep retrying.
+        if (this.currentTaskId !== capturedTaskId) return; // superseded
+        this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
+      });
     };
+  }
+
+  // Force-reconnect the stream for the current task. Called when the page
+  // becomes visible again or the network comes back online after a device
+  // sleep/lock, in case the EventSource ended up in a permanently closed state
+  // rather than auto-reconnecting.
+  async reconnectStream() {
+    if (!this.currentTaskId) return;
+    if (this.currentSource && this.currentSource.readyState !== EventSource.CLOSED) return;
+    if (this.currentSource) {
+      this.currentSource.close();
+      this.currentSource = null;
+    }
+    const taskId = this.currentTaskId;
+    let taskData;
+    try {
+      const r = await fetch(`/api/tasks/${taskId}`);
+      if (this.currentTaskId !== taskId) return; // superseded
+      if (!r.ok) {
+        this.setStatus(`task #${taskId} lost connection`, 'err');
+        this.currentTaskId = null;
+        this.setRunning(false);
+        return;
+      }
+      taskData = await r.json();
+    } catch (_) {
+      if (this.currentTaskId !== taskId) return; // superseded
+      // Network still down — attach optimistically; onerror will keep retrying.
+      taskData = { status: 'running' };
+    }
+    if (this.currentTaskId !== taskId) return; // superseded
+    // Re-attach using the real task status. lastEventId is preserved so the new
+    // EventSource URL includes ?since= and avoids duplicate terminal output.
+    this.attach(taskId, taskData);
   }
 
   toggleExpand() {
@@ -234,7 +334,7 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) this.cwd.value = data.path;
+      if (data.path) { this.cwd.value = data.path; saveLayout(); }
     } finally {
       this.cwdBrowse.disabled = false;
     }
@@ -265,6 +365,7 @@ class Card {
     this.taskIds.clear();
     cards.delete(this);
     this.el.remove();
+    saveLayout();
     // Fire-and-forget deletes; server will kill any still-running tasks first.
     await Promise.all(ids.map((id) =>
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
@@ -276,8 +377,97 @@ function addCard() {
   const card = new Card();
   $('#cards').appendChild(card.el);
   card.initTerminal();
+  saveLayout();
   return card;
 }
+
+// --- session persistence ---------------------------------------------------
+
+function currentLayoutState() {
+  return [...cards].map((c) => ({
+    agentId: c.agentSelect.value,
+    cwd: c.cwd.value,
+    lastTaskId: c.lastTaskId || null,
+  }));
+}
+
+let saveLayoutTimer = null;
+
+function saveLayout() {
+  if (!layoutReady) return;
+  clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = setTimeout(() => {
+    fetch('/api/system/layout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(currentLayoutState()),
+    }).then((r) => {
+      if (!r.ok) console.error('[agent-dashboard] failed to save layout: HTTP', r.status);
+    }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
+  }, 150);
+}
+
+async function restoreLayout() {
+  let states;
+  try {
+    const r = await fetch('/api/system/layout');
+    if (r.ok) states = await r.json();
+  } catch (err) {
+    console.error('[agent-dashboard] failed to load saved layout:', err);
+  }
+  if (!Array.isArray(states) || states.length === 0) {
+    addCard();
+  } else {
+    // Create all cards synchronously so the DOM is populated in order.
+    const entries = states.map((s) => {
+      const card = addCard();
+      if (s.agentId) card.agentSelect.value = s.agentId;
+      if (s.cwd) card.cwd.value = s.cwd;
+      return { card, s };
+    });
+    // Fan out task-existence checks in parallel to avoid serial RTTs.
+    await Promise.all(entries.map(async ({ card, s }) => {
+      const agentMissing = s.agentId && !agentsById.has(s.agentId);
+      if (!s.lastTaskId) {
+        if (agentMissing) card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
+        return;
+      }
+      try {
+        const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
+        if (taskCheck.ok) {
+          const taskData = await taskCheck.json();
+          card.taskIds.add(s.lastTaskId);
+          card.lastTaskId = s.lastTaskId;
+          card.term.reset();
+          // If the agent was deleted, write the warning to the terminal so it
+          // doesn't conflict with the running/ended status set by attach().
+          if (agentMissing) {
+            card.term.writeln(`\x1b[33m[agent "${s.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
+          }
+          card.attach(s.lastTaskId, taskData);
+        } else {
+          card.setStatus(
+            agentMissing ? `agent "${s.agentId}" no longer exists` : 'previous task no longer available',
+            'err',
+          );
+        }
+      } catch (err) {
+        console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
+      }
+    }));
+  }
+  layoutReady = true;
+}
+
+// Safety-net save on page unload using sendBeacon so the request is queued
+// even as the document is being torn down.
+window.addEventListener('beforeunload', () => {
+  if (!layoutReady) return;
+  navigator.sendBeacon(
+    '/api/system/layout',
+    new Blob([JSON.stringify(currentLayoutState())], { type: 'application/json' }),
+  );
+});
 
 // --- settings dialog -------------------------------------------------------
 
@@ -507,11 +697,23 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
   if (currentTheme() === 'auto') for (const card of cards) card.applyTermTheme();
 });
 
+// Reconnect any interrupted streams when the device wakes from sleep or the
+// network comes back. This is a safety net for cases where the EventSource
+// ends up permanently closed instead of auto-reconnecting (e.g. when the
+// browser aggressively kills connections while the page is hidden).
+function reconnectAllStreams() {
+  for (const card of cards) card.reconnectStream();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') reconnectAllStreams();
+});
+window.addEventListener('online', reconnectAllStreams);
+
 // --- bootstrap -------------------------------------------------------------
 
 (async () => {
   await loadHealth();
   await loadAgents();
-  addCard();
+  await restoreLayout();
   setInterval(loadHealth, 10000);
 })();
