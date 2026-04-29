@@ -77,6 +77,8 @@ class Card {
     this.fitAddon = null;
     this.resizeObserver = null;
     this.lastSentSize = null;
+    this._checkGitHubTimer = null;
+    this._githubAbortCtrl = null;
 
     this.refreshAgentSelect();
 
@@ -86,7 +88,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('input', () => { saveLayout(); this.checkGitHub(); });
+    this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
 
     cards.add(this);
   }
@@ -340,14 +342,24 @@ class Card {
     }
   }
 
+  scheduleCheckGitHub() {
+    clearTimeout(this._checkGitHubTimer);
+    this._checkGitHubTimer = setTimeout(() => this.checkGitHub(), 150);
+  }
+
   async checkGitHub() {
     const dir = this.cwd.value.trim();
     if (!dir) { this.githubBtn.hidden = true; return; }
+    // Cancel any in-flight request so stale responses don't overwrite newer results.
+    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
+    this._githubAbortCtrl = new AbortController();
+    const { signal } = this._githubAbortCtrl;
     try {
       const r = await fetch('/api/system/github-url', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: dir }),
+        signal,
       });
       if (!r.ok) { this.githubBtn.hidden = true; return; }
       const data = await r.json().catch(() => ({}));
@@ -358,6 +370,7 @@ class Card {
         this.githubBtn.hidden = true;
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('[agent-dashboard] checkGitHub failed:', err);
       this.githubBtn.hidden = true;
     }

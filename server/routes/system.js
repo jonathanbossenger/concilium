@@ -76,10 +76,10 @@ router.post('/pick-directory', async (req, res) => {
 
 function parseGitHubUrl(remoteUrl) {
   // SSH: git@github.com:owner/repo.git
-  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)\/?(?:\.git)?$/);
   if (sshMatch) return `https://github.com/${sshMatch[1]}`;
-  // HTTPS: https://github.com/owner/repo.git or https://github.com/owner/repo
-  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  // HTTPS: https://github.com/owner/repo.git  (optional user@, trailing slash, .git)
+  const httpsMatch = remoteUrl.match(/^https?:\/\/(?:[^@]+@)?github\.com\/([^/]+\/[^/]+?)\/?(?:\.git)?$/);
   if (httpsMatch) return `https://github.com/${httpsMatch[1]}`;
   return null;
 }
@@ -100,11 +100,15 @@ router.post('/github-url', (req, res) => {
       return res.json({ url: null });
     }
     if (!stats.isDirectory()) return res.json({ url: null });
+    // Try 'origin' first, then fall back to 'upstream' (common in fork workflows).
     execFile('git', ['-C', resolved, 'remote', 'get-url', 'origin'], (err, stdout) => {
-      if (err) return res.json({ url: null });
-      const remoteUrl = stdout.toString().trim();
-      const url = parseGitHubUrl(remoteUrl);
-      res.json({ url });
+      const originUrl = err ? null : parseGitHubUrl(stdout.toString().trim());
+      if (originUrl) return res.json({ url: originUrl });
+      execFile('git', ['-C', resolved, 'remote', 'get-url', 'upstream'], (err2, stdout2) => {
+        if (err2) return res.json({ url: null });
+        const url = parseGitHubUrl(stdout2.toString().trim());
+        res.json({ url });
+      });
     });
   });
 });
