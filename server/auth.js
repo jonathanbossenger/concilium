@@ -128,6 +128,9 @@ const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
 // Buffer size for timing-safe username comparison (bytes).
 const USERNAME_BUF_SIZE = 256;
+// Maximum allowed lengths for login inputs (prevents CPU-exhaustion via scrypt).
+const MAX_USERNAME_LENGTH = 128;
+const MAX_PASSWORD_LENGTH = 1024;
 // Progressive lockout durations (ms): 15s, 30s, 60s, 120s, 300s, 900s max.
 const LOCKOUT_MS = [15_000, 30_000, 60_000, 120_000, 300_000, 900_000];
 
@@ -250,14 +253,14 @@ router.post('/setup', (req, res) => {
   if (!username || typeof username !== 'string' || username.trim().length === 0) {
     return res.status(400).json({ error: 'username is required' });
   }
-  if (username.trim().length > 128) {
-    return res.status(400).json({ error: 'username must be 128 characters or fewer' });
+  if (username.trim().length > MAX_USERNAME_LENGTH) {
+    return res.status(400).json({ error: `username must be ${MAX_USERNAME_LENGTH} characters or fewer` });
   }
   if (!password || typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
-  if (password.length > 1024) {
-    return res.status(400).json({ error: 'password must be 1024 characters or fewer' });
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `password must be ${MAX_PASSWORD_LENGTH} characters or fewer` });
   }
 
   // Validate bind BEFORE modifying cfg to avoid dirtying the in-memory cache
@@ -302,7 +305,7 @@ router.post('/login', (req, res) => {
   const { username, password } = req.body || {};
 
   // Reject oversized inputs before scrypt to prevent CPU exhaustion attacks.
-  if (!password || typeof password !== 'string' || password.length > 1024) {
+  if (!password || typeof password !== 'string' || password.length > MAX_PASSWORD_LENGTH) {
     recordFailedLogin(ip);
     return res.status(401).json({ error: 'Invalid credentials' });
   }

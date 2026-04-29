@@ -164,6 +164,10 @@ router.get('/browse', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     const dirs = entries
+      // Include symlinks in addition to directories so that symlinked project
+      // folders (e.g. ~/projects → /Volumes/work) are browsable. The endpoint
+      // only returns directory *names*, not file contents, so traversal via a
+      // symlink exposes no more than any other authenticated browse action.
       .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.'))
       .map((e) => e.name)
       .sort((a, b) => a.localeCompare(b));
