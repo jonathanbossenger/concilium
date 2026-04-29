@@ -59,7 +59,6 @@ class Card {
     this.cwdBrowse = $('.card-cwd-browse', this.el);
     this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
-    this.killBtn = $('.card-kill', this.el);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
@@ -82,9 +81,9 @@ class Card {
 
     this.refreshAgentSelect();
 
-    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); this.run(); });
+    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); if (!this.currentTaskId) this.run(); });
+    this.runBtn.addEventListener('click', (e) => { if (this.currentTaskId) { e.preventDefault(); this.kill(); } });
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
-    this.killBtn.addEventListener('click', () => this.kill());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
@@ -151,8 +150,11 @@ class Card {
   }
 
   setRunning(running) {
-    this.killBtn.hidden = !running;
-    this.runBtn.disabled = running;
+    const label = running ? 'Kill' : 'Start';
+    this.runBtn.innerHTML = `<span aria-hidden="true">${running ? '⏹' : '▶'}</span>`;
+    this.runBtn.title = label;
+    this.runBtn.setAttribute('aria-label', label);
+    this.runBtn.classList.toggle('card-kill', running);
     if (running) this.term.focus();
   }
 

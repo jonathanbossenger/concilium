@@ -272,17 +272,27 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   gap: 0.4em;
 }
 .cwd-row .card-cwd { flex: 1; }
-.cwd-row .card-cwd-browse { flex: 0 0 auto; }
+.cwd-row .card-cwd-browse { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.cwd-row .card-run { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.card-cwd-browse {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.card-cwd-browse:hover { background: var(--bg-hover); }
+.card-run { background: var(--new); }
+.card-run:hover { background: var(--new-hover); }
 .card-github:not([hidden]) {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  padding: 0.3em 0.7em;
+  justify-content: center;
+  padding: 0.4em 0.6em;
   border-radius: 4px;
   border: 1px solid var(--border-strong);
   background: var(--bg-input);
   color: var(--text);
-  font-size: 0.82em;
+  font-size: 1em;
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
