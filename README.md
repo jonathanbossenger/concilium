@@ -10,10 +10,16 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 - **Card-based session UI** — each card is an independent agent session with
   its own selector, working directory, prompt, output, and (for interactive
   agents) input line. Add cards with **+ New session**, close them when done.
-  Each card has a **Browse…** button that opens the OS folder picker for the
-  working directory, plus an expand/collapse toggle (**⤢**) that zooms a
-  single card to fill the main area, with a smooth View Transitions
-  animation between states.
+  Card controls are compact icon buttons: 📂 opens the OS folder picker for
+  the working directory, ▶ starts the task (turns red while a task is
+  running, click to kill), and **⤢** expands a single card to fill the main
+  area with a smooth View Transitions animation between states. When the
+  working directory resolves to a GitHub repo (via `git remote`), an
+  octocat link to the repo appears next to it.
+- **Session restore** — the card layout (agent, working directory, last task)
+  is persisted server-side in SQLite, so reloading the page or restarting
+  the server brings your sessions back. Closing a card permanently removes
+  it (and the tasks it launched) from the saved layout.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
 - **Real terminal in the browser** — each card embeds an
@@ -21,7 +27,9 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
   natively, keystrokes go straight to the agent's stdin, and a
   `ResizeObserver` + the fit addon drive a resize handshake to the PTY so
   TUIs reflow correctly when you expand a card or resize the window.
-- **Live streaming** of stdout/stderr to the browser via Server-Sent Events
+- **Live streaming** of stdout/stderr to the browser via Server-Sent Events,
+  with automatic reconnect after laptop sleep / network drops so the stream
+  resumes without a manual refresh.
 - **Persistent history** in SQLite, plus per-task plain-text logs under
   `~/.agent-dashboard/logs/`. Closing a card kills any running task and
   deletes that session's tasks + logs.
@@ -105,7 +113,7 @@ State lives entirely under `~/.agent-dashboard/`:
 ```
 ~/.agent-dashboard/
 ├── config.yaml      # port + agent list (editable by hand or via the UI)
-├── tasks.db         # SQLite history
+├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log
 ├── server.log       # the server's own stdout/stderr
 └── run.pid          # standalone-mode PID file
@@ -154,6 +162,9 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/tasks/:id/resize` | resize the PTY `{cols, rows}` (PTY mode only) |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
+| `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
+| `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
+| `POST`   | `/api/system/layout` | replace the saved card layout |
 
 ## Project layout
 
