@@ -336,8 +336,9 @@ class Card {
     try {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
-      if (r.status === 501) {
-        // OS picker not supported (e.g. headless/remote server) — use web browser.
+      // 501 = picker not supported on this platform; 500 = picker failed (e.g. no display).
+      // In both cases fall back to the web-based filesystem browser.
+      if (r.status === 501 || r.status === 500) {
         openFsBrowser(this.cwd.value.trim() || null, (picked) => {
           this.cwd.value = picked;
           saveLayout();
