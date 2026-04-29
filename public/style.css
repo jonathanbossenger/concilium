@@ -169,6 +169,12 @@ main {
   align-content: start;
 }
 
+/* Single card: reserve a second track so the lone card stays at ~50%
+   instead of stretching to fill the row. */
+main:has(.card:only-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 /* --- card ------------------------------------------------------------ */
 .card {
   background: var(--surface);
@@ -228,6 +234,14 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   min-height: 0;
 }
 
+/* Narrow viewports: collapse the single-card override back to 1 column.
+   The multi-card case already collapses naturally via auto-fit. */
+@media (max-width: 879px) {
+  main:has(.card:only-child) {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(card-active),
   ::view-transition-new(card-active) {
@@ -259,6 +273,21 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 }
 .cwd-row .card-cwd { flex: 1; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; }
+.card-github:not([hidden]) {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3em 0.7em;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 0.82em;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.card-github:not([hidden]):hover { background: var(--bg-hover); }
 
 .card-term {
   background: var(--term-bg);
@@ -429,3 +458,42 @@ dialog section h3 {
 .network-status { font-size: 0.85em; margin-left: 0.75em; color: var(--text-muted); }
 .network-status.ok { color: var(--ok, #4caf50); }
 .network-status.err { color: var(--stderr, #f96); }
+
+/* --- Filesystem browser dialog ------------------------------------------ */
+.fs-browser { min-width: 380px; max-width: 540px; }
+.fs-browser-path {
+  font-size: 0.8em;
+  font-family: monospace;
+  color: var(--text-muted);
+  padding: 0.4em 0;
+  word-break: break-all;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 0.5em;
+}
+.fs-browser-error {
+  font-size: 0.85em;
+  color: var(--stderr, #f96);
+  padding: 0.3em 0;
+}
+.fs-browser-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+}
+.fs-browser-list li {
+  padding: 0.35em 0.75em;
+  cursor: pointer;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  border-bottom: 1px solid var(--border-soft);
+}
+.fs-browser-list li:last-child { border-bottom: none; }
+.fs-browser-list li:hover { background: var(--bg-hover); }
+.fs-browser-list li.up { color: var(--text-muted); font-style: italic; }
+.fs-browser-footer { margin-top: 1em; justify-content: flex-start; gap: 0.5em; }

@@ -40,6 +40,7 @@
         <div class="cwd-row">
           <input type="text" class="card-cwd" placeholder="working directory (default: $HOME)">
           <button type="button" class="card-cwd-browse" title="Browse…">Browse…</button>
+          <a class="card-github" title="Open on GitHub" target="_blank" rel="noopener noreferrer" hidden>GitHub</a>
           <button type="submit" class="card-run">Start</button>
           <button type="button" class="card-kill" hidden>Kill</button>
         </div>
@@ -107,6 +108,23 @@
           </div>
         </form>
       </section>
+    </div>
+  </dialog>
+
+  <!-- Server-side filesystem browser (used when OS picker is unavailable, e.g. remote/headless servers) -->
+  <dialog id="fs-browser-dialog">
+    <div class="dialog-body fs-browser">
+      <div class="dialog-head">
+        <h2>Select directory</h2>
+        <button type="button" class="close-btn" id="fs-browser-cancel" title="Cancel">&times;</button>
+      </div>
+      <div id="fs-browser-path" class="fs-browser-path"></div>
+      <div id="fs-browser-error" class="fs-browser-error" hidden></div>
+      <ul id="fs-browser-list" class="fs-browser-list"></ul>
+      <div class="row fs-browser-footer">
+        <button type="button" id="fs-browser-select">Select this directory</button>
+        <button type="button" id="fs-browser-cancel2" class="row-btn">Cancel</button>
+      </div>
     </div>
   </dialog>
 
