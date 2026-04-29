@@ -164,9 +164,15 @@ main {
   overflow-y: auto;
   padding: 1em;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: 1em;
   align-content: start;
+}
+
+/* Single card: reserve a second track so the lone card stays at ~50%
+   instead of stretching to fill the row. */
+main:has(.card:only-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* --- card ------------------------------------------------------------ */
@@ -228,10 +234,10 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   min-height: 0;
 }
 
-/* Below 880px a single column gives each card comfortable full-width space;
-   the threshold is a UX choice — ~2 × 440px min-content + padding + gap. */
+/* Narrow viewports: collapse the single-card override back to 1 column.
+   The multi-card case already collapses naturally via auto-fit. */
 @media (max-width: 879px) {
-  main {
+  main:has(.card:only-child) {
     grid-template-columns: 1fr;
   }
 }
