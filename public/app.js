@@ -57,6 +57,7 @@ class Card {
     this.agentSelect = $('.card-agent', this.el);
     this.cwd = $('.card-cwd', this.el);
     this.cwdBrowse = $('.card-cwd-browse', this.el);
+    this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
     this.killBtn = $('.card-kill', this.el);
     this.closeBtn = $('.card-close', this.el);
@@ -76,6 +77,8 @@ class Card {
     this.fitAddon = null;
     this.resizeObserver = null;
     this.lastSentSize = null;
+    this._checkGitHubTimer = null;
+    this._githubAbortCtrl = null;
 
     this.refreshAgentSelect();
 
@@ -85,7 +88,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('input', () => saveLayout());
+    this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
 
     cards.add(this);
   }
@@ -333,9 +336,43 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) { this.cwd.value = data.path; saveLayout(); }
+      if (data.path) { this.cwd.value = data.path; saveLayout(); this.checkGitHub(); }
     } finally {
       this.cwdBrowse.disabled = false;
+    }
+  }
+
+  scheduleCheckGitHub() {
+    clearTimeout(this._checkGitHubTimer);
+    this._checkGitHubTimer = setTimeout(() => this.checkGitHub(), 150);
+  }
+
+  async checkGitHub() {
+    const dir = this.cwd.value.trim();
+    if (!dir) { this.githubBtn.hidden = true; return; }
+    // Cancel any in-flight request so stale responses don't overwrite newer results.
+    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
+    this._githubAbortCtrl = new AbortController();
+    const { signal } = this._githubAbortCtrl;
+    try {
+      const r = await fetch('/api/system/github-url', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: dir }),
+        signal,
+      });
+      if (!r.ok) { this.githubBtn.hidden = true; return; }
+      const data = await r.json().catch(() => ({}));
+      if (data.url) {
+        this.githubBtn.href = data.url;
+        this.githubBtn.hidden = false;
+      } else {
+        this.githubBtn.hidden = true;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('[agent-dashboard] checkGitHub failed:', err);
+      this.githubBtn.hidden = true;
     }
   }
 
@@ -354,6 +391,8 @@ class Card {
   }
 
   async close() {
+    clearTimeout(this._checkGitHubTimer);
+    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
@@ -421,7 +460,7 @@ async function restoreLayout() {
     const entries = states.map((s) => {
       const card = addCard();
       if (s.agentId) card.agentSelect.value = s.agentId;
-      if (s.cwd) card.cwd.value = s.cwd;
+      if (s.cwd) { card.cwd.value = s.cwd; card.checkGitHub(); }
       return { card, s };
     });
     // Fan out task-existence checks in parallel to avoid serial RTTs.
