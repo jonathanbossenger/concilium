@@ -57,6 +57,7 @@ class Card {
     this.agentSelect = $('.card-agent', this.el);
     this.cwd = $('.card-cwd', this.el);
     this.cwdBrowse = $('.card-cwd-browse', this.el);
+    this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
     this.killBtn = $('.card-kill', this.el);
     this.closeBtn = $('.card-close', this.el);
@@ -85,7 +86,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('input', () => saveLayout());
+    this.cwd.addEventListener('input', () => { saveLayout(); this.checkGitHub(); });
 
     cards.add(this);
   }
@@ -333,9 +334,32 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) { this.cwd.value = data.path; saveLayout(); }
+      if (data.path) { this.cwd.value = data.path; saveLayout(); this.checkGitHub(); }
     } finally {
       this.cwdBrowse.disabled = false;
+    }
+  }
+
+  async checkGitHub() {
+    const dir = this.cwd.value.trim();
+    if (!dir) { this.githubBtn.hidden = true; return; }
+    try {
+      const r = await fetch('/api/system/github-url', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: dir }),
+      });
+      if (!r.ok) { this.githubBtn.hidden = true; return; }
+      const data = await r.json().catch(() => ({}));
+      if (data.url) {
+        this.githubBtn.href = data.url;
+        this.githubBtn.hidden = false;
+      } else {
+        this.githubBtn.hidden = true;
+      }
+    } catch (err) {
+      console.error('[agent-dashboard] checkGitHub failed:', err);
+      this.githubBtn.hidden = true;
     }
   }
 
@@ -421,7 +445,7 @@ async function restoreLayout() {
     const entries = states.map((s) => {
       const card = addCard();
       if (s.agentId) card.agentSelect.value = s.agentId;
-      if (s.cwd) card.cwd.value = s.cwd;
+      if (s.cwd) { card.cwd.value = s.cwd; card.checkGitHub(); }
       return { card, s };
     });
     // Fan out task-existence checks in parallel to avoid serial RTTs.

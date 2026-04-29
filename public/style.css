@@ -259,6 +259,21 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 }
 .cwd-row .card-cwd { flex: 1; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; }
+.card-github {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3em 0.7em;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 0.82em;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.card-github:hover { background: var(--bg-hover); }
 
 .card-term {
   background: var(--term-bg);
