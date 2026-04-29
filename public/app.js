@@ -81,7 +81,8 @@ class Card {
 
     this.refreshAgentSelect();
 
-    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); if (this.currentTaskId) this.kill(); else this.run(); });
+    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); if (!this.currentTaskId) this.run(); });
+    this.runBtn.addEventListener('click', (e) => { if (this.currentTaskId) { e.preventDefault(); this.kill(); } });
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
@@ -149,8 +150,10 @@ class Card {
   }
 
   setRunning(running) {
-    this.runBtn.innerHTML = running ? '⏹' : '▶';
-    this.runBtn.title = running ? 'Kill' : 'Start';
+    const label = running ? 'Kill' : 'Start';
+    this.runBtn.innerHTML = `<span aria-hidden="true">${running ? '⏹' : '▶'}</span>`;
+    this.runBtn.title = label;
+    this.runBtn.setAttribute('aria-label', label);
     this.runBtn.classList.toggle('card-kill', running);
     if (running) this.term.focus();
   }
