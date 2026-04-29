@@ -228,6 +228,8 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   min-height: 0;
 }
 
+/* Below 880px a single column gives each card comfortable full-width space;
+   the threshold is a UX choice — ~2 × 440px min-content + padding + gap. */
 @media (max-width: 879px) {
   main {
     grid-template-columns: 1fr;
