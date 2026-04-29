@@ -169,6 +169,12 @@ main {
   align-content: start;
 }
 
+/* Single card: reserve a second track so the lone card stays at ~50%
+   instead of stretching to fill the row. */
+main:has(.card:only-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 /* --- card ------------------------------------------------------------ */
 .card {
   background: var(--surface);
@@ -226,6 +232,14 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   flex: 1;
   height: auto;
   min-height: 0;
+}
+
+/* Narrow viewports: collapse the single-card override back to 1 column.
+   The multi-card case already collapses naturally via auto-fit. */
+@media (max-width: 879px) {
+  main:has(.card:only-child) {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
