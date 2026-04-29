@@ -26,6 +26,11 @@ app.get('/login', (req, res) =>
 app.get('/setup', (req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'setup.html')),
 );
+// auth.css is used by both /login and /setup; serve it before requireAuth so
+// unauthenticated pages are not left unstyled by a 302 redirect.
+app.get('/auth.css', (req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'public', 'auth.css')),
+);
 
 // Health endpoint is intentionally exempt from auth for liveness/monitoring probes.
 app.get('/api/health', (req, res) => {

@@ -164,7 +164,7 @@ router.get('/browse', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     const dirs = entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.'))
       .map((e) => e.name)
       .sort((a, b) => a.localeCompare(b));
     const parent = path.dirname(base);

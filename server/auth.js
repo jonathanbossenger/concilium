@@ -250,8 +250,14 @@ router.post('/setup', (req, res) => {
   if (!username || typeof username !== 'string' || username.trim().length === 0) {
     return res.status(400).json({ error: 'username is required' });
   }
+  if (username.trim().length > 128) {
+    return res.status(400).json({ error: 'username must be 128 characters or fewer' });
+  }
   if (!password || typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+  if (password.length > 1024) {
+    return res.status(400).json({ error: 'password must be 1024 characters or fewer' });
   }
 
   // Validate bind BEFORE modifying cfg to avoid dirtying the in-memory cache
@@ -294,6 +300,13 @@ router.post('/login', (req, res) => {
   }
 
   const { username, password } = req.body || {};
+
+  // Reject oversized inputs before scrypt to prevent CPU exhaustion attacks.
+  if (!password || typeof password !== 'string' || password.length > 1024) {
+    recordFailedLogin(ip);
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
   const cfg = getConfig();
 
   // Always run verifyPassword regardless of username match to prevent timing

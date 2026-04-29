@@ -1,8 +1,12 @@
 const path = require('path');
+const fs = require('fs');
 const Database = require('better-sqlite3');
 const { STATE_DIR } = require('./config');
 
-const db = new Database(path.join(STATE_DIR, 'tasks.db'));
+const DB_PATH = path.join(STATE_DIR, 'tasks.db');
+const db = new Database(DB_PATH);
+// Protect the DB file (contains plaintext session tokens) on multi-user hosts.
+fs.chmodSync(DB_PATH, 0o600);
 db.pragma('journal_mode = WAL');
 
 db.exec(`

@@ -18,8 +18,17 @@ function currentTermTheme() {
 
 async function loadHealth() {
   try {
+    // Check session validity via /auth/status (health is exempt from auth and
+    // cannot return 401, so we use the status endpoint for the redirect guard).
+    const authR = await fetch('/auth/status');
+    if (authR.ok) {
+      const authData = await authR.json().catch(() => ({}));
+      if (!authData.authenticated && !authData.setupRequired) {
+        window.location.replace('/login');
+        return;
+      }
+    }
     const r = await fetch('/api/health');
-    if (r.status === 401) { window.location.replace('/login'); return; }
     const data = await r.json();
     $('#health').textContent = `pid ${data.pid} · up ${Math.round(data.uptime)}s`;
   } catch (_) {

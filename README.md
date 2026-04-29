@@ -44,7 +44,13 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 > anything other than `127.0.0.1`, place the dashboard behind a TLS-terminating
 > reverse proxy (e.g. nginx, Caddy) and ensure firewall rules are in place.
 > The server sets `X-Forwarded-Proto`-aware `Secure` cookie flags automatically
-> when HTTPS is detected.
+> when HTTPS is detected. The configuration assumes a single TLS-terminating
+> reverse proxy (`trust proxy: 1`); if you have two proxies in front, adjust
+> `trustProxy` in `config.yaml` accordingly.
+>
+> **Credential reset:** To reset a forgotten password, stop the server, remove
+> the `auth:` block from `~/.agent-dashboard/config.yaml`, and restart — the
+> first-run setup wizard will re-trigger on the next visit.
 
 ## Requirements
 
