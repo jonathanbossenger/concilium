@@ -391,6 +391,8 @@ class Card {
   }
 
   async close() {
+    clearTimeout(this._checkGitHubTimer);
+    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }

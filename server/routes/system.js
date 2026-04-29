@@ -75,9 +75,12 @@ router.post('/pick-directory', async (req, res) => {
 });
 
 function parseGitHubUrl(remoteUrl) {
-  // SSH: git@github.com:owner/repo.git
+  // SSH scp-style: git@github.com:owner/repo.git
   const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)\/?(?:\.git)?$/);
   if (sshMatch) return `https://github.com/${sshMatch[1]}`;
+  // SSH url-style: ssh://git@github.com[:port]/owner/repo.git
+  const sshUrlMatch = remoteUrl.match(/^ssh:\/\/git@github\.com(?::\d+)?\/([^/]+\/[^/]+?)\/?(?:\.git)?$/);
+  if (sshUrlMatch) return `https://github.com/${sshUrlMatch[1]}`;
   // HTTPS: https://github.com/owner/repo.git  (optional user@, trailing slash, .git)
   const httpsMatch = remoteUrl.match(/^https?:\/\/(?:[^@]+@)?github\.com\/([^/]+\/[^/]+?)\/?(?:\.git)?$/);
   if (httpsMatch) return `https://github.com/${httpsMatch[1]}`;

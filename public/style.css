@@ -259,7 +259,7 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 }
 .cwd-row .card-cwd { flex: 1; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; }
-.card-github {
+.card-github:not([hidden]) {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -273,7 +273,7 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   cursor: pointer;
   white-space: nowrap;
 }
-.card-github:hover { background: var(--bg-hover); }
+.card-github:not([hidden]):hover { background: var(--bg-hover); }
 
 .card-term {
   background: var(--term-bg);
