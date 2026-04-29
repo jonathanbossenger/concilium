@@ -333,28 +333,21 @@ class Card {
 
   async browseCwd() {
     this.cwdBrowse.disabled = true;
+    const openWeb = () => openFsBrowser(this.cwd.value.trim() || null, (picked) => {
+      this.cwd.value = picked;
+      saveLayout();
+      this.checkGitHub();
+    });
     try {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       // 501 = picker not supported on this platform; 500 = picker failed (e.g. no display).
       // In both cases fall back to the web-based filesystem browser.
-      if (r.status === 501 || r.status === 500) {
-        openFsBrowser(this.cwd.value.trim() || null, (picked) => {
-          this.cwd.value = picked;
-          saveLayout();
-          this.checkGitHub();
-        });
-        return;
-      }
+      if (r.status === 501 || r.status === 500) { openWeb(); return; }
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
       if (data.path) { this.cwd.value = data.path; saveLayout(); this.checkGitHub(); }
     } catch (_) {
-      // Network error — fall back to web browser.
-      openFsBrowser(this.cwd.value.trim() || null, (picked) => {
-        this.cwd.value = picked;
-        saveLayout();
-        this.checkGitHub();
-      });
+      openWeb();
     } finally {
       this.cwdBrowse.disabled = false;
     }
@@ -747,7 +740,7 @@ $('#new-card-btn').addEventListener('click', () => addCard());
       for (const name of data.dirs) {
         const li = document.createElement('li');
         li.textContent = '📁 ' + name;
-        const fullPath = data.path.replace(/\/+$/, '') + '/' + name;
+        const fullPath = (data.path.endsWith('/') ? data.path : data.path + '/') + name;
         li.addEventListener('click', () => navigate(fullPath));
         listEl.appendChild(li);
       }
