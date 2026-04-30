@@ -629,7 +629,7 @@ function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {
   if (agentId) card.agentSelect.value = agentId;
   if (cwd) { card.cwd.value = cwd; card.checkGitHub(); }
   saveLayout();
-  if (autoRun) card.run();
+  if (autoRun && agentId) card.run();
   return card;
 }
 
@@ -672,9 +672,7 @@ async function restoreLayout() {
   } else {
     // Create all cards synchronously so the DOM is populated in order.
     const entries = states.map((s) => {
-      const card = addCard();
-      if (s.agentId) card.agentSelect.value = s.agentId;
-      if (s.cwd) { card.cwd.value = s.cwd; card.checkGitHub(); }
+      const card = addCard({ agentId: s.agentId, cwd: s.cwd });
       return { card, s };
     });
     // Fan out task-existence checks in parallel to avoid serial RTTs.
