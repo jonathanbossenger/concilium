@@ -318,6 +318,7 @@ class Card {
     const willExpand = !this.el.classList.contains('expanded');
     const apply = () => {
       for (const c of cards) c.el.classList.remove('expanded');
+      for (const c of termCards) c.el.classList.remove('expanded');
       if (willExpand) {
         this.el.classList.add('expanded');
         main.classList.add('has-expanded');
@@ -421,6 +422,7 @@ class TerminalCard {
     const tpl = $('#terminal-card-template');
     this.el = tpl.content.firstElementChild.cloneNode(true);
     this.closeBtn = $('.card-close', this.el);
+    this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
     this.termEl = $('.card-term', this.el);
 
@@ -432,8 +434,32 @@ class TerminalCard {
     this.lastSentSize = null;
 
     this.closeBtn.addEventListener('click', () => this.close());
+    this.expandBtn.addEventListener('click', () => this.toggleExpand());
 
     termCards.add(this);
+  }
+
+  toggleExpand() {
+    const main = $('#cards');
+    const willExpand = !this.el.classList.contains('expanded');
+    const apply = () => {
+      for (const c of cards) c.el.classList.remove('expanded');
+      for (const c of termCards) c.el.classList.remove('expanded');
+      if (willExpand) {
+        this.el.classList.add('expanded');
+        main.classList.add('has-expanded');
+        this.expandBtn.innerHTML = '&#x2921;';
+        this.expandBtn.title = 'Collapse';
+      } else {
+        main.classList.remove('has-expanded');
+        this.expandBtn.innerHTML = '&#x2922;';
+        this.expandBtn.title = 'Expand';
+      }
+    };
+    if (!document.startViewTransition) { apply(); return; }
+    this.el.style.viewTransitionName = 'card-active';
+    const t = document.startViewTransition(apply);
+    t.finished.finally(() => { this.el.style.viewTransitionName = ''; });
   }
 
   // Must be called AFTER the card element is attached to the DOM.
@@ -542,6 +568,9 @@ class TerminalCard {
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
+    if (this.el.classList.contains('expanded')) {
+      $('#cards').classList.remove('has-expanded');
+    }
     const id = this.taskId;
     this.taskId = null;
     if (this.el.parentNode) this.el.remove();
