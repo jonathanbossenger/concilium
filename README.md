@@ -12,10 +12,20 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
   agents) input line. Add cards with **+ New session**, close them when done.
   Card controls are compact icon buttons: 📂 opens the OS folder picker for
   the working directory, ▶ starts the task (turns red while a task is
-  running, click to kill), and **⤢** expands a single card to fill the main
-  area with a smooth View Transitions animation between states. When the
-  working directory resolves to a GitHub repo (via `git remote`), an
-  octocat link to the repo appears next to it.
+  running, click to kill), **>_** opens a pop-out terminal card (see
+  below), and **⤢** expands a single card to fill the main area with a
+  smooth View Transitions animation between states. When the working
+  directory resolves to a GitHub repo (via `git remote`), an octocat link
+  to the repo appears in the card header. A **⧉** clone button next to it
+  duplicates the card with the same agent and working directory, then
+  starts the new session immediately. Paths under `$HOME` display as
+  `~/...` shorthand in the cwd field; the server expands them at launch.
+- **Pop-out terminal cards** — the **>_** button on any session card opens
+  an independent shell terminal in a new card (using `$SHELL`, inserted
+  right after the triggering card). Useful for running side commands —
+  `git status`, `ls`, `tail` — in the same working directory as your agent
+  without leaving the dashboard. Terminal cards expand and close like any
+  other card; closing one ends the shell and drops its history.
 - **Session restore** — the card layout (agent, working directory, last task)
   is persisted server-side in SQLite, so reloading the page or restarting
   the server brings your sessions back. Closing a card permanently removes
@@ -155,6 +165,7 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/agents/discover` | scan `$PATH` for known CLIs |
 | `GET`    | `/api/tasks` | task history (newest first) |
 | `POST`   | `/api/tasks` | start task `{agent_id, prompt?, cwd?}` → `{task_id}` |
+| `POST`   | `/api/tasks/terminal` | start a `$SHELL` PTY task `{cwd?}` → `{task_id}` (powers pop-out terminal cards) |
 | `GET`    | `/api/tasks/:id` | task + all events |
 | `DELETE` | `/api/tasks/:id` | remove task (kills first if live), drops events + log file |
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
@@ -181,9 +192,10 @@ agent-dashboard/
     ├── runner.js               # spawn vs. PTY
     ├── manager.js              # live task registry, broadcast
     ├── store.js                # SQLite (tasks + events)
+    ├── util/path.js            # tilde expansion (~/foo → /home/me/foo)
     └── routes/
         ├── agents.js
-        ├── tasks.js
+        ├── tasks.js            # incl. /terminal for pop-out shell cards
         ├── stream.js
         └── system.js           # native OS folder picker
 ```
