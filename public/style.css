@@ -210,6 +210,12 @@ main:has(.card:only-child):not(.has-expanded) {
 .card-status.ok { color: var(--status-ok); }
 .card-status.warn { color: var(--status-warn); }
 .card-status.err { color: var(--status-err); }
+.card-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.2em;
+}
 .card-close, .card-expand {
   background: transparent;
   color: var(--text-dim);
