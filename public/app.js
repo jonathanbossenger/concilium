@@ -502,9 +502,15 @@ class TerminalCard {
     });
     const data = await r.json();
     if (!r.ok) { this.setStatus(data.error || 'failed to start terminal', 'err'); return; }
+    // Update label with cwd basename so multiple terminals are distinguishable.
+    if (cwd) {
+      const label = $('.card-term-label', this.el);
+      if (label) label.textContent = `Terminal — ${cwd.split('/').filter(Boolean).pop() || cwd}`;
+    }
     this.taskId = data.task_id;
     this.setStatus('running…', 'running');
     this.attach(data.task_id);
+    this.lastSentSize = null; // force resize to be sent after taskId is set
     this.fitAndResize();
   }
 
@@ -522,7 +528,6 @@ class TerminalCard {
     src.addEventListener('end', () => {
       src.close();
       if (this.currentSource === src) this.currentSource = null;
-      this.taskId = null;
       this.close();
     });
 
