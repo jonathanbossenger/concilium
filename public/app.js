@@ -500,8 +500,8 @@ class TerminalCard {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ cwd }),
     });
-    const data = await r.json();
-    if (!r.ok) { this.setStatus(data.error || 'failed to start terminal', 'err'); return; }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { this.setStatus(data.error || `failed to start terminal (${r.status})`, 'err'); return; }
     // Update label with cwd basename so multiple terminals are distinguishable.
     if (cwd) {
       const label = $('.card-term-label', this.el);
