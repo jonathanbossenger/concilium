@@ -20,7 +20,8 @@ router.post('/', (req, res) => {
   if (!agent) return res.status(404).json({ error: 'agent not found' });
 
   try {
-    const task_id = manager.launch(agent, prompt || '', cwd || os.homedir());
+    const resolvedCwd = (cwd || '').replace(/^~(?=\/|$)/, os.homedir());
+    const task_id = manager.launch(agent, prompt || '', resolvedCwd || os.homedir());
     res.json({ task_id });
   } catch (err) {
     res.status(500).json({ error: err.message, code: err.code });

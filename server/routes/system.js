@@ -1,6 +1,7 @@
 const express = require('express');
 const { execFile } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const store = require('../store');
 
@@ -88,10 +89,11 @@ function parseGitHubUrl(remoteUrl) {
 }
 
 router.post('/github-url', (req, res) => {
-  const dir = req.body && req.body.path;
-  if (!dir || typeof dir !== 'string') {
+  const rawDir = req.body && req.body.path;
+  if (!rawDir || typeof rawDir !== 'string') {
     return res.status(400).json({ error: 'path required' });
   }
+  const dir = rawDir.replace(/^~(?=\/|$)/, os.homedir());
   // Resolve to an absolute path and verify it is an existing directory before
   // running git, so we do not reveal information about arbitrary filesystem paths.
   const resolved = path.resolve(dir);
