@@ -70,6 +70,7 @@ class Card {
     this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
     this.openTermBtn = $('.card-open-term', this.el);
+    this.cloneBtn = $('.card-clone', this.el);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
@@ -98,6 +99,7 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim(), this.el));
+    this.cloneBtn.addEventListener('click', () => cloneCard(this));
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
 
@@ -606,11 +608,28 @@ function addTerminalCard(cwd, afterEl = null) {
   return card;
 }
 
-function addCard() {
+function cloneCard(sourceCard) {
+  addCard({
+    afterEl: sourceCard.el,
+    agentId: sourceCard.agentSelect.value,
+    cwd: sourceCard.cwd.value,
+    autoRun: true,
+  });
+}
+
+function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {}) {
   const card = new Card();
-  $('#cards').appendChild(card.el);
+  const main = $('#cards');
+  if (afterEl && afterEl.parentNode === main) {
+    main.insertBefore(card.el, afterEl.nextSibling);
+  } else {
+    main.appendChild(card.el);
+  }
   card.initTerminal();
+  if (agentId) card.agentSelect.value = agentId;
+  if (cwd) { card.cwd.value = cwd; card.checkGitHub(); }
   saveLayout();
+  if (autoRun && agentId) card.run();
   return card;
 }
 
@@ -653,9 +672,7 @@ async function restoreLayout() {
   } else {
     // Create all cards synchronously so the DOM is populated in order.
     const entries = states.map((s) => {
-      const card = addCard();
-      if (s.agentId) card.agentSelect.value = s.agentId;
-      if (s.cwd) { card.cwd.value = s.cwd; card.checkGitHub(); }
+      const card = addCard({ agentId: s.agentId, cwd: s.cwd });
       return { card, s };
     });
     // Fan out task-existence checks in parallel to avoid serial RTTs.

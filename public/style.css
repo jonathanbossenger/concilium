@@ -227,7 +227,7 @@ main:has(.card:only-child):not(.has-expanded) {
 }
 .card-expand:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 .card-close:hover { background: var(--bg-danger-soft); color: var(--stderr); border-color: var(--border-danger); }
-.card-github:not([hidden]) {
+.card-github:not([hidden]), .card-clone {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -243,7 +243,7 @@ main:has(.card:only-child):not(.has-expanded) {
   cursor: pointer;
   white-space: nowrap;
 }
-.card-github:not([hidden]):hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
+.card-github:not([hidden]):hover, .card-clone:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 
 main.has-expanded {
   grid-template-columns: 1fr;
