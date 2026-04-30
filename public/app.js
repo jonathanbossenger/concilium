@@ -88,7 +88,7 @@ class Card {
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
-    this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim()));
+    this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim(), this.el));
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
 
@@ -580,9 +580,18 @@ class TerminalCard {
   }
 }
 
-function addTerminalCard(cwd) {
+function addTerminalCard(cwd, afterEl = null) {
   const card = new TerminalCard();
-  $('#cards').appendChild(card.el);
+  const main = $('#cards');
+  // Insert directly after the triggering card so the new terminal lands in
+  // the next grid slot (same row if there's room, next row otherwise).
+  // insertBefore(node, null) is equivalent to appendChild, so a missing or
+  // detached afterEl falls back to end-of-grid cleanly.
+  if (afterEl && afterEl.parentNode === main) {
+    main.insertBefore(card.el, afterEl.nextSibling);
+  } else {
+    main.appendChild(card.el);
+  }
   card.initTerminal();
   card.launch(cwd);
   return card;
