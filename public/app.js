@@ -3,6 +3,7 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 
 let agentsById = new Map();
 const cards = new Set();
+const termCards = new Set();
 
 let layoutReady = false;
 
@@ -59,6 +60,7 @@ class Card {
     this.cwdBrowse = $('.card-cwd-browse', this.el);
     this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
+    this.openTermBtn = $('.card-open-term', this.el);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
@@ -86,6 +88,7 @@ class Card {
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
+    this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim(), this.el));
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
 
@@ -315,6 +318,7 @@ class Card {
     const willExpand = !this.el.classList.contains('expanded');
     const apply = () => {
       for (const c of cards) c.el.classList.remove('expanded');
+      for (const c of termCards) c.el.classList.remove('expanded');
       if (willExpand) {
         this.el.classList.add('expanded');
         main.classList.add('has-expanded');
@@ -411,6 +415,186 @@ class Card {
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
     ));
   }
+}
+
+class TerminalCard {
+  constructor() {
+    const tpl = $('#terminal-card-template');
+    this.el = tpl.content.firstElementChild.cloneNode(true);
+    this.closeBtn = $('.card-close', this.el);
+    this.expandBtn = $('.card-expand', this.el);
+    this.statusEl = $('.card-status', this.el);
+    this.termEl = $('.card-term', this.el);
+
+    this.taskId = null;
+    this.currentSource = null;
+    this.term = null;
+    this.fitAddon = null;
+    this.resizeObserver = null;
+    this.lastSentSize = null;
+
+    this.closeBtn.addEventListener('click', () => this.close());
+    this.expandBtn.addEventListener('click', () => this.toggleExpand());
+
+    termCards.add(this);
+  }
+
+  toggleExpand() {
+    const main = $('#cards');
+    const willExpand = !this.el.classList.contains('expanded');
+    const apply = () => {
+      for (const c of cards) c.el.classList.remove('expanded');
+      for (const c of termCards) c.el.classList.remove('expanded');
+      if (willExpand) {
+        this.el.classList.add('expanded');
+        main.classList.add('has-expanded');
+        this.expandBtn.innerHTML = '&#x2921;';
+        this.expandBtn.title = 'Collapse';
+      } else {
+        main.classList.remove('has-expanded');
+        this.expandBtn.innerHTML = '&#x2922;';
+        this.expandBtn.title = 'Expand';
+      }
+    };
+    if (!document.startViewTransition) { apply(); return; }
+    this.el.style.viewTransitionName = 'card-active';
+    const t = document.startViewTransition(apply);
+    t.finished.finally(() => { this.el.style.viewTransitionName = ''; });
+  }
+
+  // Must be called AFTER the card element is attached to the DOM.
+  initTerminal() {
+    this.term = new Terminal({
+      theme: currentTermTheme(),
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+      fontSize: 12,
+      cursorBlink: true,
+      convertEol: true,
+      scrollback: 5000,
+    });
+    this.fitAddon = new FitAddon.FitAddon();
+    this.term.loadAddon(this.fitAddon);
+    this.term.open(this.termEl);
+
+    this.term.onData((data) => {
+      if (this.taskId) this.sendRaw(data);
+    });
+
+    this.resizeObserver = new ResizeObserver(() => this.fitAndResize());
+    this.resizeObserver.observe(this.termEl);
+    requestAnimationFrame(() => this.fitAndResize());
+  }
+
+  fitAndResize() {
+    if (!this.fitAddon || !this.termEl.isConnected) return;
+    if (this.termEl.clientWidth === 0 || this.termEl.clientHeight === 0) return;
+    try { this.fitAddon.fit(); } catch (_) { return; }
+    const cols = this.term.cols;
+    const rows = this.term.rows;
+    const sig = `${cols}x${rows}`;
+    if (sig === this.lastSentSize) return;
+    this.lastSentSize = sig;
+    if (!this.taskId) return;
+    fetch(`/api/tasks/${this.taskId}/resize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cols, rows }),
+    }).catch(() => {});
+  }
+
+  applyTermTheme() {
+    if (this.term) this.term.options.theme = currentTermTheme();
+  }
+
+  setStatus(text, cls) {
+    this.statusEl.textContent = text;
+    this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
+  }
+
+  sendRaw(data) {
+    if (!this.taskId) return;
+    fetch(`/api/tasks/${this.taskId}/input`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ data }),
+    }).catch(() => {});
+  }
+
+  async launch(cwd) {
+    const r = await fetch('/api/tasks/terminal', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cwd }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { this.setStatus(data.error || `failed to start terminal (${r.status})`, 'err'); return; }
+    // Update label with cwd basename so multiple terminals are distinguishable.
+    if (cwd) {
+      const label = $('.card-term-label', this.el);
+      if (label) label.textContent = `Terminal — ${cwd.split('/').filter(Boolean).pop() || cwd}`;
+    }
+    this.taskId = data.task_id;
+    this.setStatus('running…', 'running');
+    this.attach(data.task_id);
+    this.lastSentSize = null; // force resize to be sent after taskId is set
+    this.fitAndResize();
+  }
+
+  attach(taskId) {
+    const src = new EventSource(`/api/stream/${taskId}`);
+    this.currentSource = src;
+
+    src.addEventListener('output', (e) => {
+      let ev;
+      try { ev = JSON.parse(e.data); } catch (_) { return; }
+      if (ev.stream === 'stdin') return;
+      this.term.write(ev.data);
+    });
+
+    src.addEventListener('end', () => {
+      src.close();
+      if (this.currentSource === src) this.currentSource = null;
+      this.close();
+    });
+
+    src.onerror = () => {
+      if (!this.taskId) return;
+      this.setStatus('reconnecting…', 'warn');
+    };
+  }
+
+  async close() {
+    termCards.delete(this);
+    if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
+    if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
+    if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
+    if (this.el.classList.contains('expanded')) {
+      $('#cards').classList.remove('has-expanded');
+    }
+    const id = this.taskId;
+    this.taskId = null;
+    if (this.el.parentNode) this.el.remove();
+    if (id) {
+      await fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+}
+
+function addTerminalCard(cwd, afterEl = null) {
+  const card = new TerminalCard();
+  const main = $('#cards');
+  // Insert directly after the triggering card so the new terminal lands in
+  // the next grid slot (same row if there's room, next row otherwise).
+  // insertBefore(node, null) is equivalent to appendChild, so a missing or
+  // detached afterEl falls back to end-of-grid cleanly.
+  if (afterEl && afterEl.parentNode === main) {
+    main.insertBefore(card.el, afterEl.nextSibling);
+  } else {
+    main.appendChild(card.el);
+  }
+  card.initTerminal();
+  card.launch(cwd);
+  return card;
 }
 
 function addCard() {
@@ -674,6 +858,7 @@ function applyTheme(theme) {
   }
   updateThemeButton();
   for (const card of cards) card.applyTermTheme();
+  for (const card of termCards) card.applyTermTheme();
 }
 function updateThemeButton() {
   const t = currentTheme();
@@ -689,7 +874,10 @@ updateThemeButton();
 
 // Re-theme terminals when the OS flips light/dark while we're on Auto.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-  if (currentTheme() === 'auto') for (const card of cards) card.applyTermTheme();
+  if (currentTheme() === 'auto') {
+    for (const card of cards) card.applyTermTheme();
+    for (const card of termCards) card.applyTermTheme();
+  }
 });
 
 // Reconnect any interrupted streams when the device wakes from sleep or the

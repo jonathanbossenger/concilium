@@ -194,8 +194,9 @@ main:has(.card:only-child):not(.has-expanded) {
   padding: 0.5em 0.5em 0.5em 0;
 }
 .card-agent {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 50%;
 }
 .card-status {
   font-size: 0.78em;
@@ -220,6 +221,23 @@ main:has(.card:only-child):not(.has-expanded) {
 }
 .card-expand:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 .card-close:hover { background: var(--bg-danger-soft); color: var(--stderr); border-color: var(--border-danger); }
+.card-github:not([hidden]) {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1.3em;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.card-github:not([hidden]):hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 
 main.has-expanded {
   grid-template-columns: 1fr;
@@ -274,6 +292,7 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 .cwd-row .card-cwd { flex: 1; }
 .cwd-row .card-cwd-browse { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
 .cwd-row .card-run { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.cwd-row .card-open-term { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
 .card-cwd-browse {
   background: var(--bg-input);
   color: var(--text);
@@ -282,22 +301,22 @@ main.has-expanded > .card:not(.expanded) { display: none; }
 .card-cwd-browse:hover { background: var(--bg-hover); }
 .card-run { background: var(--new); }
 .card-run:hover { background: var(--new-hover); }
-.card-github:not([hidden]) {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.4em 0.6em;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
+.card-open-term {
   background: var(--bg-input);
   color: var(--text);
-  font-size: 1em;
-  text-decoration: none;
-  cursor: pointer;
-  white-space: nowrap;
+  border: 1px solid var(--border-strong);
 }
-.card-github:not([hidden]):hover { background: var(--bg-hover); }
+.card-open-term:hover { background: var(--bg-hover); }
+
+.card-term-label {
+  flex: 1;
+  font-size: 0.85em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 0.2em;
+}
 
 .card-term {
   background: var(--term-bg);
