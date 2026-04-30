@@ -6,6 +6,7 @@ const cards = new Set();
 const termCards = new Set();
 
 let layoutReady = false;
+let homeDir = '';
 
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
@@ -22,9 +23,17 @@ async function loadHealth() {
     const r = await fetch('/api/health');
     const data = await r.json();
     $('#health').textContent = `pid ${data.pid} · up ${Math.round(data.uptime)}s`;
+    if (data.homeDir) homeDir = data.homeDir;
   } catch (_) {
     $('#health').textContent = 'offline';
   }
+}
+
+function toTildePath(p) {
+  if (homeDir && (p === homeDir || p.startsWith(homeDir + '/'))) {
+    return '~' + p.slice(homeDir.length);
+  }
+  return p;
 }
 
 async function loadAgents() {
@@ -342,7 +351,7 @@ class Card {
       const r = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) { this.cwd.value = data.path; saveLayout(); this.checkGitHub(); }
+      if (data.path) { this.cwd.value = toTildePath(data.path); saveLayout(); this.checkGitHub(); }
     } finally {
       this.cwdBrowse.disabled = false;
     }

@@ -1,3 +1,4 @@
+const os = require('os');
 const path = require('path');
 const express = require('express');
 const { ensureState, getConfig } = require('./config');
@@ -15,7 +16,7 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, pid: process.pid, uptime: process.uptime() });
+  res.json({ ok: true, pid: process.pid, uptime: process.uptime(), homeDir: os.homedir() });
 });
 
 app.use('/api/agents', agentsRoute);

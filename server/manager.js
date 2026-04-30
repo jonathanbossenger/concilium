@@ -1,19 +1,22 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
 const { LOG_DIR } = require('./config');
 const { startTask } = require('./runner');
 const store = require('./store');
+const { expandTilde } = require('./util/path');
 
 const live = new Map();
 
 function launch(agent, prompt, cwd) {
-  const task_id = store.createTask(agent.id, prompt, cwd);
+  const resolvedCwd = expandTilde((cwd || '').trim()) || os.homedir();
+  const task_id = store.createTask(agent.id, prompt, resolvedCwd);
   const broadcast = new EventEmitter();
   broadcast.setMaxListeners(0);
   const logStream = fs.createWriteStream(path.join(LOG_DIR, `${task_id}.log`), { flags: 'a' });
 
-  const runner = startTask(agent, prompt, cwd);
+  const runner = startTask(agent, prompt, resolvedCwd);
 
   runner.on('event', (ev) => {
     const result = store.appendEvent(task_id, ev.ts, ev.stream, ev.data);

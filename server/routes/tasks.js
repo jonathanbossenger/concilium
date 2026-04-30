@@ -1,4 +1,3 @@
-const os = require('os');
 const express = require('express');
 const { getConfig } = require('../config');
 const manager = require('../manager');
@@ -20,7 +19,7 @@ router.post('/', (req, res) => {
   if (!agent) return res.status(404).json({ error: 'agent not found' });
 
   try {
-    const task_id = manager.launch(agent, prompt || '', cwd || os.homedir());
+    const task_id = manager.launch(agent, prompt || '', cwd);
     res.json({ task_id });
   } catch (err) {
     res.status(500).json({ error: err.message, code: err.code });
@@ -32,7 +31,7 @@ router.post('/terminal', (req, res) => {
   const shell = process.env.SHELL || '/bin/sh';
   const shellAgent = { id: '_terminal', name: 'Terminal', command: shell, args: [], interactive: true };
   try {
-    const task_id = manager.launch(shellAgent, '', cwd || os.homedir());
+    const task_id = manager.launch(shellAgent, '', cwd);
     res.json({ task_id });
   } catch (err) {
     res.status(500).json({ error: err.message, code: err.code });
