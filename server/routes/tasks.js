@@ -31,7 +31,7 @@ router.post('/terminal', (req, res) => {
   const shell = process.env.SHELL || '/bin/sh';
   const shellAgent = { id: '_terminal', name: 'Terminal', command: shell, args: [], interactive: true };
   try {
-    const task_id = manager.launch(shellAgent, '', cwd || os.homedir());
+    const task_id = manager.launch(shellAgent, '', cwd);
     res.json({ task_id });
   } catch (err) {
     res.status(500).json({ error: err.message, code: err.code });
