@@ -8,8 +8,8 @@ There is no build step, no linter, and no test suite. The frontend is hand-writt
 
 - `npm install` — installs the runtime deps (`express`, `better-sqlite3`, `js-yaml`, `node-pty`, `@xterm/xterm`, `@xterm/addon-fit`). Triggers `scripts/fix-pty-perms.js`, which restores the executable bit on `node-pty`'s `spawn-helper` (npm strips it; without this, PTY spawns fail with `posix_spawnp failed.`). The xterm packages are served straight from `node_modules` via two static mounts in `server/index.js` (`/vendor/xterm`, `/vendor/xterm-addon-fit`) — no bundler.
 - `npm start` — runs `node server/index.js` in the foreground (useful when iterating; no daemonization).
-- `./bin/agentctl start | stop | restart | status | logs` — Apache-style lifecycle. `start` writes a PID file to `~/.agent-dashboard/run.pid` and logs to `~/.agent-dashboard/server.log`. After `agentctl install`, the same commands drive a launchd agent (macOS) or `systemd --user` unit (Linux) instead of the standalone PID-file path; `agentctl status` reports which mode is active.
-- Restart after editing `~/.agent-dashboard/config.yaml` by hand — `getConfig()` is process-cached. Edits made through the web UI bypass the cache via `saveConfig()` and take effect immediately.
+- `./bin/conciliumctl start | stop | restart | status | logs` — Apache-style lifecycle. `start` writes a PID file to `~/.concilium/run.pid` and logs to `~/.concilium/server.log`. After `conciliumctl install`, the same commands drive a launchd agent (macOS) or `systemd --user` unit (Linux) instead of the standalone PID-file path; `conciliumctl status` reports which mode is active.
+- Restart after editing `~/.concilium/config.yaml` by hand — `getConfig()` is process-cached. Edits made through the web UI bypass the cache via `saveConfig()` and take effect immediately.
 
 The server only listens on `127.0.0.1`. Port comes from `config.yaml` (default 7878).
 
@@ -30,7 +30,7 @@ The server only listens on `127.0.0.1`. Port comes from `config.yaml` (default 7
 
 ### Live tasks vs. historical tasks
 
-`manager.js` keeps a `Map<task_id, { broadcast, runner, logStream }>` of currently-running tasks. Every event from the runner is fanned out to three places **synchronously in this order**: (1) SQLite via `store.appendEvent`, (2) the per-task plain-text log file under `~/.agent-dashboard/logs/<id>.log`, (3) the in-process `broadcast` EventEmitter that SSE subscribers listen on.
+`manager.js` keeps a `Map<task_id, { broadcast, runner, logStream }>` of currently-running tasks. Every event from the runner is fanned out to three places **synchronously in this order**: (1) SQLite via `store.appendEvent`, (2) the per-task plain-text log file under `~/.concilium/logs/<id>.log`, (3) the in-process `broadcast` EventEmitter that SSE subscribers listen on.
 
 This ordering is the invariant that makes the SSE replay work without gaps or duplicates. See `server/routes/stream.js`: a new SSE client first attaches its listener to `broadcast`, *then* reads past events from the DB. Because step (1) (DB write) completes before step (3) (broadcast) for every event, the DB snapshot at subscribe-time covers exactly the events that fired before the subscription — no overlap with the live stream that follows. Don't reorder these emits.
 
@@ -52,8 +52,8 @@ The terminal theme is sourced from CSS custom properties (`--term-bg`, `--term-f
 
 ### Configuration & discovery
 
-`config.js` owns `~/.agent-dashboard/` (state dir, config path, log dir constants). `discover.js` has a hardcoded `KNOWN` list of CLI agents and `which()`-style scans `$PATH` for them — used by the settings UI's "Discover" panel. The same list seeds defaults in `config.js`. When adding a known agent, update both `KNOWN` in `discover.js` and the default in `config.js` so the bundled defaults and discovery suggestions stay in sync.
+`config.js` owns `~/.concilium/` (state dir, config path, log dir constants). `discover.js` has a hardcoded `KNOWN` list of CLI agents and `which()`-style scans `$PATH` for them — used by the settings UI's "Discover" panel. The same list seeds defaults in `config.js`. When adding a known agent, update both `KNOWN` in `discover.js` and the default in `config.js` so the bundled defaults and discovery suggestions stay in sync.
 
 ### Service install flow
 
-`agentctl install` reads `install/com.user.agent-dashboard.plist.tmpl` (macOS) or `install/agent-dashboard.service.tmpl` (Linux) and substitutes `@NODE_BIN@`, `@PROJECT_ROOT@`, `@LOG_FILE@`, `@USER_PATH@`. Baking the user's current `$PATH` into the service definition is intentional — it lets the daemon find agents installed via Homebrew, nvm, etc. when launched by launchd/systemd outside an interactive shell.
+`conciliumctl install` reads `install/com.user.concilium.plist.tmpl` (macOS) or `install/concilium.service.tmpl` (Linux) and substitutes `@NODE_BIN@`, `@PROJECT_ROOT@`, `@LOG_FILE@`, `@USER_PATH@`. Baking the user's current `$PATH` into the service definition is intentional — it lets the daemon find agents installed via Homebrew, nvm, etc. when launched by launchd/systemd outside an interactive shell.

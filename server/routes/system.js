@@ -100,7 +100,7 @@ router.post('/github-url', (req, res) => {
   fs.stat(resolved, (statErr, stats) => {
     if (statErr) {
       if (statErr.code !== 'ENOENT' && statErr.code !== 'ENOTDIR') {
-        console.error('[agent-dashboard] github-url stat error:', statErr.message);
+        console.error('[concilium] github-url stat error:', statErr.message);
       }
       return res.json({ url: null });
     }
@@ -124,7 +124,7 @@ router.get('/layout', (req, res) => {
   try {
     res.json(JSON.parse(raw));
   } catch (err) {
-    console.error('[agent-dashboard] failed to parse stored layout:', err);
+    console.error('[concilium] failed to parse stored layout:', err);
     res.json([]);
   }
 });
