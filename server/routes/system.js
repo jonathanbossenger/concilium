@@ -88,14 +88,42 @@ function parseGitHubUrl(remoteUrl) {
   return null;
 }
 
+function parseGitHubRepo(url) {
+  const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/.exec(url || '');
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2];
+  const ownerRepoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+  if (!ownerRepoPattern.test(owner) || !ownerRepoPattern.test(repo)) return null;
+  return { owner, repo };
+}
+
+async function fetchGitHubJson(url) {
+  const r = await fetch(url, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'concilium',
+    },
+  });
+  if (!r.ok) throw new Error(`GitHub API request failed with status ${r.status}`);
+  return r.json();
+}
+
+function toGitHubItem(item) {
+  return {
+    number: item.number,
+    title: item.title,
+    url: item.html_url,
+    state: item.state,
+  };
+}
+
 router.post('/github-url', (req, res) => {
   const rawDir = req.body && req.body.path;
   if (!rawDir || typeof rawDir !== 'string') {
     return res.status(400).json({ error: 'path required' });
   }
   const dir = expandTilde(rawDir);
-  // Resolve to an absolute path and verify it is an existing directory before
-  // running git, so we do not reveal information about arbitrary filesystem paths.
   const resolved = path.resolve(dir);
   fs.stat(resolved, (statErr, stats) => {
     if (statErr) {
@@ -105,7 +133,6 @@ router.post('/github-url', (req, res) => {
       return res.json({ url: null });
     }
     if (!stats.isDirectory()) return res.json({ url: null });
-    // Try 'origin' first, then fall back to 'upstream' (common in fork workflows).
     execFile('git', ['-C', resolved, 'remote', 'get-url', 'origin'], (err, stdout) => {
       const originUrl = err ? null : parseGitHubUrl(stdout.toString().trim());
       if (originUrl) return res.json({ url: originUrl });
@@ -116,6 +143,35 @@ router.post('/github-url', (req, res) => {
       });
     });
   });
+});
+
+router.post('/github-items', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    if (url && typeof url !== 'string') {
+      return res.status(400).json({ error: 'url must be a string' });
+    }
+    if (!url) return res.json({ url: null, issues: [], pulls: [] });
+    const repoData = parseGitHubRepo(url);
+    if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
+    const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
+    try {
+      const [rawIssues, rawPulls] = await Promise.all([
+        fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
+        fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
+      ]);
+      const issues = Array.isArray(rawIssues)
+        ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
+        : [];
+      const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubItem) : [];
+      res.json({ url, issues, pulls });
+    } catch (err) {
+      console.error('[concilium] github-items fetch failed:', err.message);
+      res.json({ url, issues: [], pulls: [], error: 'failed to fetch from github' });
+    }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
 });
 
 router.get('/layout', (req, res) => {

@@ -146,6 +146,7 @@ class Card {
     this.lastSentSize = null;
     this._checkGitHubTimer = null;
     this._githubAbortCtrl = null;
+    this.githubUrl = '';
 
     this.refreshAgentSelect();
 
@@ -156,6 +157,7 @@ class Card {
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim(), this.el));
     this.cloneBtn.addEventListener('click', () => cloneCard(this));
+    this.githubBtn.addEventListener('click', () => this.openGitHubCard());
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
     enableCardDragging(this.el, this.headerEl);
@@ -423,7 +425,7 @@ class Card {
 
   async checkGitHub() {
     const dir = this.cwd.value.trim();
-    if (!dir) { this.githubBtn.hidden = true; return; }
+    if (!dir) { this.githubUrl = ''; this.githubBtn.hidden = true; return; }
     // Cancel any in-flight request so stale responses don't overwrite newer results.
     if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
     this._githubAbortCtrl = new AbortController();
@@ -435,19 +437,26 @@ class Card {
         body: JSON.stringify({ path: dir }),
         signal,
       });
-      if (!r.ok) { this.githubBtn.hidden = true; return; }
+      if (!r.ok) { this.githubUrl = ''; this.githubBtn.hidden = true; return; }
       const data = await r.json().catch(() => ({}));
       if (data.url) {
-        this.githubBtn.href = data.url;
+        this.githubUrl = data.url;
         this.githubBtn.hidden = false;
       } else {
+        this.githubUrl = '';
         this.githubBtn.hidden = true;
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error('[concilium] checkGitHub failed:', err);
+      this.githubUrl = '';
       this.githubBtn.hidden = true;
     }
+  }
+
+  openGitHubCard() {
+    if (!this.githubUrl) return;
+    addGitHubCard({ afterEl: this.el, repoUrl: this.githubUrl });
   }
 
   async kill() {
@@ -482,6 +491,89 @@ class Card {
     await Promise.all(ids.map((id) =>
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
     ));
+  }
+}
+
+class GitHubCard {
+  constructor() {
+    const tpl = $('#github-card-template');
+    this.el = tpl.content.firstElementChild.cloneNode(true);
+    this.titleEl = $('.card-term-label', this.el);
+    this.statusEl = $('.card-status', this.el);
+    this.closeBtn = $('.card-close', this.el);
+    this.issuesEl = $('.github-issues', this.el);
+    this.pullsEl = $('.github-prs', this.el);
+    this.headerEl = $('.card-header', this.el);
+
+    this.closeBtn.addEventListener('click', () => this.close());
+    enableCardDragging(this.el, this.headerEl);
+  }
+
+  setStatus(text, cls) {
+    this.statusEl.textContent = text;
+    this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
+  }
+
+  renderList(el, items, emptyText) {
+    el.replaceChildren();
+    if (!items.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = emptyText;
+      el.appendChild(li);
+      return;
+    }
+    for (const item of items) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = item.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = `#${item.number} ${item.title}`;
+      li.appendChild(a);
+      el.appendChild(li);
+    }
+  }
+
+  setTitle(url) {
+    if (!url) return;
+    const short = url.replace(/^https:\/\/github\.com\//, '');
+    this.titleEl.textContent = `GitHub — ${short}`;
+  }
+
+  async load(repoUrlHint = '') {
+    this.setTitle(repoUrlHint);
+    this.setStatus('loading…', 'running');
+    try {
+      const r = await fetch('/api/system/github-items', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: repoUrlHint }),
+      });
+      let data = {};
+      try {
+        data = await r.json();
+      } catch (_) {}
+      if (!r.ok) {
+        this.setStatus(data.error || 'failed', 'err');
+        this.renderList(this.issuesEl, [], 'unable to load');
+        this.renderList(this.pullsEl, [], 'unable to load');
+        return;
+      }
+      const url = data.url || repoUrlHint;
+      this.setTitle(url);
+      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues');
+      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests');
+      this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
+    } catch (err) {
+      this.setStatus('failed', 'err');
+      this.renderList(this.issuesEl, [], 'unable to load');
+      this.renderList(this.pullsEl, [], 'unable to load');
+    }
+  }
+
+  close() {
+    if (this.el.parentNode) this.el.remove();
   }
 }
 
@@ -664,6 +756,18 @@ function addTerminalCard(cwd, afterEl = null) {
   }
   card.initTerminal();
   card.launch(cwd);
+  return card;
+}
+
+function addGitHubCard({ afterEl = null, repoUrl = '' } = {}) {
+  const card = new GitHubCard();
+  const main = $('#cards');
+  if (afterEl && afterEl.parentNode === main) {
+    main.insertBefore(card.el, afterEl.nextSibling);
+  } else {
+    main.appendChild(card.el);
+  }
+  card.load(repoUrl);
   return card;
 }
 
