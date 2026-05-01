@@ -561,7 +561,6 @@ class GitHubCard {
       try {
         data = await r.json();
       } catch (_) {}
-      if (signal.aborted) return;
       if (!r.ok) {
         this.setStatus(data.error || 'failed', 'err');
         this.renderList(this.issuesEl, [], 'unable to load');
@@ -574,7 +573,7 @@ class GitHubCard {
       this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests');
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
-      if (err.name === 'AbortError' || signal.aborted) return;
+      if (err.name === 'AbortError') return;
       this.setStatus('failed', 'err');
       this.renderList(this.issuesEl, [], 'unable to load');
       this.renderList(this.pullsEl, [], 'unable to load');

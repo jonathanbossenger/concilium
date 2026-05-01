@@ -108,19 +108,25 @@ async function fetchGitHubJson(url) {
   if (!r.ok) {
     const err = new Error(`GitHub API request failed with status ${r.status}`);
     err.status = r.status;
+    const remainingHeader = r.headers.get('x-ratelimit-remaining');
+    const remaining = remainingHeader === null ? null : Number.parseInt(remainingHeader, 10);
+    err.rateLimited = Number.isFinite(remaining) && remaining === 0;
     throw err;
   }
   return r.json();
 }
 
 function classifyGitHubError(err) {
-  if (err && err.status === 403) {
+  if (err && err.status === 403 && err.rateLimited) {
     return { code: 'rate_limited', message: 'github rate limited (http 403)' };
+  }
+  if (err && err.status === 403) {
+    return { code: 'forbidden', message: 'github access forbidden (http 403)' };
   }
   if (err && err.status === 404) {
     return { code: 'not_found', message: 'github repository not found (http 404)' };
   }
-  if (err && err.status) {
+  if (err && typeof err.status === 'number' && err.status > 0) {
     return { code: 'http_error', message: `github request failed (http ${err.status})` };
   }
   return { code: 'fetch_failed', message: 'failed to fetch from github' };
