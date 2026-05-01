@@ -212,7 +212,7 @@ class Card {
     // taskHint is the task row passed in by restoreLayout (already fetched);
     // null means a freshly-launched task, which is always live.
     const isLive = !taskHint || taskHint.status === 'running';
-    this.setStatus(`task #${taskId} ${isLive ? 'running…' : 'restoring…'}`, isLive ? 'running' : undefined);
+    this.setStatus(isLive ? 'task running…' : 'task restoring…', isLive ? 'running' : undefined);
     this.setRunning(isLive);
 
     // Include ?since= when we already have a lastEventId (SQLite row id) so
@@ -230,7 +230,7 @@ class Card {
     src.onopen = () => {
       if (this.currentTaskId === taskId && this._reconnecting) {
         this._reconnecting = false;
-        this.setStatus(`task #${taskId} running…`, 'running');
+        this.setStatus('task running…', 'running');
       }
     };
 
@@ -250,7 +250,7 @@ class Card {
       try { info = JSON.parse(e.data); } catch (_) {}
       const tail = `\r\n\x1b[2m[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\x1b[0m\r\n`;
       this.term.write(tail);
-      this.setStatus(`task #${taskId} ${info.status || 'ended'}`, info.status === 'done' ? 'ok' : 'err');
+      this.setStatus(`task ${info.status || 'ended'}`, info.status === 'done' ? 'ok' : 'err');
       this.setRunning(false);
       src.close();
       if (this.currentSource === src) this.currentSource = null;
@@ -264,7 +264,7 @@ class Card {
       // already-delivered events). This handles the common case of a laptop
       // sleeping/locking which causes ERR_NETWORK_IO_SUSPENDED.
       this._reconnecting = true;
-      this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
+      this.setStatus('task reconnecting…', 'warn');
       // Guard against multiple in-flight checks during extended backoff retries.
       if (this._errorCheckPending) return;
       this._errorCheckPending = true;
@@ -276,7 +276,7 @@ class Card {
           // Task is gone — nothing to reconnect to.
           src.close();
           if (this.currentSource === src) this.currentSource = null;
-          this.setStatus(`task #${capturedTaskId} lost connection`, 'err');
+          this.setStatus('task lost connection', 'err');
           this.currentTaskId = null;
           this.setRunning(false);
         }
@@ -285,7 +285,7 @@ class Card {
         this._errorCheckPending = false;
         // fetch also failed — network is down; EventSource will keep retrying.
         if (this.currentTaskId !== capturedTaskId) return; // superseded
-        this.setStatus(`task #${capturedTaskId} — reconnecting…`, 'warn');
+        this.setStatus('task reconnecting…', 'warn');
       });
     };
   }
@@ -307,7 +307,7 @@ class Card {
       const r = await fetch(`/api/tasks/${taskId}`);
       if (this.currentTaskId !== taskId) return; // superseded
       if (!r.ok) {
-        this.setStatus(`task #${taskId} lost connection`, 'err');
+        this.setStatus('task lost connection', 'err');
         this.currentTaskId = null;
         this.setRunning(false);
         return;
