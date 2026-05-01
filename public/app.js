@@ -61,21 +61,41 @@ function fillAgentSelect(select, currentValue) {
   }
 }
 
-function cardAfterPointer(main, clientY) {
+function cardInsertTarget(main, clientX, clientY) {
   const siblings = [...main.querySelectorAll('.card:not(.dragging)')];
-  let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+  if (siblings.length === 0) return null;
+  let closestCard = null;
+  let closestRect = null;
+  let closestDist = Number.POSITIVE_INFINITY;
   for (const el of siblings) {
     const rect = el.getBoundingClientRect();
-    const offset = clientY - rect.top - rect.height / 2;
-    if (offset < 0 && offset > closest.offset) closest = { offset, element: el };
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const dist = dx * dx + dy * dy;
+    if (dist < closestDist) {
+      closestDist = dist;
+      closestCard = el;
+      closestRect = rect;
+    }
   }
-  return closest.element;
+  if (!closestCard || !closestRect) return null;
+  const dx = clientX - (closestRect.left + closestRect.width / 2);
+  const dy = clientY - (closestRect.top + closestRect.height / 2);
+  const before = Math.abs(dx) > Math.abs(dy) ? dx < 0 : dy < 0;
+  return before ? closestCard : closestCard.nextElementSibling;
 }
 
 function enableCardDragging(cardEl, handleEl) {
   handleEl.draggable = true;
 
   handleEl.addEventListener('dragstart', (e) => {
+    const target = e.target;
+    if (target && target.closest('button, select, input, a, .card-actions, .card-status')) {
+      e.preventDefault();
+      return;
+    }
     if (cardEl.classList.contains('expanded')) {
       e.preventDefault();
       return;
@@ -767,18 +787,8 @@ $('#cards').addEventListener('dragover', (e) => {
   if (!draggingCardEl) return;
   e.preventDefault();
   const main = $('#cards');
-  const after = cardAfterPointer(main, e.clientY);
-  if (!after) {
-    main.appendChild(draggingCardEl);
-  } else {
-    main.insertBefore(draggingCardEl, after);
-  }
-});
-
-$('#cards').addEventListener('drop', (e) => {
-  if (!draggingCardEl) return;
-  e.preventDefault();
-  saveLayout();
+  const target = cardInsertTarget(main, e.clientX, e.clientY);
+  main.insertBefore(draggingCardEl, target);
 });
 
 // --- settings dialog -------------------------------------------------------

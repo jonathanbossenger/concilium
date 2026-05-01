@@ -195,6 +195,11 @@ main:has(.card:only-child):not(.has-expanded) {
   cursor: grab;
 }
 .card-header:active { cursor: grabbing; }
+.card-header select,
+.card-header button,
+.card-header a,
+.card-header .card-actions,
+.card-header .card-status { cursor: default; }
 .card-agent {
   flex: 1 1 auto;
   min-width: 0;
