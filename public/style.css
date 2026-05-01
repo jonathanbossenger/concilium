@@ -192,7 +192,14 @@ main:has(.card:only-child):not(.has-expanded) {
   align-items: center;
   gap: 0.5em;
   padding: 0.5em 0.5em 0.5em 0;
+  cursor: grab;
 }
+.card-header:active { cursor: grabbing; }
+.card-header select,
+.card-header button,
+.card-header a,
+.card-header .card-actions,
+.card-header .card-status { cursor: default; }
 .card-agent {
   flex: 1 1 auto;
   min-width: 0;
@@ -234,16 +241,19 @@ main:has(.card:only-child):not(.has-expanded) {
   justify-content: center;
   padding: 0 0.35em;
   border-radius: 4px;
-  border: 1px solid transparent;
   background: transparent;
   color: var(--text-dim);
   font-size: 1.3em;
   line-height: 1;
   text-decoration: none;
-  cursor: pointer;
   white-space: nowrap;
 }
-.card-github:not([hidden]):hover, .card-clone:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
+.card-clone { border: 1px solid transparent; }
+.card-github:not([hidden]) { border: 0; }
+.card-github:not([hidden]):hover, .card-clone:hover { background: var(--bg-input); color: var(--text); }
+.card-github:not([hidden]):hover { border: 1px solid var(--border-soft); }
+.card-clone:hover { border-color: var(--border-soft); }
+.card.dragging { opacity: 0.7; border-style: dashed; }
 
 main.has-expanded {
   grid-template-columns: 1fr;

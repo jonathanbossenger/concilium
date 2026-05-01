@@ -4,6 +4,7 @@ const $$ = (sel, root = document) => root.querySelectorAll(sel);
 let agentsById = new Map();
 const cards = new Set();
 const termCards = new Set();
+let draggingCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
@@ -60,6 +61,60 @@ function fillAgentSelect(select, currentValue) {
   }
 }
 
+function cardInsertTarget(main, clientX, clientY) {
+  const siblings = [...main.querySelectorAll('.card:not(.dragging)')];
+  if (siblings.length === 0) return null;
+  let closestCard = null;
+  let closestRect = null;
+  let closestDist = Number.POSITIVE_INFINITY;
+  for (const el of siblings) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const dist = dx * dx + dy * dy;
+    if (dist < closestDist) {
+      closestDist = dist;
+      closestCard = el;
+      closestRect = rect;
+    }
+  }
+  if (!closestCard || !closestRect) return null;
+  const dx = clientX - (closestRect.left + closestRect.width / 2);
+  const dy = clientY - (closestRect.top + closestRect.height / 2);
+  const before = Math.abs(dx) > Math.abs(dy) ? dx < 0 : dy < 0;
+  return before ? closestCard : closestCard.nextElementSibling;
+}
+
+function enableCardDragging(cardEl, handleEl) {
+  handleEl.draggable = true;
+
+  handleEl.addEventListener('dragstart', (e) => {
+    const target = e.target;
+    if (target && target.closest('button, select, input, a, .card-actions, .card-status')) {
+      e.preventDefault();
+      return;
+    }
+    if (cardEl.classList.contains('expanded')) {
+      e.preventDefault();
+      return;
+    }
+    draggingCardEl = cardEl;
+    cardEl.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'card');
+    }
+  });
+
+  handleEl.addEventListener('dragend', () => {
+    cardEl.classList.remove('dragging');
+    if (draggingCardEl === cardEl) draggingCardEl = null;
+    saveLayout();
+  });
+}
+
 class Card {
   constructor() {
     const tpl = $('#card-template');
@@ -76,6 +131,7 @@ class Card {
     this.statusEl = $('.card-status', this.el);
     this.termEl = $('.card-term', this.el);
     this.taskForm = $('.card-form', this.el);
+    this.headerEl = $('.card-header', this.el);
 
     this.taskIds = new Set();
     this.currentTaskId = null;
@@ -102,6 +158,7 @@ class Card {
     this.cloneBtn.addEventListener('click', () => cloneCard(this));
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
+    enableCardDragging(this.el, this.headerEl);
 
     cards.add(this);
   }
@@ -436,6 +493,7 @@ class TerminalCard {
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
     this.termEl = $('.card-term', this.el);
+    this.headerEl = $('.card-header', this.el);
 
     this.taskId = null;
     this.currentSource = null;
@@ -446,6 +504,7 @@ class TerminalCard {
 
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
+    enableCardDragging(this.el, this.headerEl);
 
     termCards.add(this);
   }
@@ -636,11 +695,16 @@ function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {
 // --- session persistence ---------------------------------------------------
 
 function currentLayoutState() {
-  return [...cards].map((c) => ({
-    agentId: c.agentSelect.value,
-    cwd: c.cwd.value,
-    lastTaskId: c.lastTaskId || null,
-  }));
+  const order = [...$('#cards').querySelectorAll('.card')];
+  const byEl = new Map([...cards].map((c) => [c.el, c]));
+  return order
+    .map((el) => byEl.get(el))
+    .filter(Boolean)
+    .map((c) => ({
+      agentId: c.agentSelect.value,
+      cwd: c.cwd.value,
+      lastTaskId: c.lastTaskId || null,
+    }));
 }
 
 let saveLayoutTimer = null;
@@ -717,6 +781,14 @@ window.addEventListener('beforeunload', () => {
     '/api/system/layout',
     new Blob([JSON.stringify(currentLayoutState())], { type: 'application/json' }),
   );
+});
+
+$('#cards').addEventListener('dragover', (e) => {
+  if (!draggingCardEl) return;
+  e.preventDefault();
+  const main = $('#cards');
+  const target = cardInsertTarget(main, e.clientX, e.clientY);
+  main.insertBefore(draggingCardEl, target);
 });
 
 // --- settings dialog -------------------------------------------------------
