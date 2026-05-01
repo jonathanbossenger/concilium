@@ -265,7 +265,7 @@ router.post('/github-token', (req, res) => {
   const cfg = getConfig();
   const normalized = typeof token === 'string' ? token.trim() : '';
   if (normalized && !GITHUB_TOKEN_RE.test(normalized)) {
-    return res.status(400).json({ error: 'GITHUB_TOKEN contains invalid characters' });
+    return res.status(400).json({ error: 'GitHub token contains invalid characters' });
   }
   if (normalized) cfg.githubToken = normalized;
   else delete cfg.githubToken;
