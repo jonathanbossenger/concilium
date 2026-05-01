@@ -88,6 +88,66 @@ function parseGitHubUrl(remoteUrl) {
   return null;
 }
 
+function parseGitHubRepo(url) {
+  const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/.exec(url || '');
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2];
+  const ownerRepoPattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+  if (!ownerRepoPattern.test(owner) || !ownerRepoPattern.test(repo)) return null;
+  return { owner, repo };
+}
+
+async function fetchGitHubJson(url) {
+  const r = await fetch(url, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'concilium',
+    },
+  });
+  if (!r.ok) {
+    const err = new Error(`GitHub API request failed with status ${r.status}`);
+    err.status = r.status;
+    const remainingHeader = r.headers.get('x-ratelimit-remaining');
+    const remaining = remainingHeader === null ? null : Number.parseInt(remainingHeader, 10);
+    err.rateLimited = Number.isFinite(remaining) && remaining === 0;
+    throw err;
+  }
+  return r.json();
+}
+
+function classifyGitHubError(err) {
+  if (err && err.status === 403 && err.rateLimited) {
+    return { code: 'rate_limited', message: 'github rate limited (http 403)' };
+  }
+  if (err && err.status === 403) {
+    return { code: 'forbidden', message: 'github access forbidden (http 403)' };
+  }
+  if (err && err.status === 404) {
+    return { code: 'not_found', message: 'github repository not found (http 404)' };
+  }
+  if (err && typeof err.status === 'number' && err.status > 0) {
+    return { code: 'http_error', message: `github request failed (http ${err.status})` };
+  }
+  return { code: 'fetch_failed', message: 'failed to fetch from github' };
+}
+
+function toGitHubItem(item) {
+  return {
+    number: item.number,
+    title: item.title,
+    url: item.html_url,
+    state: item.state,
+  };
+}
+
+function toGitHubPull(item) {
+  return {
+    ...toGitHubItem(item),
+    branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
+  };
+}
+
 router.post('/github-url', (req, res) => {
   const rawDir = req.body && req.body.path;
   if (!rawDir || typeof rawDir !== 'string') {
@@ -116,6 +176,42 @@ router.post('/github-url', (req, res) => {
       });
     });
   });
+});
+
+router.post('/github-items', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    if (url && typeof url !== 'string') {
+      return res.status(400).json({ error: 'url must be a string' });
+    }
+    if (!url) return res.json({ url: null, issues: [], pulls: [] });
+    const repoData = parseGitHubRepo(url);
+    if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
+    const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
+    try {
+      const [rawIssues, rawPulls] = await Promise.all([
+        fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
+        fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
+      ]);
+      const issues = Array.isArray(rawIssues)
+        ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
+        : [];
+      const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubPull) : [];
+      res.json({ url, issues, pulls });
+    } catch (err) {
+      const detail = classifyGitHubError(err);
+      console.error('[concilium] github-items fetch failed:', err.message);
+      res.json({
+        url,
+        issues: [],
+        pulls: [],
+        error: detail.message,
+        errorCode: detail.code,
+      });
+    }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
 });
 
 router.get('/layout', (req, res) => {

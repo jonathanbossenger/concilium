@@ -234,7 +234,7 @@ main:has(.card:only-child):not(.has-expanded) {
 }
 .card-expand:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
 .card-close:hover { background: var(--bg-danger-soft); color: var(--stderr); border-color: var(--border-danger); }
-.card-github:not([hidden]), .card-clone {
+.card-github:not([hidden]), .card-clone, .card-new-issue:not([hidden]), .card-refresh {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -247,13 +247,119 @@ main:has(.card:only-child):not(.has-expanded) {
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
 }
 .card-clone { border: 1px solid transparent; }
-.card-github:not([hidden]) { border: 0; }
-.card-github:not([hidden]):hover, .card-clone:hover { background: var(--bg-input); color: var(--text); }
-.card-github:not([hidden]):hover { border: 1px solid var(--border-soft); }
+.card-github:not([hidden]) { border: 1px solid transparent; }
+.card-new-issue:not([hidden]) { border: 1px solid transparent; }
+.card-refresh { border: 1px solid transparent; }
+.card-github:not([hidden]):hover, .card-clone:hover, .card-new-issue:not([hidden]):hover, .card-refresh:hover { background: var(--bg-input); color: var(--text); }
+.card-github:not([hidden]):hover, .card-new-issue:not([hidden]):hover, .card-refresh:hover { border-color: var(--border-soft); }
 .card-clone:hover { border-color: var(--border-soft); }
+.card-refresh.spinning svg { animation: card-refresh-spin 0.7s linear infinite; }
+@keyframes card-refresh-spin { to { transform: rotate(360deg); } }
 .card.dragging { opacity: 0.7; border-style: dashed; }
+
+.github-links {
+  display: grid;
+  gap: 0.7em;
+}
+.github-links section {
+  background: var(--bg-output);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6em 0.75em 0.5em;
+  min-width: 0;
+}
+.github-links section h3 {
+  margin: 0 0 0.45em 0;
+  font-size: 0.76em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.github-section-link {
+  color: inherit;
+  text-decoration: none;
+}
+.github-section-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.github-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.github-list li {
+  font-size: 0.88em;
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35em 0.5em;
+  min-width: 0;
+}
+.github-list li:nth-child(odd) {
+  background: var(--bg-hover);
+}
+.github-list a.github-list-link {
+  color: var(--text);
+  text-decoration: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.github-list a.github-list-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.github-branch {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-input);
+  font-size: 0.85em;
+}
+.github-branch-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.github-branch-copy {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1em 0.2em;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  line-height: 0;
+}
+.github-branch-copy:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-soft);
+}
+.github-branch-copy.copied {
+  color: var(--status-ok);
+}
 
 main.has-expanded {
   grid-template-columns: 1fr;
