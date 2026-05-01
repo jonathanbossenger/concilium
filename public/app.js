@@ -504,6 +504,7 @@ class GitHubCard {
     this.issuesEl = $('.github-issues', this.el);
     this.pullsEl = $('.github-prs', this.el);
     this.headerEl = $('.card-header', this.el);
+    this._loadAbortCtrl = null;
 
     this.closeBtn.addEventListener('click', () => this.close());
     enableCardDragging(this.el, this.headerEl);
@@ -542,18 +543,25 @@ class GitHubCard {
   }
 
   async load(repoUrlHint = '') {
+    if (this._loadAbortCtrl) this._loadAbortCtrl.abort();
+    this._loadAbortCtrl = new AbortController();
+    const { signal } = this._loadAbortCtrl;
     this.setTitle(repoUrlHint);
     this.setStatus('loading…', 'running');
+    this.renderList(this.issuesEl, [], 'loading…');
+    this.renderList(this.pullsEl, [], 'loading…');
     try {
       const r = await fetch('/api/system/github-items', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url: repoUrlHint }),
+        signal,
       });
       let data = {};
       try {
         data = await r.json();
       } catch (_) {}
+      if (signal.aborted) return;
       if (!r.ok) {
         this.setStatus(data.error || 'failed', 'err');
         this.renderList(this.issuesEl, [], 'unable to load');
@@ -566,6 +574,7 @@ class GitHubCard {
       this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests');
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
+      if (err.name === 'AbortError' || signal.aborted) return;
       this.setStatus('failed', 'err');
       this.renderList(this.issuesEl, [], 'unable to load');
       this.renderList(this.pullsEl, [], 'unable to load');
@@ -573,6 +582,7 @@ class GitHubCard {
   }
 
   close() {
+    if (this._loadAbortCtrl) this._loadAbortCtrl.abort();
     if (this.el.parentNode) this.el.remove();
   }
 }

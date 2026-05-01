@@ -105,8 +105,25 @@ async function fetchGitHubJson(url) {
       'user-agent': 'concilium',
     },
   });
-  if (!r.ok) throw new Error(`GitHub API request failed with status ${r.status}`);
+  if (!r.ok) {
+    const err = new Error(`GitHub API request failed with status ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
   return r.json();
+}
+
+function classifyGitHubError(err) {
+  if (err && err.status === 403) {
+    return { code: 'rate_limited', message: 'github rate limited (http 403)' };
+  }
+  if (err && err.status === 404) {
+    return { code: 'not_found', message: 'github repository not found (http 404)' };
+  }
+  if (err && err.status) {
+    return { code: 'http_error', message: `github request failed (http ${err.status})` };
+  }
+  return { code: 'fetch_failed', message: 'failed to fetch from github' };
 }
 
 function toGitHubItem(item) {
@@ -124,6 +141,8 @@ router.post('/github-url', (req, res) => {
     return res.status(400).json({ error: 'path required' });
   }
   const dir = expandTilde(rawDir);
+  // Resolve to an absolute path and verify it is an existing directory before
+  // running git, so we do not reveal information about arbitrary filesystem paths.
   const resolved = path.resolve(dir);
   fs.stat(resolved, (statErr, stats) => {
     if (statErr) {
@@ -133,6 +152,7 @@ router.post('/github-url', (req, res) => {
       return res.json({ url: null });
     }
     if (!stats.isDirectory()) return res.json({ url: null });
+    // Try 'origin' first, then fall back to 'upstream' (common in fork workflows).
     execFile('git', ['-C', resolved, 'remote', 'get-url', 'origin'], (err, stdout) => {
       const originUrl = err ? null : parseGitHubUrl(stdout.toString().trim());
       if (originUrl) return res.json({ url: originUrl });
@@ -166,8 +186,15 @@ router.post('/github-items', async (req, res) => {
       const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubItem) : [];
       res.json({ url, issues, pulls });
     } catch (err) {
+      const detail = classifyGitHubError(err);
       console.error('[concilium] github-items fetch failed:', err.message);
-      res.json({ url, issues: [], pulls: [], error: 'failed to fetch from github' });
+      res.json({
+        url,
+        issues: [],
+        pulls: [],
+        error: detail.message,
+        errorCode: detail.code,
+      });
     }
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
