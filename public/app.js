@@ -264,7 +264,7 @@ class Card {
       // already-delivered events). This handles the common case of a laptop
       // sleeping/locking which causes ERR_NETWORK_IO_SUSPENDED.
       this._reconnecting = true;
-      this.setStatus('task — reconnecting…', 'warn');
+      this.setStatus('task reconnecting…', 'warn');
       // Guard against multiple in-flight checks during extended backoff retries.
       if (this._errorCheckPending) return;
       this._errorCheckPending = true;
@@ -285,7 +285,7 @@ class Card {
         this._errorCheckPending = false;
         // fetch also failed — network is down; EventSource will keep retrying.
         if (this.currentTaskId !== capturedTaskId) return; // superseded
-        this.setStatus('task — reconnecting…', 'warn');
+        this.setStatus('task reconnecting…', 'warn');
       });
     };
   }
