@@ -501,12 +501,18 @@ class GitHubCard {
     this.titleEl = $('.card-term-label', this.el);
     this.statusEl = $('.card-status', this.el);
     this.closeBtn = $('.card-close', this.el);
+    this.newIssueBtn = $('.card-new-issue', this.el);
+    this.refreshBtn = $('.card-refresh', this.el);
     this.issuesEl = $('.github-issues', this.el);
     this.pullsEl = $('.github-prs', this.el);
+    this.issuesLinkEl = $('.github-issues-link', this.el);
+    this.pullsLinkEl = $('.github-prs-link', this.el);
     this.headerEl = $('.card-header', this.el);
     this._loadAbortCtrl = null;
+    this.currentUrl = '';
 
     this.closeBtn.addEventListener('click', () => this.close());
+    this.refreshBtn.addEventListener('click', () => this.load(this.currentUrl));
     enableCardDragging(this.el, this.headerEl);
   }
 
@@ -531,8 +537,58 @@ class GitHubCard {
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = `#${item.number} ${item.title}`;
+      a.className = 'github-list-link';
       li.appendChild(a);
+      if (item.branch) {
+        const branchWrap = document.createElement('span');
+        branchWrap.className = 'github-branch';
+        const code = document.createElement('code');
+        code.className = 'github-branch-name';
+        code.textContent = item.branch;
+        code.title = item.branch;
+        branchWrap.appendChild(code);
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'github-branch-copy';
+        copyBtn.setAttribute('aria-label', `Copy branch name ${item.branch}`);
+        copyBtn.title = 'Copy branch name';
+        copyBtn.innerHTML = '<svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/></svg>';
+        copyBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.copyBranch(item.branch, copyBtn);
+        });
+        branchWrap.appendChild(copyBtn);
+        li.appendChild(branchWrap);
+      }
       el.appendChild(li);
+    }
+  }
+
+  async copyBranch(branch, btn) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(branch);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = branch;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      btn.classList.add('copied');
+      btn.title = 'Copied!';
+      clearTimeout(btn._copyTimer);
+      btn._copyTimer = setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.title = 'Copy branch name';
+      }, 1200);
+    } catch (err) {
+      console.error('[concilium] branch copy failed:', err);
     }
   }
 
@@ -540,6 +596,12 @@ class GitHubCard {
     if (!url) return;
     const short = url.replace(/^https:\/\/github\.com\//, '');
     this.titleEl.textContent = `GitHub — ${short}`;
+    const base = url.replace(/\/+$/, '');
+    this.currentUrl = base;
+    this.newIssueBtn.href = base + '/issues/new';
+    this.newIssueBtn.hidden = false;
+    this.pullsLinkEl.href = base + '/pulls';
+    this.issuesLinkEl.href = base + '/issues';
   }
 
   async load(repoUrlHint = '') {
@@ -550,6 +612,8 @@ class GitHubCard {
     this.setStatus('loading…', 'running');
     this.renderList(this.issuesEl, [], 'loading…');
     this.renderList(this.pullsEl, [], 'loading…');
+    this.refreshBtn.classList.add('spinning');
+    this.refreshBtn.disabled = true;
     try {
       const r = await fetch('/api/system/github-items', {
         method: 'POST',
@@ -577,6 +641,11 @@ class GitHubCard {
       this.setStatus('failed', 'err');
       this.renderList(this.issuesEl, [], 'unable to load');
       this.renderList(this.pullsEl, [], 'unable to load');
+    } finally {
+      if (!signal.aborted) {
+        this.refreshBtn.classList.remove('spinning');
+        this.refreshBtn.disabled = false;
+      }
     }
   }
 

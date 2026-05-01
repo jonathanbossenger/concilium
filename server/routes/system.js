@@ -141,6 +141,13 @@ function toGitHubItem(item) {
   };
 }
 
+function toGitHubPull(item) {
+  return {
+    ...toGitHubItem(item),
+    branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
+  };
+}
+
 router.post('/github-url', (req, res) => {
   const rawDir = req.body && req.body.path;
   if (!rawDir || typeof rawDir !== 'string') {
@@ -189,7 +196,7 @@ router.post('/github-items', async (req, res) => {
       const issues = Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
         : [];
-      const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubItem) : [];
+      const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubPull) : [];
       res.json({ url, issues, pulls });
     } catch (err) {
       const detail = classifyGitHubError(err);
