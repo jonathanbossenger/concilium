@@ -118,7 +118,7 @@ Header controls:
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
-  - Set an optional `GITHUB_TOKEN` used for authenticated GitHub API calls
+  - Set or clear an optional `GITHUB_TOKEN` used for authenticated GitHub API calls
 
 ## Configuration
 
@@ -126,7 +126,7 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + optional GITHUB_TOKEN + agent list
+├── config.yaml      # port + optional githubToken + agent list
 ├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log
 ├── server.log       # the server's own stdout/stderr
@@ -137,7 +137,7 @@ A minimal `config.yaml`:
 
 ```yaml
 port: 7878
-GITHUB_TOKEN: ""
+githubToken: ""
 agents:
   - id: claude
     name: Claude Code
@@ -152,9 +152,11 @@ agents:
 
 `interactive: false` → stdin is piped in, then closed (one-shot).
 `interactive: true` → spawned under a PTY; stays alive for follow-up input.
+`githubToken` is optional and used for authenticated GitHub API requests.
 
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
+`config.yaml` may contain a secret token — keep it readable only by your user.
 
 ## API
 
@@ -180,7 +182,7 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
 | `GET`    | `/api/system/github-token` | returns whether `GITHUB_TOKEN` is configured |
-| `POST`   | `/api/system/github-token` | save configured `GITHUB_TOKEN` |
+| `POST`   | `/api/system/github-token` | save/clear configured `GITHUB_TOKEN` (submit empty to clear) |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 

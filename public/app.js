@@ -979,6 +979,7 @@ const dlg = $('#settings-dialog');
 const agentForm = $('#agent-form');
 const githubTokenForm = $('#github-token-form');
 const githubTokenInput = $('#github-token');
+const githubTokenClearBtn = $('#github-token-clear');
 let editingId = null;
 
 function setFormMode(mode, agent) {
@@ -1129,6 +1130,8 @@ $('#discover-btn').addEventListener('click', refreshDiscoverTable);
 githubTokenForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const submitBtn = githubTokenForm.querySelector('button[type="submit"]');
+  const submitLabel = submitBtn ? submitBtn.dataset.label || submitBtn.textContent : '';
+  if (submitBtn && !submitBtn.dataset.label) submitBtn.dataset.label = submitLabel;
   const r = await fetch('/api/system/github-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1139,10 +1142,15 @@ githubTokenForm.addEventListener('submit', async (e) => {
     alert(err.error || 'save failed');
     return;
   }
+  await loadGitHubToken();
   if (submitBtn) {
     submitBtn.textContent = 'Saved';
-    setTimeout(() => { submitBtn.textContent = 'Save token'; }, 1200);
+    setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200);
   }
+});
+githubTokenClearBtn.addEventListener('click', () => {
+  githubTokenInput.value = '';
+  githubTokenInput.focus();
 });
 $('#close-settings').addEventListener('click', () => dlg.close());
 $('#open-settings').addEventListener('click', async () => {

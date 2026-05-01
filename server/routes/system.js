@@ -7,6 +7,13 @@ const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 
 const router = express.Router();
+const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
+
+function getGitHubToken(cfg) {
+  if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
+  if (cfg && typeof cfg.GITHUB_TOKEN === 'string') return cfg.GITHUB_TOKEN.trim();
+  return '';
+}
 
 function pickDirectoryMac() {
   return new Promise((resolve, reject) => {
@@ -101,7 +108,7 @@ function parseGitHubRepo(url) {
 
 async function fetchGitHubJson(url) {
   const cfg = getConfig();
-  const githubToken = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN.trim() : '';
+  const githubToken = getGitHubToken(cfg);
   const headers = {
     accept: 'application/vnd.github+json',
     'user-agent': 'concilium',
@@ -246,7 +253,7 @@ router.post('/layout', (req, res) => {
 
 router.get('/github-token', (req, res) => {
   const cfg = getConfig();
-  const token = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN.trim() : '';
+  const token = getGitHubToken(cfg);
   res.json({ hasToken: !!token });
 });
 
@@ -257,8 +264,12 @@ router.post('/github-token', (req, res) => {
   }
   const cfg = getConfig();
   const normalized = typeof token === 'string' ? token.trim() : '';
-  if (normalized) cfg.GITHUB_TOKEN = normalized;
-  else delete cfg.GITHUB_TOKEN;
+  if (normalized && !GITHUB_TOKEN_RE.test(normalized)) {
+    return res.status(400).json({ error: 'GITHUB_TOKEN contains invalid characters' });
+  }
+  if (normalized) cfg.githubToken = normalized;
+  else delete cfg.githubToken;
+  delete cfg.GITHUB_TOKEN;
   saveConfig(cfg);
   res.json({ ok: true });
 });
