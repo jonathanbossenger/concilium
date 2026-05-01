@@ -445,7 +445,7 @@ class Card {
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
-      console.error('[agent-dashboard] checkGitHub failed:', err);
+      console.error('[concilium] checkGitHub failed:', err);
       this.githubBtn.hidden = true;
     }
   }
@@ -718,8 +718,8 @@ function saveLayout() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(currentLayoutState()),
     }).then((r) => {
-      if (!r.ok) console.error('[agent-dashboard] failed to save layout: HTTP', r.status);
-    }).catch((err) => console.error('[agent-dashboard] failed to save layout:', err));
+      if (!r.ok) console.error('[concilium] failed to save layout: HTTP', r.status);
+    }).catch((err) => console.error('[concilium] failed to save layout:', err));
   }, 150);
 }
 
@@ -729,7 +729,7 @@ async function restoreLayout() {
     const r = await fetch('/api/system/layout');
     if (r.ok) states = await r.json();
   } catch (err) {
-    console.error('[agent-dashboard] failed to load saved layout:', err);
+    console.error('[concilium] failed to load saved layout:', err);
   }
   if (!Array.isArray(states) || states.length === 0) {
     addCard();
@@ -766,7 +766,7 @@ async function restoreLayout() {
           );
         }
       } catch (err) {
-        console.error(`[agent-dashboard] failed to restore task #${s.lastTaskId}:`, err);
+        console.error(`[concilium] failed to restore task #${s.lastTaskId}:`, err);
       }
     }));
   }

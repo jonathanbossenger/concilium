@@ -1,5 +1,5 @@
 {
-  "name": "agent-dashboard",
+  "name": "concilium",
   "version": "0.1.0",
   "description": "Local multi-agent orchestration dashboard",
   "main": "server/index.js",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agentctl — Apache-style lifecycle for agent-dashboard.
+# agentctl — Apache-style lifecycle for concilium.
 #
 #   agentctl start | stop | restart | status | logs
 #   agentctl install | uninstall   (registers a launchd or systemd --user service)
@@ -16,16 +16,16 @@ BIN_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
 PROJECT_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 NODE_BIN="$(command -v node || true)"
 
-STATE_DIR="$HOME/.agent-dashboard"
+STATE_DIR="$HOME/.concilium"
 PID_FILE="$STATE_DIR/run.pid"
 LOG_FILE="$STATE_DIR/server.log"
 CONFIG_FILE="$STATE_DIR/config.yaml"
 
 PLATFORM="$(uname -s)"
-SERVICE_LABEL="com.user.agent-dashboard"
+SERVICE_LABEL="com.user.concilium"
 PLIST_PATH="$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist"
 SYSTEMD_DIR="$HOME/.config/systemd/user"
-SYSTEMD_UNIT="$SYSTEMD_DIR/agent-dashboard.service"
+SYSTEMD_UNIT="$SYSTEMD_DIR/concilium.service"
 
 mkdir -p "$STATE_DIR"
 
@@ -132,7 +132,7 @@ stop_standalone() {
 start_service() {
   case "$PLATFORM" in
     Darwin) launchctl load -w "$PLIST_PATH" 2>/dev/null || launchctl start "$SERVICE_LABEL" ;;
-    Linux)  systemctl --user start agent-dashboard ;;
+    Linux)  systemctl --user start concilium ;;
   esac
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     if is_responding; then
@@ -149,7 +149,7 @@ start_service() {
 stop_service() {
   case "$PLATFORM" in
     Darwin) launchctl unload "$PLIST_PATH" 2>/dev/null || true ;;
-    Linux)  systemctl --user stop agent-dashboard 2>/dev/null || true ;;
+    Linux)  systemctl --user stop concilium 2>/dev/null || true ;;
   esac
   echo "stopped (service)"
 }
@@ -223,7 +223,7 @@ cmd_install() {
           -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
           -e "s|@LOG_FILE@|$LOG_FILE|g" \
           -e "s|@USER_PATH@|$user_path|g" \
-          "$PROJECT_ROOT/install/com.user.agent-dashboard.plist.tmpl" > "$PLIST_PATH"
+          "$PROJECT_ROOT/install/com.user.concilium.plist.tmpl" > "$PLIST_PATH"
       launchctl unload "$PLIST_PATH" 2>/dev/null || true
       launchctl load -w "$PLIST_PATH"
       echo "installed launchd agent"
@@ -237,9 +237,9 @@ cmd_install() {
           -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
           -e "s|@LOG_FILE@|$LOG_FILE|g" \
           -e "s|@USER_PATH@|$user_path|g" \
-          "$PROJECT_ROOT/install/agent-dashboard.service.tmpl" > "$SYSTEMD_UNIT"
+          "$PROJECT_ROOT/install/concilium.service.tmpl" > "$SYSTEMD_UNIT"
       systemctl --user daemon-reload
-      systemctl --user enable --now agent-dashboard
+      systemctl --user enable --now concilium
       echo "installed systemd --user unit"
       echo "  unit: $SYSTEMD_UNIT"
       echo "  log:  $LOG_FILE"
@@ -264,7 +264,7 @@ cmd_uninstall() {
       ;;
     Linux)
       if [[ -f "$SYSTEMD_UNIT" ]]; then
-        systemctl --user disable --now agent-dashboard 2>/dev/null || true
+        systemctl --user disable --now concilium 2>/dev/null || true
         rm -f "$SYSTEMD_UNIT"
         systemctl --user daemon-reload
         echo "uninstalled (removed $SYSTEMD_UNIT)"
@@ -277,7 +277,7 @@ cmd_uninstall() {
 
 usage() {
   cat <<EOF
-agentctl — agent-dashboard service control
+agentctl — concilium service control
 
 Usage:
   agentctl start        start (service if installed, standalone otherwise)

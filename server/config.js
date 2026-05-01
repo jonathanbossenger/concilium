@@ -3,7 +3,7 @@ const path = require('path');
 const os = require('os');
 const yaml = require('js-yaml');
 
-const STATE_DIR = path.join(os.homedir(), '.agent-dashboard');
+const STATE_DIR = path.join(os.homedir(), '.concilium');
 const CONFIG_PATH = path.join(STATE_DIR, 'config.yaml');
 const LOG_DIR = path.join(STATE_DIR, 'logs');
 
