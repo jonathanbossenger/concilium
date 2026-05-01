@@ -977,6 +977,8 @@ $('#cards').addEventListener('dragover', (e) => {
 
 const dlg = $('#settings-dialog');
 const agentForm = $('#agent-form');
+const githubTokenForm = $('#github-token-form');
+const githubTokenInput = $('#github-token');
 let editingId = null;
 
 function setFormMode(mode, agent) {
@@ -1074,6 +1076,16 @@ async function refreshDiscoverTable() {
   }
 }
 
+async function loadGitHubToken() {
+  const r = await fetch('/api/system/github-token');
+  if (!r.ok) {
+    githubTokenInput.value = '';
+    return;
+  }
+  const data = await r.json().catch(() => ({}));
+  githubTokenInput.value = typeof data.GITHUB_TOKEN === 'string' ? data.GITHUB_TOKEN : '';
+}
+
 agentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const args = agentForm.args.value.trim() ? agentForm.args.value.trim().split(/\s+/) : [];
@@ -1110,11 +1122,24 @@ agentForm.addEventListener('submit', async (e) => {
 
 $('#agent-cancel').addEventListener('click', (e) => { e.preventDefault(); setFormMode('add'); });
 $('#discover-btn').addEventListener('click', refreshDiscoverTable);
+githubTokenForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await fetch('/api/system/github-token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ GITHUB_TOKEN: githubTokenInput.value }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    alert(err.error || 'save failed');
+    return;
+  }
+});
 $('#close-settings').addEventListener('click', () => dlg.close());
 $('#open-settings').addEventListener('click', async () => {
   setFormMode('add');
   $('#discover-table tbody').replaceChildren();
-  await refreshAgentsTable();
+  await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
   dlg.showModal();
 });
 

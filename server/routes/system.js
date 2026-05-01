@@ -3,6 +3,7 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const store = require('../store');
+const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 
 const router = express.Router();
@@ -99,11 +100,15 @@ function parseGitHubRepo(url) {
 }
 
 async function fetchGitHubJson(url) {
+  const cfg = getConfig();
+  const githubToken = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN.trim() : '';
+  const headers = {
+    accept: 'application/vnd.github+json',
+    'user-agent': 'concilium',
+  };
+  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
   const r = await fetch(url, {
-    headers: {
-      accept: 'application/vnd.github+json',
-      'user-agent': 'concilium',
-    },
+    headers,
   });
   if (!r.ok) {
     const err = new Error(`GitHub API request failed with status ${r.status}`);
@@ -236,6 +241,25 @@ router.post('/layout', (req, res) => {
   );
   if (!valid) return res.status(400).json({ error: 'invalid entry shape' });
   store.saveLayout(JSON.stringify(body));
+  res.json({ ok: true });
+});
+
+router.get('/github-token', (req, res) => {
+  const cfg = getConfig();
+  const token = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN : '';
+  res.json({ GITHUB_TOKEN: token });
+});
+
+router.post('/github-token', (req, res) => {
+  const token = req.body && req.body.GITHUB_TOKEN;
+  if (token !== undefined && typeof token !== 'string') {
+    return res.status(400).json({ error: 'GITHUB_TOKEN must be a string' });
+  }
+  const cfg = getConfig();
+  const normalized = typeof token === 'string' ? token.trim() : '';
+  if (normalized) cfg.GITHUB_TOKEN = normalized;
+  else delete cfg.GITHUB_TOKEN;
+  saveConfig(cfg);
   res.json({ ok: true });
 });
 

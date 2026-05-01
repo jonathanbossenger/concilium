@@ -118,6 +118,7 @@ Header controls:
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
+  - Set an optional `GITHUB_TOKEN` used for authenticated GitHub API calls
 
 ## Configuration
 
@@ -125,7 +126,7 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + agent list (editable by hand or via the UI)
+├── config.yaml      # port + optional GITHUB_TOKEN + agent list
 ├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log
 ├── server.log       # the server's own stdout/stderr
@@ -136,6 +137,7 @@ A minimal `config.yaml`:
 
 ```yaml
 port: 7878
+GITHUB_TOKEN: ""
 agents:
   - id: claude
     name: Claude Code
@@ -177,6 +179,8 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
+| `GET`    | `/api/system/github-token` | read configured `GITHUB_TOKEN` |
+| `POST`   | `/api/system/github-token` | save configured `GITHUB_TOKEN` |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 
