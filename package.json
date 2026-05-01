@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "postinstall": "node scripts/fix-pty-perms.js"
+    "postinstall": "node scripts/fix-pty-perms.js",
+    "capture-screenshots": "node scripts/capture-screenshots.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -17,5 +18,8 @@
     "express": "^4.21.2",
     "js-yaml": "^4.1.0",
     "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
   }
 }
