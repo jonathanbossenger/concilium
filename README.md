@@ -20,6 +20,9 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
   duplicates the card with the same agent and working directory, then
   starts the new session immediately. Paths under `$HOME` display as
   `~/...` shorthand in the cwd field; the server expands them at launch.
+  Drag a card by its header to reorder it on the grid; the new order is
+  persisted to the saved layout. Header controls (select, buttons, GitHub
+  link) stay clickable; dragging is disabled while a card is expanded.
 - **Pop-out terminal cards** — the **>_** button on any session card opens
   an independent shell terminal in a new card (using `$SHELL`, inserted
   right after the triggering card). Useful for running side commands —
