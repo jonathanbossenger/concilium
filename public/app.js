@@ -1078,15 +1078,16 @@ async function refreshDiscoverTable() {
 
 async function loadGitHubToken() {
   const r = await fetch('/api/system/github-token');
+  githubTokenInput.value = '';
+  githubTokenInput.placeholder = 'ghp_...';
   if (!r.ok) {
-    githubTokenInput.value = '';
     return;
   }
   const data = await r.json().catch((err) => {
     console.error('[concilium] failed to parse github-token response:', err);
     return {};
   });
-  githubTokenInput.value = typeof data.GITHUB_TOKEN === 'string' ? data.GITHUB_TOKEN : '';
+  if (data.hasToken === true) githubTokenInput.placeholder = 'token already saved';
 }
 
 agentForm.addEventListener('submit', async (e) => {

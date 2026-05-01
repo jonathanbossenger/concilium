@@ -179,7 +179,7 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
-| `GET`    | `/api/system/github-token` | read configured `GITHUB_TOKEN` |
+| `GET`    | `/api/system/github-token` | returns whether `GITHUB_TOKEN` is configured |
 | `POST`   | `/api/system/github-token` | save configured `GITHUB_TOKEN` |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |

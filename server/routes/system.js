@@ -106,7 +106,7 @@ async function fetchGitHubJson(url) {
     accept: 'application/vnd.github+json',
     'user-agent': 'concilium',
   };
-  if (githubToken) headers.authorization = `token ${githubToken}`;
+  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
   const r = await fetch(url, {
     headers,
   });
@@ -246,8 +246,8 @@ router.post('/layout', (req, res) => {
 
 router.get('/github-token', (req, res) => {
   const cfg = getConfig();
-  const token = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN : '';
-  res.json({ GITHUB_TOKEN: token });
+  const token = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN.trim() : '';
+  res.json({ hasToken: !!token });
 });
 
 router.post('/github-token', (req, res) => {
