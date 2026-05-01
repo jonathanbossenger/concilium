@@ -1124,6 +1124,7 @@ $('#agent-cancel').addEventListener('click', (e) => { e.preventDefault(); setFor
 $('#discover-btn').addEventListener('click', refreshDiscoverTable);
 githubTokenForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const submitBtn = githubTokenForm.querySelector('button[type="submit"]');
   const r = await fetch('/api/system/github-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1133,6 +1134,10 @@ githubTokenForm.addEventListener('submit', async (e) => {
     const err = await r.json().catch(() => ({}));
     alert(err.error || 'save failed');
     return;
+  }
+  if (submitBtn) {
+    submitBtn.textContent = 'Saved';
+    setTimeout(() => { submitBtn.textContent = 'Save token'; }, 1200);
   }
 });
 $('#close-settings').addEventListener('click', () => dlg.close());
