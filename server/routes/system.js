@@ -106,7 +106,7 @@ async function fetchGitHubJson(url) {
     accept: 'application/vnd.github+json',
     'user-agent': 'concilium',
   };
-  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
+  if (githubToken) headers.authorization = `token ${githubToken}`;
   const r = await fetch(url, {
     headers,
   });

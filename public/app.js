@@ -1082,7 +1082,10 @@ async function loadGitHubToken() {
     githubTokenInput.value = '';
     return;
   }
-  const data = await r.json().catch(() => ({}));
+  const data = await r.json().catch((err) => {
+    console.error('[concilium] failed to parse github-token response:', err);
+    return {};
+  });
   githubTokenInput.value = typeof data.GITHUB_TOKEN === 'string' ? data.GITHUB_TOKEN : '';
 }
 
