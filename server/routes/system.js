@@ -103,10 +103,10 @@ async function fetchGitHubJson(url) {
   const cfg = getConfig();
   const githubToken = typeof cfg.GITHUB_TOKEN === 'string' ? cfg.GITHUB_TOKEN.trim() : '';
   const headers = {
-    accept: 'application/vnd.github+json',
-    'user-agent': 'concilium',
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'concilium',
   };
-  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
+  if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
   const r = await fetch(url, {
     headers,
   });
