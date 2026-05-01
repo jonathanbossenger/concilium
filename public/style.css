@@ -251,6 +251,7 @@ main:has(.card:only-child):not(.has-expanded) {
 .card-clone { border: 1px solid transparent; }
 .card-github:not([hidden]) { border: 0; }
 .card-github:not([hidden]):hover, .card-clone:hover { background: var(--bg-input); color: var(--text); }
+.card-github:not([hidden]):hover { border: 1px solid var(--border-soft); }
 .card-clone:hover { border-color: var(--border-soft); }
 .card.dragging { opacity: 0.7; border-style: dashed; }
 
