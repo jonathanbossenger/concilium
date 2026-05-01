@@ -8,7 +8,7 @@ There is no build step, no linter, and no test suite. The frontend is hand-writt
 
 - `npm install` — installs the runtime deps (`express`, `better-sqlite3`, `js-yaml`, `node-pty`, `@xterm/xterm`, `@xterm/addon-fit`). Triggers `scripts/fix-pty-perms.js`, which restores the executable bit on `node-pty`'s `spawn-helper` (npm strips it; without this, PTY spawns fail with `posix_spawnp failed.`). The xterm packages are served straight from `node_modules` via two static mounts in `server/index.js` (`/vendor/xterm`, `/vendor/xterm-addon-fit`) — no bundler.
 - `npm start` — runs `node server/index.js` in the foreground (useful when iterating; no daemonization).
-- `./bin/agentctl start | stop | restart | status | logs` — Apache-style lifecycle. `start` writes a PID file to `~/.concilium/run.pid` and logs to `~/.concilium/server.log`. After `agentctl install`, the same commands drive a launchd agent (macOS) or `systemd --user` unit (Linux) instead of the standalone PID-file path; `agentctl status` reports which mode is active.
+- `./bin/conciliumctl start | stop | restart | status | logs` — Apache-style lifecycle. `start` writes a PID file to `~/.concilium/run.pid` and logs to `~/.concilium/server.log`. After `conciliumctl install`, the same commands drive a launchd agent (macOS) or `systemd --user` unit (Linux) instead of the standalone PID-file path; `conciliumctl status` reports which mode is active.
 - Restart after editing `~/.concilium/config.yaml` by hand — `getConfig()` is process-cached. Edits made through the web UI bypass the cache via `saveConfig()` and take effect immediately.
 
 The server only listens on `127.0.0.1`. Port comes from `config.yaml` (default 7878).
@@ -56,4 +56,4 @@ The terminal theme is sourced from CSS custom properties (`--term-bg`, `--term-f
 
 ### Service install flow
 
-`agentctl install` reads `install/com.user.concilium.plist.tmpl` (macOS) or `install/concilium.service.tmpl` (Linux) and substitutes `@NODE_BIN@`, `@PROJECT_ROOT@`, `@LOG_FILE@`, `@USER_PATH@`. Baking the user's current `$PATH` into the service definition is intentional — it lets the daemon find agents installed via Homebrew, nvm, etc. when launched by launchd/systemd outside an interactive shell.
+`conciliumctl install` reads `install/com.user.concilium.plist.tmpl` (macOS) or `install/concilium.service.tmpl` (Linux) and substitutes `@NODE_BIN@`, `@PROJECT_ROOT@`, `@LOG_FILE@`, `@USER_PATH@`. Baking the user's current `$PATH` into the service definition is intentional — it lets the daemon find agents installed via Homebrew, nvm, etc. when launched by launchd/systemd outside an interactive shell.

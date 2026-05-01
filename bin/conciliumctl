@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# agentctl — Apache-style lifecycle for concilium.
+# conciliumctl — Apache-style lifecycle for concilium.
 #
-#   agentctl start | stop | restart | status | logs
-#   agentctl install | uninstall   (registers a launchd or systemd --user service)
+#   conciliumctl start | stop | restart | status | logs
+#   conciliumctl install | uninstall   (registers a launchd or systemd --user service)
 
 set -euo pipefail
 
@@ -180,7 +180,7 @@ cmd_status() {
     elif is_standalone_running; then
       mode="standalone"
     else
-      mode="external (not managed by agentctl)"
+      mode="external (not managed by conciliumctl)"
     fi
     echo "running"
     echo "  port:   $PORT"
@@ -229,7 +229,7 @@ cmd_install() {
       echo "installed launchd agent"
       echo "  plist: $PLIST_PATH"
       echo "  log:   $LOG_FILE"
-      echo "service starts on login. To start now: agentctl start"
+      echo "service starts on login. To start now: conciliumctl start"
       ;;
     Linux)
       mkdir -p "$SYSTEMD_DIR"
@@ -277,16 +277,16 @@ cmd_uninstall() {
 
 usage() {
   cat <<EOF
-agentctl — concilium service control
+conciliumctl — concilium service control
 
 Usage:
-  agentctl start        start (service if installed, standalone otherwise)
-  agentctl stop         stop
-  agentctl restart      restart
-  agentctl status       show running status and port
-  agentctl logs         tail $LOG_FILE
-  agentctl install      install as a user service (launchd / systemd --user)
-  agentctl uninstall    remove the user service
+  conciliumctl start        start (service if installed, standalone otherwise)
+  conciliumctl stop         stop
+  conciliumctl restart      restart
+  conciliumctl status       show running status and port
+  conciliumctl logs         tail $LOG_FILE
+  conciliumctl install      install as a user service (launchd / systemd --user)
+  conciliumctl uninstall    remove the user service
 
 Project: $PROJECT_ROOT
 State:   $STATE_DIR

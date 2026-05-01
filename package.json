@@ -4,7 +4,7 @@
   "description": "Local multi-agent orchestration dashboard",
   "main": "server/index.js",
   "bin": {
-    "agentctl": "./bin/agentctl"
+    "conciliumctl": "./bin/conciliumctl"
   },
   "scripts": {
     "start": "node server/index.js",

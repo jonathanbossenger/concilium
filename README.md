@@ -49,7 +49,7 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 - **Light / dark / auto theme** — defaults to your OS preference
   (`prefers-color-scheme`); the **Auto** button in the header cycles to
   Light or Dark and persists in `localStorage`.
-- **Apache-style lifecycle** — `agentctl start | stop | restart | status`,
+- **Apache-style lifecycle** — `conciliumctl start | stop | restart | status`,
   with optional install as a launchd or systemd `--user` service
 - **PATH-based agent discovery** — scans `$PATH` for known CLIs and lets you
   add them with one click
@@ -75,7 +75,7 @@ The `postinstall` step restores the executable bit on
 `node-pty`'s `spawn-helper` (npm strips it during install — without this,
 PTY spawns fail with `posix_spawnp failed.`).
 
-To get `agentctl` on your `$PATH`:
+To get `conciliumctl` on your `$PATH`:
 
 ```bash
 npm link
@@ -86,19 +86,19 @@ npm link
 ### Standalone
 
 ```bash
-./bin/agentctl start         # daemonizes node, writes PID file
-./bin/agentctl status
-./bin/agentctl restart
-./bin/agentctl stop
-./bin/agentctl logs          # tail -f the server log
+./bin/conciliumctl start         # daemonizes node, writes PID file
+./bin/conciliumctl status
+./bin/conciliumctl restart
+./bin/conciliumctl stop
+./bin/conciliumctl logs          # tail -f the server log
 ```
 
 ### As a user service (auto-start on login)
 
 ```bash
-./bin/agentctl install       # writes launchd plist or systemd --user unit
-./bin/agentctl status        # mode: service
-./bin/agentctl uninstall
+./bin/conciliumctl install       # writes launchd plist or systemd --user unit
+./bin/conciliumctl status        # mode: service
+./bin/conciliumctl uninstall
 ```
 
 The install step bakes the absolute path to `node`, the project root, and
@@ -152,7 +152,7 @@ agents:
 `interactive: true` → spawned under a PTY; stays alive for follow-up input.
 
 Edits via the UI take effect immediately. Editing the YAML by hand requires
-a restart (`agentctl restart`).
+a restart (`conciliumctl restart`).
 
 ## API
 
@@ -184,7 +184,7 @@ All endpoints are JSON; loopback only.
 
 ```
 concilium/
-├── bin/agentctl                # lifecycle CLI
+├── bin/conciliumctl                # lifecycle CLI
 ├── install/                    # launchd & systemd templates
 ├── public/                     # vanilla HTML/CSS/JS UI
 ├── scripts/fix-pty-perms.js    # postinstall fixup
