@@ -76,8 +76,7 @@ function enableCardDragging(cardEl, handleEl) {
   handleEl.draggable = true;
 
   handleEl.addEventListener('dragstart', (e) => {
-    const main = $('#cards');
-    if (!main || main.classList.contains('has-expanded')) {
+    if (cardEl.classList.contains('expanded')) {
       e.preventDefault();
       return;
     }
@@ -676,7 +675,7 @@ function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {
 // --- session persistence ---------------------------------------------------
 
 function currentLayoutState() {
-  const order = [...$('#cards').children];
+  const order = [...$('#cards').querySelectorAll('.card')];
   const byEl = new Map([...cards].map((c) => [c.el, c]));
   return order
     .map((el) => byEl.get(el))
@@ -771,7 +770,7 @@ $('#cards').addEventListener('dragover', (e) => {
   const after = cardAfterPointer(main, e.clientY);
   if (!after) {
     main.appendChild(draggingCardEl);
-  } else if (after !== draggingCardEl) {
+  } else {
     main.insertBefore(draggingCardEl, after);
   }
 });
