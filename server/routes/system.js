@@ -435,7 +435,7 @@ router.post('/new-project', async (req, res) => {
   try {
     const parsed = sanitizeProjectName(req.body && req.body.name);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
-    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'private') && typeof req.body.private !== 'boolean') {
+    if (typeof req.body?.private !== 'undefined' && typeof req.body.private !== 'boolean') {
       return res.status(400).json({ error: 'private must be a boolean' });
     }
     const isPrivate = !!(req.body && req.body.private);
