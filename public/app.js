@@ -1174,6 +1174,7 @@ $('#new-card-btn').addEventListener('click', () => addCard());
 
 const THEME_ORDER = ['auto', 'light', 'dark'];
 const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const THEME_ICON = { auto: '🖥', light: '☀', dark: '☾' };
 
 function currentTheme() {
   return document.documentElement.dataset.theme || 'auto';
@@ -1193,7 +1194,8 @@ function applyTheme(theme) {
 function updateThemeButton() {
   const t = currentTheme();
   const btn = $('#theme-toggle');
-  btn.textContent = THEME_LABEL[t];
+  btn.textContent = THEME_ICON[t];
+  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]}`);
   btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
 }
 $('#theme-toggle').addEventListener('click', () => {

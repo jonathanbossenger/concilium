@@ -510,7 +510,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   font-size: 0.85em;
 }
 #new-card-btn:hover { background: var(--new-hover); }
-#open-settings, #theme-toggle {
+#open-settings, #theme-toggle, #new-project-btn {
   background: transparent;
   color: var(--text-dim);
   font-size: 1em;
@@ -518,9 +518,16 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   border: 1px solid var(--border-strong);
   border-radius: 4px;
 }
-#open-settings { font-size: 1.2em; padding: 0 0.4em; }
-#open-settings:hover, #theme-toggle:hover { background: var(--bg-hover); color: var(--text); }
-#theme-toggle { min-width: 4.5em; text-align: center; }
+#open-settings, #theme-toggle, #new-project-btn {
+  width: 2.2em;
+  height: 2.2em;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#open-settings { font-size: 1.2em; }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
 dialog#settings-dialog {

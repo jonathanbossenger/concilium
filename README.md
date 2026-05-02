@@ -147,7 +147,8 @@ to close it (kills any running task in that card and deletes its history).
 Header controls:
 
 - **+ New session** — adds another card.
-- **Auto / Light / Dark** — cycles theme; defaults to your OS preference.
+- **⧉** — placeholder button for opening a new project window.
+- **🖥 / ☀ / ☾** — cycles theme (auto/light/dark); defaults to your OS preference.
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
