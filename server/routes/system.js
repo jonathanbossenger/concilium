@@ -427,6 +427,9 @@ router.post('/new-project/check', async (req, res) => {
     return res.json({ canCreate: false, reason: `GitHub check failed (HTTP ${repoResp.status})` });
   } catch (err) {
     const detail = classifyGitHubError(err);
+    if (detail.code === 'fetch_failed' || detail.code === 'http_error') {
+      return res.status(502).json({ error: detail.message });
+    }
     res.json({ canCreate: false, reason: detail.message });
   }
 });
@@ -495,7 +498,8 @@ router.post('/new-project', async (req, res) => {
     const createData = await createResp.json().catch(() => ({}));
     if (!createResp.ok) {
       const msg = typeof createData.message === 'string' ? createData.message : `GitHub repo creation failed (HTTP ${createResp.status})`;
-      return res.status(createResp.status).json({ error: msg });
+      const status = createResp.status >= 400 && createResp.status < 600 ? createResp.status : 502;
+      return res.status(status).json({ error: msg });
     }
 
     const cloneUrl = typeof createData.clone_url === 'string' ? createData.clone_url : '';
@@ -513,18 +517,31 @@ router.post('/new-project', async (req, res) => {
       await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: GIT_CLONE_TIMEOUT_MS });
     } catch (err) {
       let cleanupSucceeded = false;
+      let localCleanupSucceeded = false;
       try {
         cleanupSucceeded = await deleteGitHubRepo(githubToken, createdOwner, createdRepo);
-      } catch (_cleanupErr) {}
+      } catch (_cleanupErr) {
+        console.error('[concilium] orphan repo cleanup failed:', _cleanupErr && _cleanupErr.message ? _cleanupErr.message : _cleanupErr);
+      }
+      try {
+        await fs.promises.rm(destination, { recursive: true, force: true });
+        localCleanupSucceeded = true;
+      } catch (localCleanupErr) {
+        console.error('[concilium] partial clone cleanup failed:', localCleanupErr && localCleanupErr.message ? localCleanupErr.message : localCleanupErr);
+      }
       const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
       const message = stderr || err.message || 'git clone failed';
       const cleanupMessage = cleanupSucceeded
         ? 'Temporary repository cleanup succeeded.'
         : `Repository may still exist: ${htmlUrl}`;
+      const localCleanupMessage = localCleanupSucceeded
+        ? 'Partial local clone cleanup succeeded.'
+        : `Local directory may still exist: ${destination}`;
       return res.status(502).json({
-        error: `repository created but clone failed: ${message}. ${cleanupMessage}`,
+        error: `repository created but clone failed: ${message}. ${cleanupMessage} ${localCleanupMessage}`,
         repoUrl: htmlUrl,
         cleanupSucceeded,
+        localCleanupSucceeded,
       });
     }
 

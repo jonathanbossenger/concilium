@@ -1288,8 +1288,6 @@ newProjectForm.addEventListener('submit', async (e) => {
       const base = data.error || 'Project creation failed.';
       const withRepoUrl = data.repoUrl ? `${base} ${data.repoUrl}` : base;
       setNewProjectStatus(withRepoUrl, 'err');
-      newProjectCreateBtn.disabled = false;
-      updateNewProjectCreateState();
       return;
     }
 
@@ -1302,10 +1300,9 @@ newProjectForm.addEventListener('submit', async (e) => {
   } catch (err) {
     console.error('[concilium] new project creation failed:', err);
     setNewProjectStatus('Project creation failed.', 'err');
-    newProjectCreateBtn.disabled = false;
-    updateNewProjectCreateState();
   } finally {
     newProjectCreateBtn.textContent = originalButtonText;
+    updateNewProjectCreateState();
   }
 });
 
