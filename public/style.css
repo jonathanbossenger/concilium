@@ -514,14 +514,11 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   background: transparent;
   color: var(--text-dim);
   font-size: 1em;
-  padding: 0.25em 0.55em;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-}
-#open-settings, #theme-toggle, #new-project-btn {
   width: 2.2em;
   height: 2.2em;
   padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
