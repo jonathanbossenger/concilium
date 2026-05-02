@@ -173,7 +173,7 @@ function execFileText(command, args) {
 
 async function getActiveAgentPRsByRepo() {
   const now = Date.now();
-  if (activeAgentPRsCache.value && now < activeAgentPRsCache.expiresAt) {
+  if (activeAgentPRsCache.value !== null && now < activeAgentPRsCache.expiresAt) {
     return activeAgentPRsCache.value;
   }
 
@@ -209,7 +209,7 @@ async function getActiveAgentPRsByRepo() {
     for (const row of rows) {
       if (!row || row.completedAt) continue;
       const repo = typeof row.repository === 'string' ? row.repository.trim().toLowerCase() : '';
-      const prNumber = Number.parseInt(row.pullRequestNumber, 10);
+      const prNumber = Number(row.pullRequestNumber);
       if (!repo || !Number.isInteger(prNumber) || prNumber <= 0) continue;
       if (!byRepo.has(repo)) byRepo.set(repo, new Set());
       byRepo.get(repo).add(prNumber);
