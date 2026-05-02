@@ -160,6 +160,53 @@ function toGitHubPull(item) {
   };
 }
 
+function execFileText(command, args) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, (err, stdout) => {
+      if (err) return reject(err);
+      resolve(stdout.toString().trim());
+    });
+  });
+}
+
+async function taskGitHubRepoAndBranch(cwd) {
+  let remote = '';
+  try {
+    remote = await execFileText('git', ['-C', cwd, 'remote', 'get-url', 'origin']);
+  } catch (_) {
+    try {
+      remote = await execFileText('git', ['-C', cwd, 'remote', 'get-url', 'upstream']);
+    } catch (_) {
+      return null;
+    }
+  }
+  const repoUrl = parseGitHubUrl(remote);
+  if (!repoUrl) return null;
+  let branch = '';
+  try {
+    branch = await execFileText('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
+  } catch (_) {
+    return null;
+  }
+  if (!branch || branch === 'HEAD') return null;
+  const repoData = parseGitHubRepo(repoUrl);
+  if (!repoData) return null;
+  return { repoKey: `${repoData.owner}/${repoData.repo}`.toLowerCase(), branch };
+}
+
+async function getActiveBranchesByRepo() {
+  const runningTasks = store.listTasks(500).filter((task) => task.status === 'running' && task.agent_id !== '_terminal');
+  if (!runningTasks.length) return new Map();
+  const pairs = await Promise.all(runningTasks.map((task) => taskGitHubRepoAndBranch(task.cwd || '')));
+  const branchesByRepo = new Map();
+  for (const info of pairs) {
+    if (!info) continue;
+    if (!branchesByRepo.has(info.repoKey)) branchesByRepo.set(info.repoKey, new Set());
+    branchesByRepo.get(info.repoKey).add(info.branch);
+  }
+  return branchesByRepo;
+}
+
 router.post('/github-url', (req, res) => {
   const rawDir = req.body && req.body.path;
   if (!rawDir || typeof rawDir !== 'string') {
@@ -200,15 +247,23 @@ router.post('/github-items', async (req, res) => {
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
+    const repoKey = `${repoData.owner}/${repoData.repo}`.toLowerCase();
     try {
-      const [rawIssues, rawPulls] = await Promise.all([
+      const [rawIssues, rawPulls, activeBranchesByRepo] = await Promise.all([
         fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
         fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
+        getActiveBranchesByRepo(),
       ]);
       const issues = Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
         : [];
-      const pulls = Array.isArray(rawPulls) ? rawPulls.map(toGitHubPull) : [];
+      const activeBranches = activeBranchesByRepo.get(repoKey) || new Set();
+      const pulls = Array.isArray(rawPulls)
+        ? rawPulls.map((item) => {
+          const pull = toGitHubPull(item);
+          return { ...pull, agentActive: !!pull.branch && activeBranches.has(pull.branch) };
+        })
+        : [];
       res.json({ url, issues, pulls });
     } catch (err) {
       const detail = classifyGitHubError(err);
