@@ -7,7 +7,7 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 
 Your council of agents - Concilium!
 
-[![Concilium dashboard screenshot](screenshots/Dashboard.png)](screenshots/Dashboard.png)
+![Concilium dashboard screenshot](screenshots/dashboard.png)
 
 <!-- When renaming a heading below, also update the matching link in this list. -->
 ## Table of contents
@@ -153,7 +153,7 @@ Header controls:
   - Scan `$PATH` for known CLI agents and add the ones found
   - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 
-[![Concilium settings dialog screenshot](screenshots/Settings.png)](screenshots/Settings.png)
+![Concilium settings dialog screenshot](screenshots/settings.png)
 
 ### GitHub personal access token (optional)
 
