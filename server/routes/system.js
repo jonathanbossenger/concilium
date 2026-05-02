@@ -8,6 +8,10 @@ const { expandTilde } = require('../util/path');
 
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
+// Internal task id used for local shell-only terminal cards (not cloud agents).
+const TERMINAL_AGENT_ID = '_terminal';
+// Hard cap on historical task rows scanned when deriving active PR markers.
+const MAX_TASKS_TO_CHECK = 500;
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -170,13 +174,18 @@ function execFileText(command, args) {
 }
 
 async function taskGitHubRepoAndBranch(cwd) {
+  if (typeof cwd !== 'string' || !cwd.trim()) return null;
+  // Resolve to an absolute path before invoking git.
+  const resolvedCwd = path.resolve(cwd);
   let remote = '';
   try {
-    remote = await execFileText('git', ['-C', cwd, 'remote', 'get-url', 'origin']);
-  } catch (_) {
+    remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'origin']);
+  } catch (originErr) {
+    // Not all repos have origin configured; fall back to upstream.
     try {
-      remote = await execFileText('git', ['-C', cwd, 'remote', 'get-url', 'upstream']);
-    } catch (_) {
+      remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'upstream']);
+    } catch (upstreamErr) {
+      // This task cwd is not a GitHub repo we can map to PRs.
       return null;
     }
   }
@@ -184,8 +193,10 @@ async function taskGitHubRepoAndBranch(cwd) {
   if (!repoUrl) return null;
   let branch = '';
   try {
-    branch = await execFileText('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
-  } catch (_) {
+    // execFile runs without a shell, so argv values are not shell-expanded.
+    branch = await execFileText('git', ['-C', resolvedCwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
+  } catch (err) {
+    console.error('[concilium] github-items branch lookup failed:', err.message);
     return null;
   }
   if (!branch || branch === 'HEAD') return null;
@@ -195,11 +206,22 @@ async function taskGitHubRepoAndBranch(cwd) {
 }
 
 async function getActiveBranchesByRepo() {
-  const runningTasks = store.listTasks(500).filter((task) => task.status === 'running' && task.agent_id !== '_terminal');
+  // listTasks() is sorted newest-first; scanning recent tasks keeps this fast for
+  // normal usage while still catching active work on currently-running agents.
+  const runningTasks = store
+    .listTasks(MAX_TASKS_TO_CHECK)
+    .filter((task) => task.status === 'running' && task.agent_id !== TERMINAL_AGENT_ID);
   if (!runningTasks.length) return new Map();
-  const pairs = await Promise.all(runningTasks.map((task) => taskGitHubRepoAndBranch(task.cwd || '')));
   const branchesByRepo = new Map();
-  for (const info of pairs) {
+  const infoByCwd = new Map();
+  for (const task of runningTasks) {
+    // Keep git subprocess usage bounded by resolving one task at a time.
+    const cwd = (task.cwd || '').trim();
+    let info = infoByCwd.get(cwd);
+    if (info === undefined) {
+      info = await taskGitHubRepoAndBranch(cwd);
+      infoByCwd.set(cwd, info || null);
+    }
     if (!info) continue;
     if (!branchesByRepo.has(info.repoKey)) branchesByRepo.set(info.repoKey, new Set());
     branchesByRepo.get(info.repoKey).add(info.branch);
