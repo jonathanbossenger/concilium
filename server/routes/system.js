@@ -3,9 +3,17 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const store = require('../store');
+const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 
 const router = express.Router();
+const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
+
+function getGitHubToken(cfg) {
+  if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
+  if (cfg && typeof cfg.GITHUB_TOKEN === 'string') return cfg.GITHUB_TOKEN.trim();
+  return '';
+}
 
 function pickDirectoryMac() {
   return new Promise((resolve, reject) => {
@@ -99,11 +107,15 @@ function parseGitHubRepo(url) {
 }
 
 async function fetchGitHubJson(url) {
+  const cfg = getConfig();
+  const githubToken = getGitHubToken(cfg);
+  const headers = {
+    accept: 'application/vnd.github+json',
+    'user-agent': 'concilium',
+  };
+  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
   const r = await fetch(url, {
-    headers: {
-      accept: 'application/vnd.github+json',
-      'user-agent': 'concilium',
-    },
+    headers,
   });
   if (!r.ok) {
     const err = new Error(`GitHub API request failed with status ${r.status}`);
@@ -236,6 +248,29 @@ router.post('/layout', (req, res) => {
   );
   if (!valid) return res.status(400).json({ error: 'invalid entry shape' });
   store.saveLayout(JSON.stringify(body));
+  res.json({ ok: true });
+});
+
+router.get('/github-token', (req, res) => {
+  const cfg = getConfig();
+  const token = getGitHubToken(cfg);
+  res.json({ hasToken: !!token });
+});
+
+router.post('/github-token', (req, res) => {
+  const token = req.body && req.body.GITHUB_TOKEN;
+  if (token !== undefined && typeof token !== 'string') {
+    return res.status(400).json({ error: 'GITHUB_TOKEN must be a string' });
+  }
+  const cfg = getConfig();
+  const normalized = typeof token === 'string' ? token.trim() : '';
+  if (normalized && !GITHUB_TOKEN_RE.test(normalized)) {
+    return res.status(400).json({ error: 'GitHub token contains invalid characters' });
+  }
+  if (normalized) cfg.githubToken = normalized;
+  else delete cfg.githubToken;
+  delete cfg.GITHUB_TOKEN;
+  saveConfig(cfg);
   res.json({ ok: true });
 });
 

@@ -977,6 +977,9 @@ $('#cards').addEventListener('dragover', (e) => {
 
 const dlg = $('#settings-dialog');
 const agentForm = $('#agent-form');
+const githubTokenForm = $('#github-token-form');
+const githubTokenInput = $('#github-token');
+const githubTokenClearBtn = $('#github-token-clear');
 let editingId = null;
 
 function setFormMode(mode, agent) {
@@ -1074,6 +1077,20 @@ async function refreshDiscoverTable() {
   }
 }
 
+async function loadGitHubToken() {
+  const r = await fetch('/api/system/github-token');
+  githubTokenInput.value = '';
+  githubTokenInput.placeholder = 'ghp_...';
+  if (!r.ok) {
+    return;
+  }
+  const data = await r.json().catch((err) => {
+    console.error('[concilium] failed to parse github-token response:', err);
+    return {};
+  });
+  if (data.hasToken === true) githubTokenInput.placeholder = 'token already saved';
+}
+
 agentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const args = agentForm.args.value.trim() ? agentForm.args.value.trim().split(/\s+/) : [];
@@ -1110,11 +1127,36 @@ agentForm.addEventListener('submit', async (e) => {
 
 $('#agent-cancel').addEventListener('click', (e) => { e.preventDefault(); setFormMode('add'); });
 $('#discover-btn').addEventListener('click', refreshDiscoverTable);
+githubTokenForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submitBtn = githubTokenForm.querySelector('button[type="submit"]');
+  const submitLabel = submitBtn ? submitBtn.dataset.label || submitBtn.textContent : '';
+  if (submitBtn && !submitBtn.dataset.label) submitBtn.dataset.label = submitLabel;
+  const r = await fetch('/api/system/github-token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ GITHUB_TOKEN: githubTokenInput.value }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    alert(err.error || 'save failed');
+    return;
+  }
+  await loadGitHubToken();
+  if (submitBtn) {
+    submitBtn.textContent = 'Saved';
+    setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200);
+  }
+});
+githubTokenClearBtn.addEventListener('click', () => {
+  githubTokenInput.value = '';
+  githubTokenInput.focus();
+});
 $('#close-settings').addEventListener('click', () => dlg.close());
 $('#open-settings').addEventListener('click', async () => {
   setFormMode('add');
   $('#discover-table tbody').replaceChildren();
-  await refreshAgentsTable();
+  await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
   dlg.showModal();
 });
 

@@ -118,6 +118,39 @@ Header controls:
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
+  - Set or clear an optional `githubToken` used for authenticated GitHub API calls
+
+### GitHub personal access token (optional)
+
+Concilium can make authenticated GitHub API calls if you provide a personal
+access token. Without one, requests fall back to unauthenticated and are
+subject to a much lower rate limit.
+
+Create a **fine-grained** personal access token at
+<https://github.com/settings/personal-access-tokens/new>:
+
+![GitHub fine-grained PAT settings for Concilium](screenshots/GitHubToken.png)
+
+1. **Token name** — anything memorable (e.g. `Concilium`).
+2. **Description** — optional, e.g. "GitHub token allowing Concilium to fetch
+   GitHub API data".
+3. **Resource owner** — your own account (or an org you administer if you
+   want the token scoped there).
+4. **Expiration** — GitHub recommends setting an expiration date.
+5. **Repository access** — pick **All repositories** (covers public + private
+   you own) or **Only select repositories** if you want to restrict it.
+6. **Permissions → Repository permissions** — set the following to
+   **Read-only**:
+   - **Issues**
+   - **Pull requests**
+   - **Metadata** (required by GitHub for any fine-grained token; selected
+     automatically)
+   
+   No other permissions are needed — Concilium only reads issue and PR
+   metadata.
+7. Click **Generate token**, copy the value, then paste it into the gear
+   (⚙) → GitHub token field in the Concilium UI. Submit an empty value to
+   clear it.
 
 ## Configuration
 
@@ -125,7 +158,7 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + agent list (editable by hand or via the UI)
+├── config.yaml      # port + optional githubToken + agent list
 ├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log
 ├── server.log       # the server's own stdout/stderr
@@ -136,6 +169,7 @@ A minimal `config.yaml`:
 
 ```yaml
 port: 7878
+githubToken: ""
 agents:
   - id: claude
     name: Claude Code
@@ -150,9 +184,11 @@ agents:
 
 `interactive: false` → stdin is piped in, then closed (one-shot).
 `interactive: true` → spawned under a PTY; stays alive for follow-up input.
+`githubToken` is optional and used for authenticated GitHub API requests.
 
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
+`config.yaml` may contain a secret token — keep it readable only by your user.
 
 ## API
 
@@ -177,6 +213,8 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
+| `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
+| `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 
