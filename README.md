@@ -118,7 +118,7 @@ Header controls:
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
-  - Set or clear an optional `GITHUB_TOKEN` used for authenticated GitHub API calls
+  - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 
 ## Configuration
 
@@ -181,8 +181,8 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
-| `GET`    | `/api/system/github-token` | returns whether `GITHUB_TOKEN` is configured |
-| `POST`   | `/api/system/github-token` | save/clear configured `GITHUB_TOKEN` (submit empty to clear) |
+| `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
+| `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 
