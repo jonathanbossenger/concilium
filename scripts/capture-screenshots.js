@@ -5,7 +5,6 @@
  *
  * Outputs to ./screenshots/:
  *   - dashboard.png       1920x1080
- *   - hero.png            1920x1080
  *   - settings.png        1920x1080
  *   - walkthrough.webm    1920x1080  (Playwright VP8 recording)
  *   - walkthrough.mp4     1920x1080  (H.264, written if ffmpeg is on PATH)
@@ -234,13 +233,6 @@ async function takeScreenshots(browser) {
   // ---- dashboard.png ----
   await page.screenshot({ path: path.join(OUT_DIR, 'dashboard.png') });
   console.log('saved dashboard.png');
-
-  // ---- hero.png — same layout, cursor parked off-canvas ----
-  await page.mouse.move(0, 0);
-  await page.addStyleTag({ content: GRID_CSS });
-  await sleep(700);
-  await page.screenshot({ path: path.join(OUT_DIR, 'hero.png') });
-  console.log('saved hero.png');
 
   // ---- settings.png — settings dialog over the council layout ----
   await sleep(400);
