@@ -81,6 +81,19 @@ Your council of agents - Concilium!
 - A C toolchain only if `node-pty`'s prebuilt binaries aren't available for
   your platform; on macOS arm64/x64 and Linux x64/arm64 the prebuilds are used
 
+External CLIs the server invokes (must be on `$PATH`):
+
+- **`git`** — required. Used to read `origin` / `upstream` remotes when
+  detecting the GitHub repo for a card's working directory.
+- **`gh`** ([GitHub CLI](https://cli.github.com/)) — optional but recommended.
+  Authenticated (`gh auth login`) so it can call `gh agent-task list` to power
+  the active-agent indicator on PR rows. Without it, the rest of the GitHub
+  card still works; the 🤖 indicator just never shows.
+- **`zenity`** — Linux only, optional. Powers the OS folder picker (📂) on
+  GNU/Linux desktops. Without it, type or paste paths into the cwd field.
+  On macOS the picker uses built-in `osascript`; on Windows it uses built-in
+  `powershell`.
+
 ## Install
 
 ```bash
