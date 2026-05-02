@@ -1304,7 +1304,8 @@ newProjectForm.addEventListener('submit', async (e) => {
     const cwd = typeof data.cwd === 'string' ? toTildePath(data.cwd) : '';
     addCard({ cwd });
     newProjectDlg.close();
-  } catch (_) {
+  } catch (err) {
+    console.error('[concilium] new project creation failed:', err);
     setNewProjectStatus('Project creation failed.', 'err');
     updateNewProjectCreateState();
   } finally {
