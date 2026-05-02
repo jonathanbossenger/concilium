@@ -13,6 +13,8 @@
  * Layout: 3 columns × 2 rows showcasing two real projects, each with
  * an agent card + a terminal card + a GitHub card. The grid is forced
  * via injected CSS so the shoot is identical regardless of viewport.
+ * Each agent card's task is started as soon as the card is in place, so
+ * the captured media shows live agent output rather than an idle prompt.
  *
  * Prerequisites:
  *   - Concilium server reachable at CONCILIUM_URL (default
@@ -133,8 +135,9 @@ async function buildSixCardLayout(page) {
   await page.addStyleTag({ content: GRID_CSS });
   await sleep(200);
 
-  // Agent cards already exist from the staged layout. For each, add github
-  // then terminal so the final order per project is [agent, term, github].
+  // Agent cards already exist from the staged layout. For each, start the
+  // configured agent task so the card shows real output, then add github
+  // and terminal so the final order per project is [agent, term, github].
   for (let i = 0; i < PROJECTS.length; i++) {
     // Re-query each iteration: DOM order shifts as we insert new cards.
     const agents = page.locator(
@@ -142,6 +145,16 @@ async function buildSixCardLayout(page) {
     );
     const agentCard = agents.nth(i);
     await agentCard.scrollIntoViewIfNeeded();
+
+    // Kick off the agent task. The submit handler only runs when no task
+    // is live for this card, so this is a no-op if one is already running.
+    const runBtn = agentCard.locator('.card-run');
+    try {
+      await runBtn.waitFor({ state: 'visible', timeout: 5000 });
+      await runBtn.click();
+    } catch {
+      console.warn(`[${PROJECTS[i].label}] run button never appeared; skipping start`);
+    }
 
     // Wait until the cwd has been auto-checked for a GitHub remote — the
     // .card-github button is hidden until then.
@@ -171,7 +184,8 @@ async function buildSixCardLayout(page) {
     .catch(() => {
       console.warn('did not reach 6 cards within timeout — proceeding with what is rendered');
     });
-  await sleep(800);
+  // Give the just-started agent tasks time to print their initial UI.
+  await sleep(2500);
 }
 
 async function focusTerminal(page, termLocator) {
