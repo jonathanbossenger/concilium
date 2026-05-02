@@ -510,17 +510,20 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   font-size: 0.85em;
 }
 #new-card-btn:hover { background: var(--new-hover); }
-#open-settings, #theme-toggle {
+#open-settings, #theme-toggle, #new-project-btn {
   background: transparent;
   color: var(--text-dim);
   font-size: 1em;
-  padding: 0.25em 0.55em;
+  width: 2.2em;
+  height: 2.2em;
+  padding: 0;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-#open-settings { font-size: 1.2em; padding: 0 0.4em; }
-#open-settings:hover, #theme-toggle:hover { background: var(--bg-hover); color: var(--text); }
-#theme-toggle { min-width: 4.5em; text-align: center; }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:not(:disabled):hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
 dialog#settings-dialog {
