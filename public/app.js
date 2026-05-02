@@ -539,14 +539,6 @@ class GitHubCard {
       a.textContent = `#${item.number} ${item.title}`;
       a.className = 'github-list-link';
       li.appendChild(a);
-      if (item.agentActive) {
-        const activeIcon = document.createElement('span');
-        activeIcon.className = 'github-agent-active';
-        activeIcon.textContent = '🤖';
-        activeIcon.title = 'An agent is currently working on this PR';
-        activeIcon.setAttribute('aria-label', activeIcon.title);
-        li.appendChild(activeIcon);
-      }
       if (item.branch) {
         const branchWrap = document.createElement('span');
         branchWrap.className = 'github-branch';
@@ -555,6 +547,14 @@ class GitHubCard {
         code.textContent = item.branch;
         code.title = item.branch;
         branchWrap.appendChild(code);
+        if (item.agentActive) {
+          const activeIcon = document.createElement('span');
+          activeIcon.className = 'github-agent-active';
+          activeIcon.textContent = '🤖';
+          activeIcon.title = 'An agent is currently working on this PR';
+          activeIcon.setAttribute('aria-label', activeIcon.title);
+          branchWrap.appendChild(activeIcon);
+        }
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
         copyBtn.className = 'github-branch-copy';

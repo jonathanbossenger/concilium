@@ -177,19 +177,17 @@ async function taskGitHubRepoAndBranch(cwd) {
   if (typeof cwd !== 'string' || !cwd.trim()) return null;
   // Resolve to an absolute path before invoking git.
   const resolvedCwd = path.resolve(cwd);
-  let remote = '';
+  let repoUrl = null;
   try {
-    remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'origin']);
-  } catch (originErr) {
-    // Not all repos have origin configured; fall back to upstream.
+    const remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'origin']);
+    repoUrl = parseGitHubUrl(remote);
+  } catch (originErr) {}
+  if (!repoUrl) {
     try {
-      remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'upstream']);
-    } catch (upstreamErr) {
-      // This task cwd is not a GitHub repo we can map to PRs.
-      return null;
-    }
+      const remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'upstream']);
+      repoUrl = parseGitHubUrl(remote);
+    } catch (upstreamErr) {}
   }
-  const repoUrl = parseGitHubUrl(remote);
   if (!repoUrl) return null;
   let branch = '';
   try {
