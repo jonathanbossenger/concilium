@@ -1174,7 +1174,11 @@ $('#new-card-btn').addEventListener('click', () => addCard());
 
 const THEME_ORDER = ['auto', 'light', 'dark'];
 const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
-const THEME_ICON = { auto: '🖥', light: '☀', dark: '☾' };
+const THEME_ICON = {
+  auto: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2.5A1.5 1.5 0 0 0 .5 4v7A1.5 1.5 0 0 0 2 12.5h4.9l-.8 1.5H5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H9.9l-.8-1.5H14A1.5 1.5 0 0 0 15.5 11V4A1.5 1.5 0 0 0 14 2.5H2Zm0 1h12a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5Z"/></svg>',
+  light: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.4" fill="currentColor" stroke="none"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4"/></svg>',
+  dark: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.02 1.1a.6.6 0 0 1 .68.78A5.5 5.5 0 1 0 14.12 8a.6.6 0 0 1 .78.69A6.7 6.7 0 1 1 9.3 1.1a.6.6 0 0 1 .72 0Z"/></svg>',
+};
 
 function currentTheme() {
   return document.documentElement.dataset.theme || 'auto';
@@ -1194,7 +1198,7 @@ function applyTheme(theme) {
 function updateThemeButton() {
   const t = currentTheme();
   const btn = $('#theme-toggle');
-  btn.textContent = THEME_ICON[t];
+  btn.innerHTML = THEME_ICON[t];
   btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]}`);
   btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
 }
