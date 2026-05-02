@@ -999,7 +999,7 @@ let editingId = null;
 let newProjectCanCreate = false;
 let newProjectCheckTimer = null;
 let newProjectCheckAbortCtrl = null;
-const PROJECT_NAME_CHECK_DEBOUNCE_MS = 180;
+const PROJECT_NAME_CHECK_DEBOUNCE_MS = 200;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;

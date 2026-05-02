@@ -9,6 +9,7 @@ const { expandTilde } = require('../util/path');
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+const GIT_CLONE_TIMEOUT_MS = 120000;
 const AGENT_TASK_CACHE_TTL_MS = 5000;
 let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
@@ -162,7 +163,7 @@ function sanitizeProjectName(input) {
   if (!GITHUB_REPO_NAME_RE.test(name)) {
     return {
       name,
-      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be at most 100 characters long',
+      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be between 1 and 100 characters long',
     };
   }
   return { name, error: null };
@@ -171,7 +172,7 @@ function sanitizeProjectName(input) {
 async function fetchGitHubUser(githubToken) {
   const r = await fetch('https://api.github.com/user', { headers: githubHeaders(githubToken) });
   if (!r.ok) {
-    const err = new Error(`GitHub user request failed with status ${r.status}`);
+    const err = new Error(`failed to fetch GitHub user (HTTP ${r.status}); verify your GitHub token and scopes`);
     err.status = r.status;
     throw err;
   }
@@ -489,7 +490,7 @@ router.post('/new-project', async (req, res) => {
     if (!cloneUrl) return res.status(502).json({ error: 'GitHub did not return a clone URL' });
 
     try {
-      await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: 120000 });
+      await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: GIT_CLONE_TIMEOUT_MS });
     } catch (err) {
       const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
       const message = stderr || err.message || 'git clone failed';
