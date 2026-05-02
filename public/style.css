@@ -524,7 +524,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   justify-content: center;
 }
 #open-settings { font-size: 1.2em; }
-#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover { background: var(--bg-hover); color: var(--text); }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:not(:disabled):hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
 dialog#settings-dialog {

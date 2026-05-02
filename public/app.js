@@ -1198,8 +1198,9 @@ function applyTheme(theme) {
 function updateThemeButton() {
   const t = currentTheme();
   const btn = $('#theme-toggle');
+  // THEME_ICON values are static code-defined SVG strings, not user input.
   btn.innerHTML = THEME_ICON[t];
-  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]}`);
+  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]} (click to cycle)`);
   btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
 }
 $('#theme-toggle').addEventListener('click', () => {
