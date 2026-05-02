@@ -8,10 +8,8 @@ const { expandTilde } = require('../util/path');
 
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
-// Internal task id used for local shell-only terminal cards (not cloud agents).
-const TERMINAL_AGENT_ID = '_terminal';
-// Hard cap on historical task rows scanned when deriving active PR markers.
-const MAX_TASKS_TO_CHECK = 500;
+const AGENT_TASK_CACHE_TTL_MS = 5000;
+let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -173,58 +171,53 @@ function execFileText(command, args) {
   });
 }
 
-async function taskGitHubRepoAndBranch(cwd) {
-  if (typeof cwd !== 'string' || !cwd.trim()) return null;
-  // Resolve to an absolute path before invoking git.
-  const resolvedCwd = path.resolve(cwd);
-  let repoUrl = null;
-  try {
-    const remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'origin']);
-    repoUrl = parseGitHubUrl(remote);
-  } catch (originErr) {}
-  if (!repoUrl) {
-    try {
-      const remote = await execFileText('git', ['-C', resolvedCwd, 'remote', 'get-url', 'upstream']);
-      repoUrl = parseGitHubUrl(remote);
-    } catch (upstreamErr) {}
+async function getActiveAgentPRsByRepo() {
+  const now = Date.now();
+  if (activeAgentPRsCache.value && now < activeAgentPRsCache.expiresAt) {
+    return activeAgentPRsCache.value;
   }
-  if (!repoUrl) return null;
-  let branch = '';
-  try {
-    // execFile runs without a shell, so argv values are not shell-expanded.
-    branch = await execFileText('git', ['-C', resolvedCwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
-  } catch (err) {
-    console.error('[concilium] github-items branch lookup failed:', err.message);
-    return null;
-  }
-  if (!branch || branch === 'HEAD') return null;
-  const repoData = parseGitHubRepo(repoUrl);
-  if (!repoData) return null;
-  return { repoKey: `${repoData.owner}/${repoData.repo}`.toLowerCase(), branch };
-}
 
-async function getActiveBranchesByRepo() {
-  // listTasks() is sorted newest-first; scanning recent tasks keeps this fast for
-  // normal usage while still catching active work on currently-running agents.
-  const runningTasks = store
-    .listTasks(MAX_TASKS_TO_CHECK)
-    .filter((task) => task.status === 'running' && task.agent_id !== TERMINAL_AGENT_ID);
-  if (!runningTasks.length) return new Map();
-  const branchesByRepo = new Map();
-  const infoByCwd = new Map();
-  for (const task of runningTasks) {
-    // Keep git subprocess usage bounded by resolving one task at a time.
-    const cwd = (task.cwd || '').trim();
-    let info = infoByCwd.get(cwd);
-    if (info === undefined) {
-      info = await taskGitHubRepoAndBranch(cwd);
-      infoByCwd.set(cwd, info || null);
-    }
-    if (!info) continue;
-    if (!branchesByRepo.has(info.repoKey)) branchesByRepo.set(info.repoKey, new Set());
-    branchesByRepo.get(info.repoKey).add(info.branch);
+  let stdout = '';
+  try {
+    // gh agent-task is currently a preview command and may evolve over time.
+    // We key activity by completedAt because null/empty means "still active".
+    stdout = await execFileText('gh', [
+      'agent-task',
+      'list',
+      '--json',
+      'state,completedAt,pullRequestNumber,repository',
+      '--limit',
+      '50',
+    ]);
+  } catch (_err) {
+    const empty = new Map();
+    activeAgentPRsCache = { value: empty, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
+    return empty;
   }
-  return branchesByRepo;
+
+  let rows = [];
+  try {
+    rows = JSON.parse(stdout);
+  } catch (_err) {
+    const empty = new Map();
+    activeAgentPRsCache = { value: empty, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
+    return empty;
+  }
+
+  const byRepo = new Map();
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (!row || row.completedAt) continue;
+      const repo = typeof row.repository === 'string' ? row.repository.trim().toLowerCase() : '';
+      const prNumber = Number.parseInt(row.pullRequestNumber, 10);
+      if (!repo || !Number.isInteger(prNumber) || prNumber <= 0) continue;
+      if (!byRepo.has(repo)) byRepo.set(repo, new Set());
+      byRepo.get(repo).add(prNumber);
+    }
+  }
+
+  activeAgentPRsCache = { value: byRepo, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
+  return byRepo;
 }
 
 router.post('/github-url', (req, res) => {
@@ -269,19 +262,19 @@ router.post('/github-items', async (req, res) => {
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
     const repoKey = `${repoData.owner}/${repoData.repo}`.toLowerCase();
     try {
-      const [rawIssues, rawPulls, activeBranchesByRepo] = await Promise.all([
+      const [rawIssues, rawPulls, activePRsByRepo] = await Promise.all([
         fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
         fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
-        getActiveBranchesByRepo(),
+        getActiveAgentPRsByRepo(),
       ]);
       const issues = Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
         : [];
-      const activeBranches = activeBranchesByRepo.get(repoKey) || new Set();
+      const activePRs = activePRsByRepo.get(repoKey) || new Set();
       const pulls = Array.isArray(rawPulls)
         ? rawPulls.map((item) => {
           const pull = toGitHubPull(item);
-          return { ...pull, agentActive: !!pull.branch && activeBranches.has(pull.branch) };
+          return { ...pull, agentActive: activePRs.has(pull.number) };
         })
         : [];
       res.json({ url, issues, pulls });
