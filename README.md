@@ -7,6 +7,22 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 
 Your council of agents - Concilium!
 
+<!-- When renaming a heading below, also update the matching link in this list. -->
+## Table of contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Usage](#usage)
+  - [Standalone](#standalone)
+  - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
+  - [Web UI](#web-ui)
+  - [GitHub personal access token (optional)](#github-personal-access-token-optional)
+- [Configuration](#configuration)
+- [API](#api)
+- [Project layout](#project-layout)
+- [License](#license)
+
 ## Features
 
 - **Card-based session UI** — each card is an independent agent session with
