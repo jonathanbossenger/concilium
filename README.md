@@ -1,9 +1,11 @@
 # Concilium
 
-A simple, locally-installed multi-agent orchestration dashboard. Configure CLI
+A straightforward, locally-installed multi-agent orchestration dashboard. Configure CLI
 AI agents you have on your machine (Claude Code, Codex, Aider, Gemini, Copilot,
 Ollama, …), fire off tasks, watch live output, and keep a history — from a
 loopback web UI. Easy to start, stop, and restart, like Apache.
+
+Your council of agents - Concilium!
 
 ## Features
 
