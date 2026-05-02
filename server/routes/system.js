@@ -163,7 +163,7 @@ function sanitizeProjectName(input) {
   if (!GITHUB_REPO_NAME_RE.test(name)) {
     return {
       name,
-      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be up to 100 characters long',
+      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and stay within GitHub\'s 100-character limit',
     };
   }
   return { name, error: null };

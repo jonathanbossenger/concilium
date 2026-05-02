@@ -1280,7 +1280,7 @@ newProjectForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (newProjectCreateBtn.disabled) return;
 
-  const originalLabel = newProjectCreateBtn.textContent;
+  const originalButtonText = newProjectCreateBtn.textContent;
   newProjectCreateBtn.disabled = true;
   newProjectCreateBtn.textContent = 'Creating…';
   setNewProjectStatus('Creating repository and cloning locally…');
@@ -1309,7 +1309,7 @@ newProjectForm.addEventListener('submit', async (e) => {
     setNewProjectStatus('Project creation failed.', 'err');
     updateNewProjectCreateState();
   } finally {
-    newProjectCreateBtn.textContent = originalLabel;
+    newProjectCreateBtn.textContent = originalButtonText;
   }
 });
 
