@@ -992,6 +992,7 @@ const newProjectDlg = $('#new-project-dialog');
 const newProjectForm = $('#new-project-form');
 const newProjectNameInput = $('#new-project-name');
 const newProjectTargetInput = $('#new-project-target');
+const newProjectPrivateInput = $('#new-project-private');
 const newProjectBrowseBtn = $('#new-project-target-browse');
 const newProjectCreateBtn = $('#new-project-create');
 const newProjectStatusEl = $('#new-project-status');
@@ -1292,6 +1293,7 @@ newProjectForm.addEventListener('submit', async (e) => {
       body: JSON.stringify({
         name: newProjectNameInput.value.trim(),
         targetPath: newProjectTargetInput.value.trim(),
+        private: newProjectPrivateInput.checked,
       }),
     });
     const data = await r.json().catch(() => ({}));

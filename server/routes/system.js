@@ -435,6 +435,10 @@ router.post('/new-project', async (req, res) => {
   try {
     const parsed = sanitizeProjectName(req.body && req.body.name);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'private') && typeof req.body.private !== 'boolean') {
+      return res.status(400).json({ error: 'private must be a boolean' });
+    }
+    const isPrivate = !!(req.body && req.body.private);
 
     const rawTarget = req.body && req.body.targetPath;
     if (!rawTarget || typeof rawTarget !== 'string') {
@@ -485,7 +489,7 @@ router.post('/new-project', async (req, res) => {
       body: JSON.stringify({
         name: parsed.name,
         auto_init: true,
-        private: false,
+        private: isPrivate,
       }),
     });
     const createData = await createResp.json().catch(() => ({}));
@@ -499,7 +503,7 @@ router.post('/new-project', async (req, res) => {
       ? createData.owner.login
       : login;
     const createdRepo = typeof createData.name === 'string' ? createData.name : parsed.name;
-    const isPrivate = createData && createData.private === true;
+    const createdPrivate = createData && createData.private === true;
     const htmlUrl = typeof createData.html_url === 'string'
       ? createData.html_url
       : `https://github.com/${encodeURIComponent(createdOwner)}/${encodeURIComponent(createdRepo)}`;
@@ -528,7 +532,7 @@ router.post('/new-project', async (req, res) => {
       ok: true,
       cwd: destination,
       repoUrl: htmlUrl,
-      private: isPrivate,
+      private: createdPrivate,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });

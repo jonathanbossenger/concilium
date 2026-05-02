@@ -148,9 +148,10 @@ Header controls:
 
 - **+ New session** — adds another card.
 - **⧉** — opens a **New Project** dialog. Concilium validates the project name
-  against GitHub using your saved token, then creates a new repository with an
-  initialized README, clones it into your selected target location, and opens a new
-  session card with that directory pre-filled.
+  against GitHub using your saved token, then creates a new repository (public by
+  default, with an optional private toggle) with an initialized README, clones it
+  into your selected target location, and opens a new session card with that
+  directory pre-filled.
 - **🖥 / ☀ / ☾** — cycles theme (auto/light/dark); defaults to your OS preference.
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
@@ -250,7 +251,7 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
 | `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `POST`   | `/api/system/new-project/check` | check whether `{name}` can be used to create a repo with the saved GitHub token |
-| `POST`   | `/api/system/new-project` | create repo + clone from `{name, targetPath}` → `{ok, cwd, repoUrl}` |
+| `POST`   | `/api/system/new-project` | create repo + clone from `{name, targetPath, private?}` (defaults to public) → `{ok, cwd, repoUrl, private}` |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 
