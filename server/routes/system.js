@@ -8,7 +8,7 @@ const { expandTilde } = require('../util/path');
 
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
-const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/;
+const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 const AGENT_TASK_CACHE_TTL_MS = 5000;
 let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
@@ -160,7 +160,10 @@ function sanitizeProjectName(input) {
   const name = typeof input === 'string' ? input.trim() : '';
   if (!name) return { name: '', error: 'project name is required' };
   if (!GITHUB_REPO_NAME_RE.test(name)) {
-    return { name, error: 'project name must use letters, numbers, dot, underscore, or dash' };
+    return {
+      name,
+      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be at most 100 characters long',
+    };
   }
   return { name, error: null };
 }
@@ -486,7 +489,7 @@ router.post('/new-project', async (req, res) => {
     if (!cloneUrl) return res.status(502).json({ error: 'GitHub did not return a clone URL' });
 
     try {
-      await execFileWithOutput('git', ['clone', cloneUrl, destination], { timeout: 120000 });
+      await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: 120000 });
     } catch (err) {
       const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
       const message = stderr || err.message || 'git clone failed';

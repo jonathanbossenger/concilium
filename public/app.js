@@ -999,6 +999,7 @@ let editingId = null;
 let newProjectCanCreate = false;
 let newProjectCheckTimer = null;
 let newProjectCheckAbortCtrl = null;
+const PROJECT_NAME_CHECK_DEBOUNCE_MS = 180;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1130,7 +1131,7 @@ function scheduleNewProjectNameCheck() {
     return;
   }
   setNewProjectStatus('Checking repository availability…');
-  newProjectCheckTimer = setTimeout(() => checkNewProjectName(name), 180);
+  newProjectCheckTimer = setTimeout(() => checkNewProjectName(name), PROJECT_NAME_CHECK_DEBOUNCE_MS);
 }
 
 async function checkNewProjectName(name) {
