@@ -186,6 +186,14 @@ async function fetchGitHubUser(githubToken) {
   return { login };
 }
 
+async function deleteGitHubRepo(githubToken, owner, repo) {
+  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+    method: 'DELETE',
+    headers: githubHeaders(githubToken),
+  });
+  return r.status === 204;
+}
+
 function toGitHubItem(item) {
   return {
     number: item.number,
@@ -477,6 +485,7 @@ router.post('/new-project', async (req, res) => {
       body: JSON.stringify({
         name: parsed.name,
         auto_init: true,
+        private: false,
       }),
     });
     const createData = await createResp.json().catch(() => ({}));
@@ -486,23 +495,40 @@ router.post('/new-project', async (req, res) => {
     }
 
     const cloneUrl = typeof createData.clone_url === 'string' ? createData.clone_url : '';
+    const createdOwner = createData && createData.owner && typeof createData.owner.login === 'string'
+      ? createData.owner.login
+      : login;
+    const createdRepo = typeof createData.name === 'string' ? createData.name : parsed.name;
+    const isPrivate = createData && createData.private === true;
     const htmlUrl = typeof createData.html_url === 'string'
       ? createData.html_url
-      : `https://github.com/${encodeURIComponent(login)}/${encodeURIComponent(parsed.name)}`;
+      : `https://github.com/${encodeURIComponent(createdOwner)}/${encodeURIComponent(createdRepo)}`;
     if (!cloneUrl) return res.status(502).json({ error: 'GitHub did not return a clone URL' });
 
     try {
       await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: GIT_CLONE_TIMEOUT_MS });
     } catch (err) {
+      let cleanupSucceeded = false;
+      try {
+        cleanupSucceeded = await deleteGitHubRepo(githubToken, createdOwner, createdRepo);
+      } catch (_cleanupErr) {}
       const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
       const message = stderr || err.message || 'git clone failed';
-      return res.status(502).json({ error: `repository created but clone failed: ${message}` });
+      const cleanupMessage = cleanupSucceeded
+        ? 'Temporary repository cleanup succeeded.'
+        : `Repository may still exist: ${htmlUrl}`;
+      return res.status(502).json({
+        error: `repository created but clone failed: ${message}. ${cleanupMessage}`,
+        repoUrl: htmlUrl,
+        cleanupSucceeded,
+      });
     }
 
     res.json({
       ok: true,
       cwd: destination,
       repoUrl: htmlUrl,
+      private: isPrivate,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });

@@ -999,7 +999,7 @@ let editingId = null;
 let newProjectCanCreate = false;
 let newProjectCheckTimer = null;
 let newProjectCheckAbortCtrl = null;
-const PROJECT_NAME_CHECK_DEBOUNCE_MS = 200;
+const PROJECT_NAME_CHECK_DEBOUNCE_MS = 450;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1112,7 +1112,8 @@ async function loadGitHubToken() {
 
 function setNewProjectStatus(text, cls = '') {
   newProjectStatusEl.textContent = text;
-  newProjectStatusEl.className = `footnote${cls ? ' ' + cls : ''}`;
+  newProjectStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) newProjectStatusEl.classList.add(cls);
 }
 
 function updateNewProjectCreateState() {
@@ -1296,14 +1297,19 @@ newProjectForm.addEventListener('submit', async (e) => {
     const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      setNewProjectStatus(data.error || 'Project creation failed.', 'err');
+      const base = data.error || 'Project creation failed.';
+      const withRepoUrl = data.repoUrl ? `${base} ${data.repoUrl}` : base;
+      setNewProjectStatus(withRepoUrl, 'err');
       newProjectCreateBtn.disabled = false;
       updateNewProjectCreateState();
       return;
     }
 
     const cwd = typeof data.cwd === 'string' ? toTildePath(data.cwd) : '';
-    addCard({ cwd });
+    const card = addCard({ cwd });
+    if (typeof data.private === 'boolean') {
+      card.setStatus(`repo created (${data.private ? 'private' : 'public'})`, 'ok');
+    }
     newProjectDlg.close();
   } catch (err) {
     console.error('[concilium] new project creation failed:', err);

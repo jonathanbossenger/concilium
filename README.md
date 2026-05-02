@@ -149,7 +149,7 @@ Header controls:
 - **+ New session** — adds another card.
 - **⧉** — opens a **New Project** dialog. Concilium validates the project name
   against GitHub using your saved token, then creates a new repository with an
-  empty README, clones it into your selected target location, and opens a new
+  initialized README, clones it into your selected target location, and opens a new
   session card with that directory pre-filled.
 - **🖥 / ☀ / ☾** — cycles theme (auto/light/dark); defaults to your OS preference.
 - **Gear (⚙)** — opens a settings dialog where you can:
