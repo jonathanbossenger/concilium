@@ -988,7 +988,17 @@ const agentForm = $('#agent-form');
 const githubTokenForm = $('#github-token-form');
 const githubTokenInput = $('#github-token');
 const githubTokenClearBtn = $('#github-token-clear');
+const newProjectDlg = $('#new-project-dialog');
+const newProjectForm = $('#new-project-form');
+const newProjectNameInput = $('#new-project-name');
+const newProjectTargetInput = $('#new-project-target');
+const newProjectBrowseBtn = $('#new-project-target-browse');
+const newProjectCreateBtn = $('#new-project-create');
+const newProjectStatusEl = $('#new-project-status');
 let editingId = null;
+let newProjectCanCreate = false;
+let newProjectCheckTimer = null;
+let newProjectCheckAbortCtrl = null;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1099,6 +1109,83 @@ async function loadGitHubToken() {
   if (data.hasToken === true) githubTokenInput.placeholder = 'token already saved';
 }
 
+function setNewProjectStatus(text, cls = '') {
+  newProjectStatusEl.textContent = text;
+  newProjectStatusEl.className = `footnote${cls ? ' ' + cls : ''}`;
+}
+
+function updateNewProjectCreateState() {
+  const hasName = !!newProjectNameInput.value.trim();
+  const hasTarget = !!newProjectTargetInput.value.trim();
+  newProjectCreateBtn.disabled = !(hasName && hasTarget && newProjectCanCreate);
+}
+
+function scheduleNewProjectNameCheck() {
+  clearTimeout(newProjectCheckTimer);
+  newProjectCanCreate = false;
+  updateNewProjectCreateState();
+  const name = newProjectNameInput.value.trim();
+  if (!name) {
+    setNewProjectStatus('Enter a project name.');
+    return;
+  }
+  setNewProjectStatus('Checking repository availability…');
+  newProjectCheckTimer = setTimeout(() => checkNewProjectName(name), 180);
+}
+
+async function checkNewProjectName(name) {
+  if (newProjectCheckAbortCtrl) newProjectCheckAbortCtrl.abort();
+  newProjectCheckAbortCtrl = new AbortController();
+  const { signal } = newProjectCheckAbortCtrl;
+  try {
+    const r = await fetch('/api/system/new-project/check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+      signal,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setNewProjectStatus(data.error || 'Unable to validate project name.', 'err');
+      newProjectCanCreate = false;
+      updateNewProjectCreateState();
+      return;
+    }
+    if (data.canCreate) {
+      const ownerPrefix = data.owner ? `${data.owner}/` : '';
+      setNewProjectStatus(`Repository ${ownerPrefix}${name} is available.`, 'ok');
+      newProjectCanCreate = true;
+    } else {
+      setNewProjectStatus(data.reason || 'This project name is unavailable.', 'warn');
+      newProjectCanCreate = false;
+    }
+    updateNewProjectCreateState();
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    setNewProjectStatus('Unable to validate project name.', 'err');
+    newProjectCanCreate = false;
+    updateNewProjectCreateState();
+  }
+}
+
+async function browseNewProjectTarget() {
+  newProjectBrowseBtn.disabled = true;
+  try {
+    const r = await fetch('/api/system/pick-directory', { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setNewProjectStatus(data.error || 'browse failed', 'err');
+      return;
+    }
+    if (data.path) {
+      newProjectTargetInput.value = toTildePath(data.path);
+      updateNewProjectCreateState();
+    }
+  } finally {
+    newProjectBrowseBtn.disabled = false;
+  }
+}
+
 agentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const args = agentForm.args.value.trim() ? agentForm.args.value.trim().split(/\s+/) : [];
@@ -1169,6 +1256,60 @@ $('#open-settings').addEventListener('click', async () => {
 });
 
 $('#new-card-btn').addEventListener('click', () => addCard());
+$('#new-project-btn').addEventListener('click', () => {
+  newProjectForm.reset();
+  if (homeDir) newProjectTargetInput.value = toTildePath(homeDir);
+  if (newProjectCheckAbortCtrl) newProjectCheckAbortCtrl.abort();
+  clearTimeout(newProjectCheckTimer);
+  newProjectCanCreate = false;
+  setNewProjectStatus('Enter a project name and target location.');
+  updateNewProjectCreateState();
+  newProjectDlg.showModal();
+  newProjectNameInput.focus();
+});
+$('#close-new-project').addEventListener('click', () => newProjectDlg.close());
+newProjectDlg.addEventListener('close', () => {
+  if (newProjectCheckAbortCtrl) newProjectCheckAbortCtrl.abort();
+  clearTimeout(newProjectCheckTimer);
+});
+newProjectNameInput.addEventListener('input', scheduleNewProjectNameCheck);
+newProjectTargetInput.addEventListener('input', updateNewProjectCreateState);
+newProjectBrowseBtn.addEventListener('click', browseNewProjectTarget);
+newProjectForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (newProjectCreateBtn.disabled) return;
+
+  const originalLabel = newProjectCreateBtn.textContent;
+  newProjectCreateBtn.disabled = true;
+  newProjectCreateBtn.textContent = 'Creating…';
+  setNewProjectStatus('Creating repository and cloning locally…');
+  try {
+    const r = await fetch('/api/system/new-project', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: newProjectNameInput.value.trim(),
+        targetPath: newProjectTargetInput.value.trim(),
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      setNewProjectStatus(data.error || 'Project creation failed.', 'err');
+      updateNewProjectCreateState();
+      return;
+    }
+
+    const cwd = typeof data.cwd === 'string' ? toTildePath(data.cwd) : '';
+    addCard({ cwd });
+    newProjectDlg.close();
+  } catch (_) {
+    setNewProjectStatus('Project creation failed.', 'err');
+    updateNewProjectCreateState();
+  } finally {
+    newProjectCreateBtn.textContent = originalLabel;
+  }
+});
 
 // --- theme ----------------------------------------------------------------
 
