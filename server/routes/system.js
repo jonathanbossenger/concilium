@@ -475,6 +475,10 @@ router.post('/new-project', async (req, res) => {
     }
 
     const destination = path.join(targetPath, parsed.name);
+    const destinationRelative = path.relative(targetPath, destination);
+    if (!destinationRelative || destinationRelative.startsWith('..') || path.isAbsolute(destinationRelative)) {
+      return res.status(400).json({ error: 'invalid target project directory' });
+    }
     try {
       await fs.promises.stat(destination);
       return res.status(409).json({ error: 'target project directory already exists' });
