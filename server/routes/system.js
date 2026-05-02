@@ -162,9 +162,9 @@ function toGitHubPull(item) {
   };
 }
 
-function execFileText(command, args) {
+function execFileText(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, (err, stdout) => {
+    execFile(command, args, options, (err, stdout) => {
       if (err) return reject(err);
       resolve(stdout.toString().trim());
     });
@@ -188,9 +188,11 @@ async function getActiveAgentPRsByRepo() {
       'state,completedAt,pullRequestNumber,repository',
       '--limit',
       '50',
-    ]);
+    ], { timeout: 5000 });
   } catch (_err) {
     const empty = new Map();
+    // Cache empty results on errors to avoid spawning `gh` repeatedly while
+    // the CLI is unavailable, unauthenticated, or timing out.
     activeAgentPRsCache = { value: empty, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
     return empty;
   }
