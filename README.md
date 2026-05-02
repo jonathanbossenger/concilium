@@ -7,6 +7,7 @@ loopback web UI. Easy to start, stop, and restart, like Apache.
 
 Your council of agents - Concilium!
 
+<!-- When renaming a heading below, also update the matching link in this list. -->
 ## Table of contents
 
 - [Features](#features)
