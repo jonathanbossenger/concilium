@@ -163,7 +163,7 @@ function sanitizeProjectName(input) {
   if (!GITHUB_REPO_NAME_RE.test(name)) {
     return {
       name,
-      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and stay within GitHub\'s 100-character limit',
+      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be up to 100 characters long',
     };
   }
   return { name, error: null };
@@ -486,7 +486,9 @@ router.post('/new-project', async (req, res) => {
     }
 
     const cloneUrl = typeof createData.clone_url === 'string' ? createData.clone_url : '';
-    const htmlUrl = typeof createData.html_url === 'string' ? createData.html_url : `https://github.com/${login}/${parsed.name}`;
+    const htmlUrl = typeof createData.html_url === 'string'
+      ? createData.html_url
+      : `https://github.com/${encodeURIComponent(login)}/${encodeURIComponent(parsed.name)}`;
     if (!cloneUrl) return res.status(502).json({ error: 'GitHub did not return a clone URL' });
 
     try {

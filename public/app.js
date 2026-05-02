@@ -1297,6 +1297,7 @@ newProjectForm.addEventListener('submit', async (e) => {
 
     if (!r.ok) {
       setNewProjectStatus(data.error || 'Project creation failed.', 'err');
+      newProjectCreateBtn.disabled = false;
       updateNewProjectCreateState();
       return;
     }
@@ -1307,6 +1308,7 @@ newProjectForm.addEventListener('submit', async (e) => {
   } catch (err) {
     console.error('[concilium] new project creation failed:', err);
     setNewProjectStatus('Project creation failed.', 'err');
+    newProjectCreateBtn.disabled = false;
     updateNewProjectCreateState();
   } finally {
     newProjectCreateBtn.textContent = originalButtonText;
