@@ -126,29 +126,24 @@ Concilium can make authenticated GitHub API calls if you provide a personal
 access token. Without one, requests fall back to unauthenticated and are
 subject to a much lower rate limit.
 
-Create a **fine-grained** personal access token at
-<https://github.com/settings/personal-access-tokens/new>:
+Use a **classic** personal access token rather than a fine-grained one.
+Fine-grained tokens are scoped to a single resource owner, so a token tied to
+your own account returns `403 forbidden` against repositories owned by other
+users or organisations — even ones you contribute to. Classic tokens cover
+every repository you can already read.
 
-![GitHub fine-grained PAT settings for Concilium](screenshots/GitHubToken.png)
+Create a classic token at <https://github.com/settings/tokens/new>:
 
-1. **Token name** — anything memorable (e.g. `Concilium`).
-2. **Description** — optional, e.g. "GitHub token allowing Concilium to fetch
-   GitHub API data".
-3. **Resource owner** — your own account (or an org you administer if you
-   want the token scoped there).
-4. **Expiration** — GitHub recommends setting an expiration date.
-5. **Repository access** — pick **All repositories** (covers public + private
-   you own) or **Only select repositories** if you want to restrict it.
-6. **Permissions → Repository permissions** — set the following to
-   **Read-only**:
-   - **Issues**
-   - **Pull requests**
-   - **Metadata** (required by GitHub for any fine-grained token; selected
-     automatically)
-   
-   No other permissions are needed — Concilium only reads issue and PR
-   metadata.
-7. Click **Generate token**, copy the value, then paste it into the gear
+![GitHub classic PAT settings for Concilium](screenshots/GitHubToken.png)
+
+1. **Note** — anything memorable (e.g. `Concilium`).
+2. **Expiration** — GitHub recommends setting an expiration date.
+3. **Select scopes** — tick **`repo`** (Full control of private repositories).
+   That single scope is enough to read issues and pull requests on any public
+   or private repository you have access to. If you only need public
+   repositories, **`public_repo`** alone is sufficient. No other scopes are
+   needed — Concilium only reads issue and PR metadata.
+4. Click **Generate token**, copy the value, then paste it into the gear
    (⚙) → GitHub token field in the Concilium UI. Submit an empty value to
    clear it.
 
