@@ -536,7 +536,7 @@ router.post('/new-project', async (req, res) => {
         : `Repository may still exist: ${htmlUrl}`;
       const localCleanupMessage = localCleanupSucceeded
         ? 'Partial local clone cleanup succeeded.'
-        : `Local directory may still exist: ${destination}`;
+        : 'Local directory may still exist.';
       return res.status(502).json({
         error: `repository created but clone failed: ${message}. ${cleanupMessage} ${localCleanupMessage}`,
         repoUrl: htmlUrl,
