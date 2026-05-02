@@ -997,10 +997,7 @@ const newProjectBrowseBtn = $('#new-project-target-browse');
 const newProjectCreateBtn = $('#new-project-create');
 const newProjectStatusEl = $('#new-project-status');
 let editingId = null;
-let newProjectCanCreate = false;
-let newProjectCheckTimer = null;
 let newProjectCheckAbortCtrl = null;
-const PROJECT_NAME_CHECK_DEBOUNCE_MS = 450;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1120,20 +1117,7 @@ function setNewProjectStatus(text, cls = '') {
 function updateNewProjectCreateState() {
   const hasName = !!newProjectNameInput.value.trim();
   const hasTarget = !!newProjectTargetInput.value.trim();
-  newProjectCreateBtn.disabled = !(hasName && hasTarget && newProjectCanCreate);
-}
-
-function scheduleNewProjectNameCheck() {
-  clearTimeout(newProjectCheckTimer);
-  newProjectCanCreate = false;
-  updateNewProjectCreateState();
-  const name = newProjectNameInput.value.trim();
-  if (!name) {
-    setNewProjectStatus('Enter a project name.');
-    return;
-  }
-  setNewProjectStatus('Checking repository availability…');
-  newProjectCheckTimer = setTimeout(() => checkNewProjectName(name), PROJECT_NAME_CHECK_DEBOUNCE_MS);
+  newProjectCreateBtn.disabled = !(hasName && hasTarget);
 }
 
 async function checkNewProjectName(name) {
@@ -1150,24 +1134,20 @@ async function checkNewProjectName(name) {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       setNewProjectStatus(data.error || 'Unable to validate project name.', 'err');
-      newProjectCanCreate = false;
-      updateNewProjectCreateState();
-      return;
+      return false;
     }
     if (data.canCreate) {
       const ownerPrefix = data.owner ? `${data.owner}/` : '';
       setNewProjectStatus(`Repository ${ownerPrefix}${name} is available.`, 'ok');
-      newProjectCanCreate = true;
+      return true;
     } else {
       setNewProjectStatus(data.reason || 'This project name is unavailable.', 'warn');
-      newProjectCanCreate = false;
+      return false;
     }
-    updateNewProjectCreateState();
   } catch (err) {
-    if (err.name === 'AbortError') return;
+    if (err.name === 'AbortError') return false;
     setNewProjectStatus('Unable to validate project name.', 'err');
-    newProjectCanCreate = false;
-    updateNewProjectCreateState();
+    return false;
   }
 }
 
@@ -1263,8 +1243,6 @@ $('#new-project-btn').addEventListener('click', () => {
   newProjectForm.reset();
   if (homeDir) newProjectTargetInput.value = toTildePath(homeDir);
   if (newProjectCheckAbortCtrl) newProjectCheckAbortCtrl.abort();
-  clearTimeout(newProjectCheckTimer);
-  newProjectCanCreate = false;
   setNewProjectStatus('Enter a project name and target location.');
   updateNewProjectCreateState();
   newProjectDlg.showModal();
@@ -1273,9 +1251,8 @@ $('#new-project-btn').addEventListener('click', () => {
 $('#close-new-project').addEventListener('click', () => newProjectDlg.close());
 newProjectDlg.addEventListener('close', () => {
   if (newProjectCheckAbortCtrl) newProjectCheckAbortCtrl.abort();
-  clearTimeout(newProjectCheckTimer);
 });
-newProjectNameInput.addEventListener('input', scheduleNewProjectNameCheck);
+newProjectNameInput.addEventListener('input', updateNewProjectCreateState);
 newProjectTargetInput.addEventListener('input', updateNewProjectCreateState);
 newProjectBrowseBtn.addEventListener('click', browseNewProjectTarget);
 newProjectForm.addEventListener('submit', async (e) => {
@@ -1284,14 +1261,23 @@ newProjectForm.addEventListener('submit', async (e) => {
 
   const originalButtonText = newProjectCreateBtn.textContent;
   newProjectCreateBtn.disabled = true;
-  newProjectCreateBtn.textContent = 'Creating…';
-  setNewProjectStatus('Creating repository and cloning locally…');
+  newProjectCreateBtn.textContent = 'Checking…';
+  setNewProjectStatus('Checking repository availability…');
   try {
+    const name = newProjectNameInput.value.trim();
+    const canCreate = await checkNewProjectName(name);
+    if (!canCreate) {
+      updateNewProjectCreateState();
+      return;
+    }
+
+    newProjectCreateBtn.textContent = 'Creating…';
+    setNewProjectStatus('Creating repository and cloning locally…');
     const r = await fetch('/api/system/new-project', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        name: newProjectNameInput.value.trim(),
+        name,
         targetPath: newProjectTargetInput.value.trim(),
         private: newProjectPrivateInput.checked,
       }),
