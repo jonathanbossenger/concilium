@@ -476,7 +476,7 @@ router.post('/new-project', async (req, res) => {
 
     const destination = path.join(targetPath, parsed.name);
     const destinationRelative = path.relative(targetPath, destination);
-    if (!destinationRelative || destinationRelative.startsWith('..') || path.isAbsolute(destinationRelative)) {
+    if (destinationRelative.startsWith('..') || path.isAbsolute(destinationRelative)) {
       return res.status(400).json({ error: 'invalid target project directory' });
     }
     try {
