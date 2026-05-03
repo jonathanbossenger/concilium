@@ -19,7 +19,7 @@ Your council of agents - Concilium!
   - [Standalone](#standalone)
   - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
   - [Web UI](#web-ui)
-  - [GitHub personal access token (optional)](#github-personal-access-token-optional)
+  - [GitHub personal access token](#github-personal-access-token)
 - [Configuration](#configuration)
 - [API](#api)
 - [Project layout](#project-layout)
@@ -160,11 +160,15 @@ Header controls:
 
 ![Concilium settings dialog screenshot](screenshots/settings.png)
 
-### GitHub personal access token (optional)
+### GitHub personal access token
 
 Concilium can make authenticated GitHub API calls if you provide a personal
-access token. Without one, requests fall back to unauthenticated and are
-subject to a much lower rate limit.
+access token. A token is **required for the New Project flow** (⧉ in the
+header) — repository creation goes through the authenticated
+`POST /user/repos` endpoint and cannot fall back to unauthenticated. For
+read-only features (e.g. the active-agent indicator on PR rows) the token is
+optional; without one, requests fall back to unauthenticated and are subject
+to a much lower rate limit.
 
 Use a **classic** personal access token rather than a fine-grained one.
 Fine-grained tokens are scoped to a single resource owner, so a token tied to
@@ -179,10 +183,15 @@ Create a classic token at <https://github.com/settings/tokens/new>:
 1. **Note** — anything memorable (e.g. `Concilium`).
 2. **Expiration** — GitHub recommends setting an expiration date.
 3. **Select scopes** — tick **`repo`** (Full control of private repositories).
-   That single scope is enough to read issues and pull requests on any public
-   or private repository you have access to. If you only need public
-   repositories, **`public_repo`** alone is sufficient. No other scopes are
-   needed — Concilium only reads issue and PR metadata.
+   That single scope covers everything Concilium does today: reading issues
+   and PRs on any public or private repository, and creating new
+   repositories (public or private) via the New Project flow. If you never
+   create private repos and don't need to read private issues/PRs,
+   **`public_repo`** alone is sufficient. Optionally add **`delete_repo`**
+   if you want Concilium to clean up the GitHub repo automatically when a
+   post-create `git clone` fails (rare — usually only flaky networks);
+   without it, the orphaned repo stays on GitHub and the UI surfaces its
+   URL so you can delete it manually.
 4. Click **Generate token**, copy the value, then paste it into the gear
    (⚙) → GitHub token field in the Concilium UI. Submit an empty value to
    clear it.
