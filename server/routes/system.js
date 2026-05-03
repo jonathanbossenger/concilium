@@ -8,6 +8,8 @@ const { expandTilde } = require('../util/path');
 
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
+const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+const GIT_CLONE_TIMEOUT_MS = 120000;
 const AGENT_TASK_CACHE_TTL_MS = 5000;
 let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
@@ -146,6 +148,52 @@ function classifyGitHubError(err) {
   return { code: 'fetch_failed', message: 'failed to fetch from github' };
 }
 
+function githubHeaders(githubToken) {
+  const headers = {
+    accept: 'application/vnd.github+json',
+    'user-agent': 'concilium',
+  };
+  if (githubToken) headers.authorization = `Bearer ${githubToken}`;
+  return headers;
+}
+
+function sanitizeProjectName(input) {
+  const name = typeof input === 'string' ? input.trim() : '';
+  if (!name) return { name: '', error: 'project name is required' };
+  if (!GITHUB_REPO_NAME_RE.test(name)) {
+    return {
+      name,
+      error: 'project name must start/end with a letter or number, contain only letters, numbers, dots, underscores, or dashes, and be up to 100 characters long',
+    };
+  }
+  return { name, error: null };
+}
+
+async function fetchGitHubUser(githubToken) {
+  const r = await fetch('https://api.github.com/user', { headers: githubHeaders(githubToken) });
+  if (!r.ok) {
+    const err = new Error(`failed to fetch GitHub user (HTTP ${r.status}); verify your GitHub token and scopes`);
+    err.status = r.status;
+    throw err;
+  }
+  const data = await r.json().catch(() => ({}));
+  const login = data && typeof data.login === 'string' ? data.login.trim() : '';
+  if (!login) {
+    const err = new Error('GitHub user login missing');
+    err.status = 502;
+    throw err;
+  }
+  return { login };
+}
+
+async function deleteGitHubRepo(githubToken, owner, repo) {
+  const r = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+    method: 'DELETE',
+    headers: githubHeaders(githubToken),
+  });
+  return r.status === 204;
+}
+
 function toGitHubItem(item) {
   return {
     number: item.number,
@@ -167,6 +215,22 @@ function execFileText(command, args, options = {}) {
     execFile(command, args, options, (err, stdout) => {
       if (err) return reject(err);
       resolve(stdout.toString().trim());
+    });
+  });
+}
+
+function execFileWithOutput(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout ? stdout.toString() : '';
+        err.stderr = stderr ? stderr.toString() : '';
+        return reject(err);
+      }
+      resolve({
+        stdout: stdout ? stdout.toString() : '',
+        stderr: stderr ? stderr.toString() : '',
+      });
     });
   });
 }
@@ -342,6 +406,158 @@ router.post('/github-token', (req, res) => {
   delete cfg.GITHUB_TOKEN;
   saveConfig(cfg);
   res.json({ ok: true });
+});
+
+router.post('/new-project/check', async (req, res) => {
+  try {
+    const parsed = sanitizeProjectName(req.body && req.body.name);
+    if (parsed.error) return res.json({ canCreate: false, reason: parsed.error });
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) return res.json({ canCreate: false, reason: 'set a GitHub token in Settings first' });
+
+    const { login } = await fetchGitHubUser(githubToken);
+    const repoUrl = `https://api.github.com/repos/${encodeURIComponent(login)}/${encodeURIComponent(parsed.name)}`;
+    const repoResp = await fetch(repoUrl, { headers: githubHeaders(githubToken) });
+    if (repoResp.status === 404) return res.json({ canCreate: true, owner: login });
+    if (repoResp.ok) return res.json({ canCreate: false, owner: login, reason: `repository ${login}/${parsed.name} already exists` });
+    if (repoResp.status === 401) return res.json({ canCreate: false, reason: 'GitHub token is not authorized (HTTP 401)' });
+    if (repoResp.status === 403) return res.json({ canCreate: false, reason: 'GitHub token cannot access repository checks (HTTP 403)' });
+    return res.json({ canCreate: false, reason: `GitHub check failed (HTTP ${repoResp.status})` });
+  } catch (err) {
+    const detail = classifyGitHubError(err);
+    if (detail.code === 'fetch_failed' || detail.code === 'http_error') {
+      return res.status(502).json({ error: detail.message });
+    }
+    res.json({ canCreate: false, reason: detail.message });
+  }
+});
+
+router.post('/new-project', async (req, res) => {
+  try {
+    const parsed = sanitizeProjectName(req.body && req.body.name);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    if (typeof req.body?.private !== 'undefined' && typeof req.body.private !== 'boolean') {
+      return res.status(400).json({ error: 'The private field must be a boolean value' });
+    }
+    const isPrivate = !!(req.body && req.body.private);
+
+    const rawTarget = req.body && req.body.targetPath;
+    if (!rawTarget || typeof rawTarget !== 'string') {
+      return res.status(400).json({ error: 'targetPath is required' });
+    }
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+
+    const targetPath = path.resolve(expandTilde(rawTarget.trim()));
+    if (!targetPath) return res.status(400).json({ error: 'targetPath is required' });
+
+    let stats;
+    try {
+      stats = await fs.promises.stat(targetPath);
+    } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+        return res.status(400).json({ error: 'target location does not exist' });
+      }
+      throw err;
+    }
+    if (!stats.isDirectory()) return res.status(400).json({ error: 'target location must be a directory' });
+    try {
+      await fs.promises.access(targetPath, fs.constants.W_OK);
+    } catch (err) {
+      if (err && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'target location is not writable' });
+      }
+      throw err;
+    }
+
+    const destination = path.join(targetPath, parsed.name);
+    const destinationRelative = path.relative(targetPath, destination);
+    if (destinationRelative.startsWith('..') || path.isAbsolute(destinationRelative)) {
+      return res.status(400).json({ error: 'invalid target project directory' });
+    }
+    try {
+      await fs.promises.stat(destination);
+      return res.status(409).json({ error: 'target project directory already exists' });
+    } catch (err) {
+      if (!err || err.code !== 'ENOENT') throw err;
+    }
+
+    const { login } = await fetchGitHubUser(githubToken);
+    const createResp = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: parsed.name,
+        auto_init: true,
+        private: isPrivate,
+      }),
+    });
+    const createData = await createResp.json().catch(() => ({}));
+    if (!createResp.ok) {
+      const msg = typeof createData.message === 'string' ? createData.message : `GitHub repo creation failed (HTTP ${createResp.status})`;
+      const status = createResp.status >= 400 && createResp.status < 600 ? createResp.status : 502;
+      return res.status(status).json({ error: msg });
+    }
+
+    const cloneUrl = typeof createData.clone_url === 'string' ? createData.clone_url : '';
+    const createdOwner = createData && createData.owner && typeof createData.owner.login === 'string'
+      ? createData.owner.login
+      : login;
+    const createdRepo = typeof createData.name === 'string' ? createData.name : parsed.name;
+    const createdPrivate = createData && createData.private === true;
+    const htmlUrl = typeof createData.html_url === 'string'
+      ? createData.html_url
+      : `https://github.com/${encodeURIComponent(createdOwner)}/${encodeURIComponent(createdRepo)}`;
+    if (!cloneUrl) return res.status(502).json({ error: 'GitHub did not return a clone URL' });
+
+    try {
+      await execFileWithOutput('git', ['clone', '--', cloneUrl, destination], { timeout: GIT_CLONE_TIMEOUT_MS });
+    } catch (err) {
+      let cleanupSucceeded = false;
+      let localCleanupSucceeded = false;
+      try {
+        cleanupSucceeded = await deleteGitHubRepo(githubToken, createdOwner, createdRepo);
+      } catch (_cleanupErr) {
+        console.error('[concilium] orphan repo cleanup failed:', _cleanupErr && _cleanupErr.message ? _cleanupErr.message : _cleanupErr);
+      }
+      try {
+        await fs.promises.rm(destination, { recursive: true, force: true });
+        localCleanupSucceeded = true;
+      } catch (localCleanupErr) {
+        console.error('[concilium] partial clone cleanup failed:', localCleanupErr && localCleanupErr.message ? localCleanupErr.message : localCleanupErr);
+      }
+      const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
+      const message = stderr || err.message || 'git clone failed';
+      const cleanupMessage = cleanupSucceeded
+        ? 'Temporary repository cleanup succeeded.'
+        : `Repository may still exist: ${htmlUrl}`;
+      const localCleanupMessage = localCleanupSucceeded
+        ? 'Partial local clone cleanup succeeded.'
+        : 'Local directory may still exist.';
+      return res.status(502).json({
+        error: `repository created but clone failed: ${message}. ${cleanupMessage} ${localCleanupMessage}`,
+        repoUrl: htmlUrl,
+        cleanupSucceeded,
+        localCleanupSucceeded,
+      });
+    }
+
+    res.json({
+      ok: true,
+      cwd: destination,
+      repoUrl: htmlUrl,
+      private: createdPrivate,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
 });
 
 module.exports = router;

@@ -523,10 +523,11 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   align-items: center;
   justify-content: center;
 }
-#open-settings:hover, #theme-toggle:hover, #new-project-btn:not(:disabled):hover { background: var(--bg-hover); color: var(--text); }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
-dialog#settings-dialog {
+dialog#settings-dialog,
+dialog#new-project-dialog {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -536,7 +537,8 @@ dialog#settings-dialog {
   max-height: 86vh;
   box-shadow: var(--shadow-modal);
 }
-dialog#settings-dialog::backdrop { background: var(--backdrop); }
+dialog#settings-dialog::backdrop,
+dialog#new-project-dialog::backdrop { background: var(--backdrop); }
 .dialog-body { display: flex; flex-direction: column; gap: 1.2em; padding: 1em 1.2em 1.4em; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 1.05em; color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -610,6 +612,14 @@ dialog section h3 {
   padding: 0.35em 0;
 }
 .agent-form label.check input { margin: 0; }
+.agent-form .inline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.agent-form .inline-row input[type="text"] {
+  flex: 1 1 auto;
+}
 .agent-form .row {
   margin-top: 1em;
   padding-top: 0.75em;
@@ -618,3 +628,6 @@ dialog section h3 {
 }
 .footnote { color: var(--text-muted); font-size: 0.8em; }
 .footnote code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+#new-project-status.ok { color: var(--status-ok); }
+#new-project-status.warn { color: var(--status-warn); }
+#new-project-status.err { color: var(--status-err); }
