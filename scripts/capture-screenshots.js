@@ -4,8 +4,10 @@
  * Capture marketing/docs media for Concilium.
  *
  * Outputs to ./screenshots/:
- *   - dashboard.png       1920x1080
- *   - settings.png        1920x1080
+ *   - dashboard.png       1920x1080  (light mode)
+ *   - dashboard-dark.png  1920x1080  (dark mode)
+ *   - settings.png        1920x1080  (light mode)
+ *   - settings-dark.png   1920x1080  (dark mode)
  *   - walkthrough.webm    1920x1080  (Playwright VP8 recording)
  *   - walkthrough.mp4     1920x1080  (H.264, written if ffmpeg is on PATH)
  *
@@ -217,6 +219,43 @@ async function populateTerminals(page) {
   await sleep(1500);
 }
 
+// Cycle the in-app theme toggle (auto → light → dark → auto) until the
+// document is in the requested theme. Used to capture both light- and
+// dark-mode variants of each screenshot from the same page state.
+async function setTheme(page, target) {
+  for (let i = 0; i < 4; i++) {
+    const current = await page.evaluate(
+      () => document.documentElement.dataset.theme || 'auto',
+    );
+    if (current === target) return;
+    await page.click('#theme-toggle');
+    await sleep(450);
+  }
+}
+
+async function captureDashboardAndSettings(page, suffix) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await sleep(300);
+
+  const dashboardPath = path.join(OUT_DIR, `dashboard${suffix}.png`);
+  await page.screenshot({ path: dashboardPath });
+  console.log(`saved ${path.basename(dashboardPath)}`);
+
+  await sleep(400);
+  await page.click('#open-settings');
+  await page
+    .waitForSelector('#settings-dialog[open], #settings-dialog.open, dialog#settings-dialog', {
+      timeout: 4000,
+    })
+    .catch(() => {});
+  await sleep(1500);
+  const settingsPath = path.join(OUT_DIR, `settings${suffix}.png`);
+  await page.screenshot({ path: settingsPath });
+  console.log(`saved ${path.basename(settingsPath)}`);
+  await page.click('#close-settings').catch(() => {});
+  await sleep(600);
+}
+
 async function takeScreenshots(browser) {
   const ctx = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
@@ -227,26 +266,16 @@ async function takeScreenshots(browser) {
   await buildSixCardLayout(page);
   await populateTerminals(page);
   await sleep(1500);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await sleep(300);
 
-  // ---- dashboard.png ----
-  await page.screenshot({ path: path.join(OUT_DIR, 'dashboard.png') });
-  console.log('saved dashboard.png');
+  // ---- light mode: dashboard.png + settings.png ----
+  await setTheme(page, 'light');
+  await sleep(500);
+  await captureDashboardAndSettings(page, '');
 
-  // ---- settings.png — settings dialog over the council layout ----
-  await sleep(400);
-  await page.click('#open-settings');
-  await page
-    .waitForSelector('#settings-dialog[open], #settings-dialog.open, dialog#settings-dialog', {
-      timeout: 4000,
-    })
-    .catch(() => {});
-  await sleep(1500);
-  await page.screenshot({ path: path.join(OUT_DIR, 'settings.png') });
-  console.log('saved settings.png');
-  await page.click('#close-settings').catch(() => {});
-  await sleep(600);
+  // ---- dark mode: dashboard-dark.png + settings-dark.png ----
+  await setTheme(page, 'dark');
+  await sleep(700); // give terminals a beat to re-theme
+  await captureDashboardAndSettings(page, '-dark');
 
   await ctx.close();
 }
