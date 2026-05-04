@@ -11,6 +11,7 @@ const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 const GIT_CLONE_TIMEOUT_MS = 120000;
 const AGENT_TASK_CACHE_TTL_MS = 5000;
+const AGENT_TASK_LOOKUP_DEADLINE_MS = 250;
 let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
 function getGitHubToken(cfg) {
@@ -286,6 +287,20 @@ async function getActiveAgentPRsByRepo() {
   return byRepo;
 }
 
+async function withFallbackAfterDeadline(promise, deadlineMs, fallbackValue) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(fallbackValue), deadlineMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 router.post('/github-url', (req, res) => {
   const rawDir = req.body && req.body.path;
   if (!rawDir || typeof rawDir !== 'string') {
@@ -328,11 +343,16 @@ router.post('/github-items', async (req, res) => {
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
     const repoKey = `${repoData.owner}/${repoData.repo}`.toLowerCase();
     try {
-      const [rawIssues, rawPulls, activePRsByRepo] = await Promise.all([
+      const activePRsByRepoPromise = getActiveAgentPRsByRepo().catch(() => new Map());
+      const [rawIssues, rawPulls] = await Promise.all([
         fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
         fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
-        getActiveAgentPRsByRepo(),
       ]);
+      const activePRsByRepo = await withFallbackAfterDeadline(
+        activePRsByRepoPromise,
+        AGENT_TASK_LOOKUP_DEADLINE_MS,
+        new Map(),
+      );
       const issues = Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
         : [];
