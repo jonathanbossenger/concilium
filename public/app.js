@@ -564,28 +564,30 @@ class GitHubCard {
       if (withPullActions) {
         const actions = document.createElement('span');
         actions.className = 'github-pr-actions';
-        if (item.draft) {
-          const readyBtn = document.createElement('button');
-          readyBtn.type = 'button';
-          readyBtn.className = 'github-pr-action';
-          readyBtn.textContent = 'Ready';
-          readyBtn.title = 'Mark pull request ready for review';
-          readyBtn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            this.runPullAction(item, 'ready_for_review', readyBtn);
-          });
-          actions.appendChild(readyBtn);
+        const methodSelect = document.createElement('select');
+        methodSelect.className = 'github-pr-merge-method github-pr-action-control';
+        methodSelect.title = 'Select merge method';
+        const methods = [
+          { value: 'merge', label: 'Merge commit' },
+          { value: 'squash', label: 'Squash' },
+          { value: 'rebase', label: 'Rebase' },
+        ];
+        for (const method of methods) {
+          const opt = document.createElement('option');
+          opt.value = method.value;
+          opt.textContent = method.label;
+          methodSelect.appendChild(opt);
         }
+        actions.appendChild(methodSelect);
         const mergeBtn = document.createElement('button');
         mergeBtn.type = 'button';
-        mergeBtn.className = 'github-pr-action github-pr-action-merge';
+        mergeBtn.className = 'github-pr-action github-pr-action-merge github-pr-action-control';
         mergeBtn.textContent = 'Merge';
         mergeBtn.title = 'Merge pull request';
         mergeBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          this.runPullAction(item, 'merge', mergeBtn);
+          this.runPullAction(item, mergeBtn, methodSelect);
         });
         actions.appendChild(mergeBtn);
         li.appendChild(actions);
@@ -621,12 +623,13 @@ class GitHubCard {
     }
   }
 
-  async runPullAction(item, action, btn) {
-    const actionName = action === 'ready_for_review' ? 'ready for review' : 'merge';
+  async runPullAction(item, btn, methodSelect) {
+    const mergeMethod = methodSelect && methodSelect.value ? methodSelect.value : 'merge';
+    if (!confirm(`Merge #${item.number} using ${mergeMethod}?`)) return;
     const wrap = btn.parentElement;
-    const group = wrap ? [...wrap.querySelectorAll('.github-pr-action')] : [btn];
-    for (const actionBtn of group) actionBtn.disabled = true;
-    this.setStatus(`${actionName} #${item.number}…`, 'running');
+    const controls = wrap ? [...wrap.querySelectorAll('.github-pr-action-control')] : [btn];
+    for (const control of controls) control.disabled = true;
+    this.setStatus(`merging #${item.number}…`, 'running');
     try {
       const r = await fetch('/api/system/github-pulls/action', {
         method: 'POST',
@@ -634,24 +637,24 @@ class GitHubCard {
         body: JSON.stringify({
           url: this.currentUrl,
           pullNumber: item.number,
-          action,
+          action: 'merge',
+          sha: item.headSha || undefined,
+          mergeMethod,
         }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        this.setStatus(data.error || `failed to ${actionName}`, 'err');
+        this.setStatus(data.error || `failed to merge #${item.number}`, 'err');
         return;
       }
-      const successFallback = action === 'ready_for_review'
-        ? 'pull request marked ready for review'
-        : 'pull request merged';
+      const successFallback = `pull request #${item.number} merged`;
       this.setStatus(data.message || successFallback, 'ok');
       await this.load(this.currentUrl);
     } catch (err) {
       console.error('[concilium] pull request action failed:', err);
-      this.setStatus(`failed to ${actionName}`, 'err');
+      this.setStatus(`failed to merge #${item.number}`, 'err');
     } finally {
-      for (const actionBtn of group) actionBtn.disabled = false;
+      for (const control of controls) control.disabled = false;
     }
   }
 

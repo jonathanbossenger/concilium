@@ -205,7 +205,7 @@ function toGitHubPull(item) {
   return {
     ...toGitHubItem(item),
     branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
-    draft: !!item.draft,
+    headSha: item.head && typeof item.head.sha === 'string' ? item.head.sha : '',
   };
 }
 
@@ -298,14 +298,22 @@ router.post('/github-pulls/action', async (req, res) => {
     const url = req.body && req.body.url;
     const pullNumber = req.body && req.body.pullNumber;
     const action = req.body && req.body.action;
+    const sha = req.body && req.body.sha;
+    const mergeMethod = req.body && req.body.mergeMethod;
     if (typeof url !== 'string' || !url) {
       return res.status(400).json({ error: 'url is required' });
     }
     if (!Number.isInteger(pullNumber) || pullNumber < 1) {
       return res.status(400).json({ error: 'pullNumber must be a positive integer' });
     }
-    if (action !== 'ready_for_review' && action !== 'merge') {
-      return res.status(400).json({ error: 'action must be "ready_for_review" or "merge"' });
+    if (action !== 'merge') {
+      return res.status(400).json({ error: 'action must be "merge"' });
+    }
+    if (sha !== undefined && typeof sha !== 'string') {
+      return res.status(400).json({ error: 'sha must be a string' });
+    }
+    if (mergeMethod !== undefined && mergeMethod !== 'merge' && mergeMethod !== 'squash' && mergeMethod !== 'rebase') {
+      return res.status(400).json({ error: 'mergeMethod must be one of "merge", "squash", or "rebase"' });
     }
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
@@ -321,12 +329,17 @@ router.post('/github-pulls/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const apiUrl = action === 'ready_for_review'
-      ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/ready_for_review`
-      : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`;
+    const payload = {};
+    if (sha && sha.trim()) payload.sha = sha.trim();
+    if (mergeMethod) payload.merge_method = mergeMethod;
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`;
     const resp = await fetch(apiUrl, {
-      method: action === 'ready_for_review' ? 'POST' : 'PUT',
-      headers: githubHeaders(githubToken),
+      method: 'PUT',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: Object.keys(payload).length ? JSON.stringify(payload) : undefined,
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
@@ -338,7 +351,7 @@ router.post('/github-pulls/action', async (req, res) => {
     res.json({
       ok: true,
       action,
-      message: action === 'ready_for_review' ? 'pull request marked ready for review' : 'pull request merged',
+      message: 'pull request merged',
       merged: !!data.merged,
     });
   } catch (err) {

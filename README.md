@@ -256,7 +256,7 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
 | `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
-| `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action}` where action is `ready_for_review` or `merge` |
+| `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?}` (currently `action: "merge"`) |
 | `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
 | `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `POST`   | `/api/system/new-project/check` | check whether `{name}` can be used to create a repo with the saved GitHub token |

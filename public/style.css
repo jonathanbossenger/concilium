@@ -382,17 +382,27 @@ main:has(.card:only-child):not(.has-expanded) {
   padding: 0.15em 0.45em;
   cursor: pointer;
 }
+.github-pr-merge-method {
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 0.82em;
+  line-height: 1.4;
+  padding: 0.12em 0.3em;
+}
 .github-pr-action:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
 }
-.github-pr-action:disabled {
+.github-pr-action:disabled,
+.github-pr-merge-method:disabled {
   opacity: 0.6;
   cursor: wait;
 }
 .github-pr-action-merge {
   color: var(--status-ok);
-  border-color: var(--border-soft);
+  border-color: var(--status-ok);
 }
 
 main.has-expanded {
