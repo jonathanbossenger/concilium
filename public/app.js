@@ -1353,13 +1353,14 @@ newIssueForm.addEventListener('submit', async (e) => {
   newIssueCreateBtn.textContent = 'Creating…';
   setNewIssueStatus('Creating issue…');
   try {
+    const trimmedBody = newIssueBodyInput.value.trim();
     const r = await fetch('/api/system/new-issue', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         url: newIssueRepoUrl,
         title: newIssueTitleInput.value.trim(),
-        body: newIssueBodyInput.value.trim(),
+        ...(trimmedBody ? { body: trimmedBody } : {}),
       }),
     });
     const data = await r.json().catch(() => ({}));

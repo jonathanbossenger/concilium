@@ -294,9 +294,7 @@ router.post('/github-items', async (req, res) => {
 
 router.post('/new-issue', async (req, res) => {
   try {
-    const url = req.body && req.body.url;
-    const title = req.body && req.body.title;
-    const body = req.body && req.body.body;
+    const { url, title, body } = req.body || {};
     if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'url is required' });
     if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title is required' });
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
@@ -308,6 +306,7 @@ router.post('/new-issue', async (req, res) => {
     }
     const repoData = parseGitHubRepo(withoutTrailingSlashes);
     if (!repoData) return res.status(400).json({ error: 'Invalid GitHub repository URL' });
+    const trimmedBody = body ? body.trim() : '';
 
     const cfg = getConfig();
     const githubToken = getGitHubToken(cfg);
@@ -323,7 +322,7 @@ router.post('/new-issue', async (req, res) => {
         },
         body: JSON.stringify({
           title: title.trim(),
-          ...(body && body.trim() ? { body: body.trim() } : {}),
+          ...(trimmedBody ? { body: trimmedBody } : {}),
         }),
       },
     );
