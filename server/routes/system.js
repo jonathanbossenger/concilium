@@ -391,7 +391,7 @@ router.post('/github-issues/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/assignees`;
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/assignees`;
     const resp = await fetch(apiUrl, {
       method: 'POST',
       headers: {
