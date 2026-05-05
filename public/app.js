@@ -512,6 +512,7 @@ class GitHubCard {
     this.currentUrl = '';
 
     this.closeBtn.addEventListener('click', () => this.close());
+    this.newIssueBtn.addEventListener('click', () => this.openNewIssueDialog());
     this.refreshBtn.addEventListener('click', () => this.load(this.currentUrl));
     enableCardDragging(this.el, this.headerEl);
   }
@@ -598,10 +599,17 @@ class GitHubCard {
     this.titleEl.textContent = `GitHub — ${short}`;
     const base = url.replace(/\/+$/, '');
     this.currentUrl = base;
-    this.newIssueBtn.href = base + '/issues/new';
     this.newIssueBtn.hidden = false;
     this.pullsLinkEl.href = base + '/pulls';
     this.issuesLinkEl.href = base + '/issues';
+  }
+
+  openNewIssueDialog() {
+    if (!this.currentUrl) return;
+    openNewIssueDialog(this.currentUrl, async () => {
+      await this.load(this.currentUrl);
+      this.setStatus('issue created', 'ok');
+    });
   }
 
   async load(repoUrlHint = '') {
@@ -988,8 +996,17 @@ const newProjectPrivateInput = $('#new-project-private');
 const newProjectBrowseBtn = $('#new-project-target-browse');
 const newProjectCreateBtn = $('#new-project-create');
 const newProjectStatusEl = $('#new-project-status');
+const newIssueDlg = $('#new-issue-dialog');
+const newIssueForm = $('#new-issue-form');
+const newIssueRepoInput = $('#new-issue-repo');
+const newIssueTitleInput = $('#new-issue-title');
+const newIssueBodyInput = $('#new-issue-body');
+const newIssueCreateBtn = $('#new-issue-create');
+const newIssueStatusEl = $('#new-issue-status');
 let editingId = null;
 let newProjectCheckAbortCtrl = null;
+let newIssueRepoUrl = '';
+let newIssueCreatedHook = null;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1110,6 +1127,29 @@ function updateNewProjectCreateState() {
   const hasName = !!newProjectNameInput.value.trim();
   const hasTarget = !!newProjectTargetInput.value.trim();
   newProjectCreateBtn.disabled = !(hasName && hasTarget);
+}
+
+function setNewIssueStatus(text, cls = '') {
+  newIssueStatusEl.textContent = text;
+  newIssueStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) newIssueStatusEl.classList.add(cls);
+}
+
+function updateNewIssueCreateState() {
+  newIssueCreateBtn.disabled = !newIssueTitleInput.value.trim();
+}
+
+function openNewIssueDialog(repoUrl, onCreated = null) {
+  const base = (repoUrl || '').replace(/\/+$/, '');
+  if (!base) return;
+  newIssueRepoUrl = base;
+  newIssueCreatedHook = typeof onCreated === 'function' ? onCreated : null;
+  newIssueForm.reset();
+  newIssueRepoInput.value = base.replace(/^https:\/\/github\.com\//, '');
+  setNewIssueStatus('Enter a title to create an issue.');
+  updateNewIssueCreateState();
+  newIssueDlg.showModal();
+  newIssueTitleInput.focus();
 }
 
 async function checkNewProjectName(name) {
@@ -1295,6 +1335,47 @@ newProjectForm.addEventListener('submit', async (e) => {
   } finally {
     newProjectCreateBtn.textContent = originalButtonText;
     updateNewProjectCreateState();
+  }
+});
+
+$('#close-new-issue').addEventListener('click', () => newIssueDlg.close());
+newIssueDlg.addEventListener('close', () => {
+  newIssueRepoUrl = '';
+  newIssueCreatedHook = null;
+});
+newIssueTitleInput.addEventListener('input', updateNewIssueCreateState);
+newIssueForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (newIssueCreateBtn.disabled) return;
+
+  const originalButtonText = newIssueCreateBtn.textContent;
+  newIssueCreateBtn.disabled = true;
+  newIssueCreateBtn.textContent = 'Creating…';
+  setNewIssueStatus('Creating issue…');
+  try {
+    const trimmedBody = newIssueBodyInput.value.trim();
+    const r = await fetch('/api/system/new-issue', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        url: newIssueRepoUrl,
+        title: newIssueTitleInput.value.trim(),
+        ...(trimmedBody ? { body: trimmedBody } : {}),
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setNewIssueStatus(data.error || 'Failed to create issue. Please try again.', 'err');
+      return;
+    }
+    if (newIssueCreatedHook) await newIssueCreatedHook(data);
+    newIssueDlg.close();
+  } catch (err) {
+    console.error('[concilium] new issue creation failed:', err);
+    setNewIssueStatus('Issue creation failed.', 'err');
+  } finally {
+    newIssueCreateBtn.textContent = originalButtonText;
+    updateNewIssueCreateState();
   }
 });
 
