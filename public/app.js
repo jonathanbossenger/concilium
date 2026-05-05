@@ -606,9 +606,13 @@ class GitHubCard {
 
   openNewIssueDialog() {
     if (!this.currentUrl) return;
-    openNewIssueDialog(this.currentUrl, async () => {
+    openNewIssueDialog(this.currentUrl, async (issue) => {
       await this.load(this.currentUrl);
-      this.setStatus('issue created', 'ok');
+      if (issue && issue.copilotAssigned === false) {
+        this.setStatus('issue created (copilot assignment failed)', 'warn');
+      } else {
+        this.setStatus('issue created', 'ok');
+      }
     });
   }
 
@@ -1369,6 +1373,12 @@ newIssueForm.addEventListener('submit', async (e) => {
       return;
     }
     if (newIssueCreatedHook) await newIssueCreatedHook(data);
+    if (data && data.copilotAssigned === false) {
+      newIssueForm.reset();
+      setNewIssueStatus('Issue created, but Copilot assignment failed. Check that Copilot coding agent is enabled for this repository.', 'warn');
+      updateNewIssueCreateState();
+      return;
+    }
     newIssueDlg.close();
   } catch (err) {
     console.error('[concilium] new issue creation failed:', err);
