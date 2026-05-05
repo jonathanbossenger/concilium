@@ -522,7 +522,7 @@ class GitHubCard {
     this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
   }
 
-  renderList(el, items, emptyText, { withPullActions = false } = {}) {
+  renderList(el, items, emptyText, { withPullActions = false, withIssueActions = false } = {}) {
     el.replaceChildren();
     if (!items.length) {
       const li = document.createElement('li');
@@ -593,6 +593,22 @@ class GitHubCard {
         actions.appendChild(mergeBtn);
         li.appendChild(actions);
       }
+      if (withIssueActions) {
+        const actions = document.createElement('span');
+        actions.className = 'github-issue-actions';
+        const assignBtn = document.createElement('button');
+        assignBtn.type = 'button';
+        assignBtn.className = 'github-issue-action github-issue-action-assign github-issue-action-control';
+        assignBtn.textContent = 'Assign to CoPilot agent';
+        assignBtn.title = 'Assign issue to copilot-swe-agent[bot]';
+        assignBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.runIssueAction(item, assignBtn);
+        });
+        actions.appendChild(assignBtn);
+        li.appendChild(actions);
+      }
       el.appendChild(li);
     }
   }
@@ -659,6 +675,37 @@ class GitHubCard {
     }
   }
 
+  async runIssueAction(item, btn) {
+    if (!confirm(`Assign issue #${item.number} to copilot-swe-agent[bot]?`)) return;
+    const controls = [btn];
+    for (const control of controls) control.disabled = true;
+    this.setStatus(`assigning #${item.number}…`, 'running');
+    try {
+      const r = await fetch('/api/system/github-issues/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: this.currentUrl,
+          issueNumber: item.number,
+          action: 'assign_copilot',
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        this.setStatus(data.error || `failed to assign #${item.number}`, 'err');
+        return;
+      }
+      const successFallback = `issue #${item.number} assigned`;
+      this.setStatus(data.message || successFallback, 'ok');
+      await this.load(this.currentUrl);
+    } catch (err) {
+      console.error('[concilium] issue action failed:', err);
+      this.setStatus(`failed to assign #${item.number}`, 'err');
+    } finally {
+      for (const control of controls) control.disabled = false;
+    }
+  }
+
   setTitle(url) {
     if (!url) return;
     const short = url.replace(/^https:\/\/github\.com\//, '');
@@ -707,7 +754,7 @@ class GitHubCard {
       }
       const url = data.url || repoUrlHint;
       this.setTitle(url);
-      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues');
+      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues', { withIssueActions: true });
       this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests', { withPullActions: true });
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {

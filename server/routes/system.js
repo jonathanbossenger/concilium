@@ -13,6 +13,7 @@ const GIT_CLONE_TIMEOUT_MS = 120000;
 const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
+const COPILOT_ISSUE_ASSIGNEE = 'copilot-swe-agent[bot]';
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -356,6 +357,60 @@ router.post('/github-pulls/action', async (req, res) => {
       action,
       message: 'pull request merged',
       merged: !!data.merged,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
+});
+
+router.post('/github-issues/action', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    const issueNumber = req.body && req.body.issueNumber;
+    const action = req.body && req.body.action;
+    if (typeof url !== 'string' || !url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+    if (!Number.isInteger(issueNumber) || issueNumber < 1) {
+      return res.status(400).json({ error: 'issueNumber must be a positive integer' });
+    }
+    if (action !== 'assign_copilot') {
+      return res.status(400).json({ error: 'action must be "assign_copilot"' });
+    }
+    const repoData = parseGitHubRepo(url);
+    if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+    const owner = repoData.owner;
+    const repo = repoData.repo;
+    if (!GITHUB_REPO_NAME_RE.test(owner) || !GITHUB_REPO_NAME_RE.test(repo)) {
+      return res.status(400).json({ error: 'invalid github repository url' });
+    }
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) {
+      return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+    }
+
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/assignees`;
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ assignees: [COPILOT_ISSUE_ASSIGNEE] }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data && typeof data.message === 'string' && data.message
+        ? data.message
+        : `GitHub action failed (HTTP ${resp.status})`;
+      return res.status(resp.status).json({ error: msg });
+    }
+    res.json({
+      ok: true,
+      action,
+      message: `issue #${issueNumber} assigned to ${COPILOT_ISSUE_ASSIGNEE}`,
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
