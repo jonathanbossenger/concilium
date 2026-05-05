@@ -322,11 +322,6 @@ main:has(.card:only-child):not(.has-expanded) {
   color: var(--accent);
   text-decoration: underline;
 }
-.github-agent-active {
-  flex: 0 0 auto;
-  line-height: 1;
-  font-size: 0.95em;
-}
 .github-branch {
   flex: 0 1 auto;
   min-width: 0;
