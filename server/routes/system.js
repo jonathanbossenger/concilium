@@ -205,6 +205,7 @@ function toGitHubPull(item) {
   return {
     ...toGitHubItem(item),
     branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
+    draft: !!item.draft,
   };
 }
 
@@ -287,6 +288,54 @@ router.post('/github-items', async (req, res) => {
         errorCode: detail.code,
       });
     }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
+});
+
+router.post('/github-pulls/action', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    const pullNumber = req.body && req.body.pullNumber;
+    const action = req.body && req.body.action;
+    if (typeof url !== 'string' || !url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+    if (!Number.isInteger(pullNumber) || pullNumber < 1) {
+      return res.status(400).json({ error: 'pullNumber must be a positive integer' });
+    }
+    if (action !== 'ready_for_review' && action !== 'merge') {
+      return res.status(400).json({ error: 'action must be "ready_for_review" or "merge"' });
+    }
+    const repoData = parseGitHubRepo(url);
+    if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) {
+      return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+    }
+
+    const apiUrl = action === 'ready_for_review'
+      ? `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}/pulls/${pullNumber}/ready_for_review`
+      : `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}/pulls/${pullNumber}/merge`;
+    const resp = await fetch(apiUrl, {
+      method: action === 'ready_for_review' ? 'POST' : 'PUT',
+      headers: githubHeaders(githubToken),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data && typeof data.message === 'string' && data.message
+        ? data.message
+        : `GitHub action failed (HTTP ${resp.status})`;
+      return res.status(resp.status).json({ error: msg });
+    }
+    res.json({
+      ok: true,
+      action,
+      message: action === 'ready_for_review' ? 'pull request marked ready for review' : 'pull request merged',
+      merged: !!data.merged,
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
   }

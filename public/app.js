@@ -521,7 +521,7 @@ class GitHubCard {
     this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
   }
 
-  renderList(el, items, emptyText) {
+  renderList(el, items, emptyText, { withPullActions = false } = {}) {
     el.replaceChildren();
     if (!items.length) {
       const li = document.createElement('li');
@@ -561,6 +561,35 @@ class GitHubCard {
         branchWrap.appendChild(copyBtn);
         li.appendChild(branchWrap);
       }
+      if (withPullActions) {
+        const actions = document.createElement('span');
+        actions.className = 'github-pr-actions';
+        if (item.draft) {
+          const readyBtn = document.createElement('button');
+          readyBtn.type = 'button';
+          readyBtn.className = 'github-pr-action';
+          readyBtn.textContent = 'Ready';
+          readyBtn.title = 'Mark pull request ready for review';
+          readyBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.runPullAction(item, 'ready_for_review', readyBtn);
+          });
+          actions.appendChild(readyBtn);
+        }
+        const mergeBtn = document.createElement('button');
+        mergeBtn.type = 'button';
+        mergeBtn.className = 'github-pr-action github-pr-action-merge';
+        mergeBtn.textContent = 'Merge';
+        mergeBtn.title = 'Merge pull request';
+        mergeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.runPullAction(item, 'merge', mergeBtn);
+        });
+        actions.appendChild(mergeBtn);
+        li.appendChild(actions);
+      }
       el.appendChild(li);
     }
   }
@@ -589,6 +618,36 @@ class GitHubCard {
       }, 1200);
     } catch (err) {
       console.error('[concilium] branch copy failed:', err);
+    }
+  }
+
+  async runPullAction(item, action, btn) {
+    const actionName = action === 'ready_for_review' ? 'ready for review' : 'merge';
+    const wrap = btn.parentElement;
+    const group = wrap ? [...wrap.querySelectorAll('.github-pr-action')] : [btn];
+    for (const actionBtn of group) actionBtn.disabled = true;
+    this.setStatus(`${actionName} #${item.number}…`, 'running');
+    try {
+      const r = await fetch('/api/system/github-pulls/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: this.currentUrl,
+          pullNumber: item.number,
+          action,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        this.setStatus(data.error || `failed to ${actionName}`, 'err');
+        return;
+      }
+      this.setStatus(data.message || `pull request ${actionName}d`, 'ok');
+      await this.load(this.currentUrl);
+    } catch (_) {
+      this.setStatus(`failed to ${actionName}`, 'err');
+    } finally {
+      for (const actionBtn of group) actionBtn.disabled = false;
     }
   }
 
@@ -634,7 +693,7 @@ class GitHubCard {
       const url = data.url || repoUrlHint;
       this.setTitle(url);
       this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues');
-      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests');
+      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests', { withPullActions: true });
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
       if (err.name === 'AbortError') return;
