@@ -210,7 +210,10 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
       }),
     },
   );
-  const data = await r.json().catch(() => ({}));
+  const data = await r.json().catch((err) => {
+    console.warn('[concilium] failed to parse assignee response JSON:', err && err.message ? err.message : err);
+    return null;
+  });
   if (!r.ok) {
     return {
       assigned: false,
@@ -218,8 +221,12 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
       message: data && typeof data.message === 'string' ? data.message : '',
     };
   }
-  const assignees = Array.isArray(data.assignees) ? data.assignees : [];
-  const assigned = assignees.some((assignee) => assignee && typeof assignee.login === 'string' && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase());
+  const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
+  const assigned = assignees.some((assignee) => (
+    assignee
+    && typeof assignee.login === 'string'
+    && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase()
+  ));
   return {
     assigned,
     status: r.status,
