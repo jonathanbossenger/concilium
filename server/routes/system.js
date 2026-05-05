@@ -371,7 +371,7 @@ router.post('/github-issues/action', async (req, res) => {
     if (typeof url !== 'string' || !url) {
       return res.status(400).json({ error: 'url is required' });
     }
-    if (!Number.isInteger(issueNumber) || issueNumber < 1) {
+    if (!Number.isSafeInteger(issueNumber) || issueNumber < 1) {
       return res.status(400).json({ error: 'issueNumber must be a positive integer' });
     }
     if (action !== 'assign_copilot') {
