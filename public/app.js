@@ -599,7 +599,7 @@ class GitHubCard {
         const assignBtn = document.createElement('button');
         assignBtn.type = 'button';
         assignBtn.className = 'github-issue-action github-issue-action-assign github-issue-action-control';
-        assignBtn.textContent = 'Assign to CoPilot agent';
+        assignBtn.textContent = 'Assign to Copilot agent';
         assignBtn.title = 'Assign issue to copilot-swe-agent[bot]';
         assignBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
