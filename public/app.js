@@ -677,8 +677,7 @@ class GitHubCard {
 
   async runIssueAction(item, btn) {
     if (!confirm(`Assign issue #${item.number} to copilot-swe-agent[bot]?`)) return;
-    const controls = [btn];
-    for (const control of controls) control.disabled = true;
+    btn.disabled = true;
     this.setStatus(`assigning #${item.number}…`, 'running');
     try {
       const r = await fetch('/api/system/github-issues/action', {
@@ -702,7 +701,7 @@ class GitHubCard {
       console.error('[concilium] issue action failed:', err);
       this.setStatus(`failed to assign #${item.number}`, 'err');
     } finally {
-      for (const control of controls) control.disabled = false;
+      btn.disabled = false;
     }
   }
 
