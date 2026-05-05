@@ -598,7 +598,7 @@ class GitHubCard {
     this.titleEl.textContent = `GitHub — ${short}`;
     const base = url.replace(/\/+$/, '');
     this.currentUrl = base;
-    this.newIssueBtn.href = base + '/issues/new';
+    this.newIssueBtn.href = base + '/issues/new?assignees=copilot-swe-agent';
     this.newIssueBtn.hidden = false;
     this.pullsLinkEl.href = base + '/pulls';
     this.issuesLinkEl.href = base + '/issues';
