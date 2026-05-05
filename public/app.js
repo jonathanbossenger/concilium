@@ -1368,7 +1368,6 @@ newIssueForm.addEventListener('submit', async (e) => {
       setNewIssueStatus(data.error || 'Failed to create issue. Please try again.', 'err');
       return;
     }
-    setNewIssueStatus(`Created issue #${data.number}.`, 'ok');
     if (newIssueCreatedHook) await newIssueCreatedHook(data);
     newIssueDlg.close();
   } catch (err) {

@@ -300,11 +300,8 @@ router.post('/new-issue', async (req, res) => {
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
 
     const normalizedUrl = url.trim();
-    let withoutTrailingSlashes = normalizedUrl;
-    while (withoutTrailingSlashes.endsWith('/')) {
-      withoutTrailingSlashes = withoutTrailingSlashes.slice(0, -1);
-    }
-    const repoData = parseGitHubRepo(withoutTrailingSlashes);
+    const trimmedUrl = normalizedUrl.replace(/\/+$/, '');
+    const repoData = parseGitHubRepo(trimmedUrl);
     if (!repoData) return res.status(400).json({ error: 'Invalid GitHub repository URL' });
     const trimmedBody = body ? body.trim() : '';
 
@@ -342,7 +339,7 @@ router.post('/new-issue', async (req, res) => {
     res.json(toGitHubItem(data));
   } catch (err) {
     const detail = classifyGitHubError(err);
-    res.status(err.status || 500).json({ error: err.message || detail.message });
+    res.status(err.status || 500).json({ error: detail.message });
   }
 });
 
