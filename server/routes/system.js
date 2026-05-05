@@ -10,6 +10,9 @@ const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 const GIT_CLONE_TIMEOUT_MS = 120000;
+const MAX_GITHUB_URL_LENGTH = 2048;
+const MAX_ISSUE_TITLE_LENGTH = 256;
+const MAX_ISSUE_BODY_BYTES = 65536;
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -300,10 +303,20 @@ router.post('/new-issue', async (req, res) => {
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
 
     const normalizedUrl = url.trim();
+    if (normalizedUrl.length > MAX_GITHUB_URL_LENGTH) {
+      return res.status(400).json({ error: `url must be ${MAX_GITHUB_URL_LENGTH} characters or fewer` });
+    }
     const trimmedUrl = normalizedUrl.replace(/\/+$/, '');
     const repoData = parseGitHubRepo(trimmedUrl);
     if (!repoData) return res.status(400).json({ error: 'Invalid GitHub repository URL' });
+    const trimmedTitle = title.trim();
+    if (trimmedTitle.length > MAX_ISSUE_TITLE_LENGTH) {
+      return res.status(400).json({ error: `title must be ${MAX_ISSUE_TITLE_LENGTH} characters or fewer` });
+    }
     const trimmedBody = body ? body.trim() : '';
+    if (trimmedBody && Buffer.byteLength(trimmedBody, 'utf8') > MAX_ISSUE_BODY_BYTES) {
+      return res.status(400).json({ error: `body must be ${MAX_ISSUE_BODY_BYTES} bytes or fewer` });
+    }
 
     const cfg = getConfig();
     const githubToken = getGitHubToken(cfg);
@@ -318,7 +331,7 @@ router.post('/new-issue', async (req, res) => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          title: title.trim(),
+          title: trimmedTitle,
           ...(trimmedBody ? { body: trimmedBody } : {}),
         }),
       },
