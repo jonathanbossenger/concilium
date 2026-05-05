@@ -522,7 +522,8 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
 
 /* --- settings dialog --- */
 dialog#settings-dialog,
-dialog#new-project-dialog {
+dialog#new-project-dialog,
+dialog#new-issue-dialog {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -533,7 +534,8 @@ dialog#new-project-dialog {
   box-shadow: var(--shadow-modal);
 }
 dialog#settings-dialog::backdrop,
-dialog#new-project-dialog::backdrop { background: var(--backdrop); }
+dialog#new-project-dialog::backdrop,
+dialog#new-issue-dialog::backdrop { background: var(--backdrop); }
 .dialog-body { display: flex; flex-direction: column; gap: 1.2em; padding: 1em 1.2em 1.4em; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 1.05em; color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -607,6 +609,7 @@ dialog section h3 {
   padding: 0.35em 0;
 }
 .agent-form label.check input { margin: 0; }
+.agent-form label.full-span { grid-column: 1 / -1; }
 .agent-form .inline-row {
   display: flex;
   align-items: center;
@@ -626,3 +629,6 @@ dialog section h3 {
 #new-project-status.ok { color: var(--status-ok); }
 #new-project-status.warn { color: var(--status-warn); }
 #new-project-status.err { color: var(--status-err); }
+#new-issue-status.ok { color: var(--status-ok); }
+#new-issue-status.warn { color: var(--status-warn); }
+#new-issue-status.err { color: var(--status-err); }

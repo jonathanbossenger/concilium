@@ -292,6 +292,56 @@ router.post('/github-items', async (req, res) => {
   }
 });
 
+router.post('/new-issue', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    const title = req.body && req.body.title;
+    const body = req.body && req.body.body;
+    if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'url is required' });
+    if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title is required' });
+    if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
+
+    const repoData = parseGitHubRepo(url.trim().replace(/\/+$/, ''));
+    if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+
+    const createResp = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}/issues`,
+      {
+        method: 'POST',
+        headers: {
+          ...githubHeaders(githubToken),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          ...(body && body.trim() ? { body: body.trim() } : {}),
+        }),
+      },
+    );
+    const data = await createResp.json().catch(() => ({}));
+    if (!createResp.ok) {
+      const msg = data && typeof data.message === 'string'
+        ? data.message
+        : `issue creation failed (HTTP ${createResp.status})`;
+      const err = new Error(msg);
+      err.status = createResp.status;
+      const remainingHeader = createResp.headers.get('x-ratelimit-remaining');
+      const remaining = remainingHeader === null ? null : Number.parseInt(remainingHeader, 10);
+      err.rateLimited = Number.isFinite(remaining) && remaining === 0;
+      throw err;
+    }
+
+    res.json(toGitHubItem(data));
+  } catch (err) {
+    const detail = classifyGitHubError(err);
+    res.status(err.status || 500).json({ error: err.message || detail.message });
+  }
+});
+
 router.get('/layout', (req, res) => {
   const raw = store.getLayout();
   if (!raw) return res.json([]);
