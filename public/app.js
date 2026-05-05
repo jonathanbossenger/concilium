@@ -642,7 +642,10 @@ class GitHubCard {
         this.setStatus(data.error || `failed to ${actionName}`, 'err');
         return;
       }
-      this.setStatus(data.message || `pull request ${actionName}d`, 'ok');
+      const successFallback = action === 'ready_for_review'
+        ? 'pull request marked ready for review'
+        : 'pull request merged';
+      this.setStatus(data.message || successFallback, 'ok');
       await this.load(this.currentUrl);
     } catch (_) {
       this.setStatus(`failed to ${actionName}`, 'err');
