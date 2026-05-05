@@ -198,7 +198,7 @@ async function deleteGitHubRepo(githubToken, owner, repo) {
 
 async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
   const r = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${String(issueNumber)}/assignees`,
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/assignees`,
     {
       method: 'POST',
       headers: {
@@ -222,11 +222,11 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
     };
   }
   const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
-  const assigned = assignees.some((assignee) => (
-    assignee
-    && typeof assignee.login === 'string'
-    && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase()
-  ));
+  const assigned = assignees.some((assignee) => {
+    return assignee
+      && typeof assignee.login === 'string'
+      && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase();
+  });
   return {
     assigned,
     status: r.status,
