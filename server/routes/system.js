@@ -301,8 +301,13 @@ router.post('/new-issue', async (req, res) => {
     if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title is required' });
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
 
-    const repoData = parseGitHubRepo(url.trim().replace(/\/+$/, ''));
-    if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+    const normalizedUrl = url.trim();
+    let withoutTrailingSlashes = normalizedUrl;
+    while (withoutTrailingSlashes.endsWith('/')) {
+      withoutTrailingSlashes = withoutTrailingSlashes.slice(0, -1);
+    }
+    const repoData = parseGitHubRepo(withoutTrailingSlashes);
+    if (!repoData) return res.status(400).json({ error: 'Invalid GitHub repository URL' });
 
     const cfg = getConfig();
     const githubToken = getGitHubToken(cfg);
@@ -326,7 +331,7 @@ router.post('/new-issue', async (req, res) => {
     if (!createResp.ok) {
       const msg = data && typeof data.message === 'string'
         ? data.message
-        : `issue creation failed (HTTP ${createResp.status})`;
+        : `Issue creation failed (HTTP ${createResp.status})`;
       const err = new Error(msg);
       err.status = createResp.status;
       const remainingHeader = createResp.headers.get('x-ratelimit-remaining');

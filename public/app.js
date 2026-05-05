@@ -1364,7 +1364,7 @@ newIssueForm.addEventListener('submit', async (e) => {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      setNewIssueStatus(data.error || 'Issue creation failed.', 'err');
+      setNewIssueStatus(data.error || 'Failed to create issue. Please try again.', 'err');
       return;
     }
     setNewIssueStatus(`Created issue #${data.number}.`, 'ok');
