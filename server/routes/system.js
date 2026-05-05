@@ -309,6 +309,11 @@ router.post('/github-pulls/action', async (req, res) => {
     }
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+    const owner = repoData.owner;
+    const repo = repoData.repo;
+    if (!GITHUB_REPO_NAME_RE.test(owner) || !GITHUB_REPO_NAME_RE.test(repo)) {
+      return res.status(400).json({ error: 'invalid github repository url' });
+    }
 
     const cfg = getConfig();
     const githubToken = getGitHubToken(cfg);
@@ -317,8 +322,8 @@ router.post('/github-pulls/action', async (req, res) => {
     }
 
     const apiUrl = action === 'ready_for_review'
-      ? `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}/pulls/${pullNumber}/ready_for_review`
-      : `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}/pulls/${pullNumber}/merge`;
+      ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/ready_for_review`
+      : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`;
     const resp = await fetch(apiUrl, {
       method: action === 'ready_for_review' ? 'POST' : 'PUT',
       headers: githubHeaders(githubToken),
