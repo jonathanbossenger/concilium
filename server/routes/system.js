@@ -334,10 +334,13 @@ router.post('/github-items', async (req, res) => {
 
 router.post('/new-issue', async (req, res) => {
   try {
-    const { url, title, body } = req.body || {};
+    const { url, title, body, assignCopilot } = req.body || {};
     if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'url is required' });
     if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title is required' });
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
+    if (assignCopilot !== undefined && typeof assignCopilot !== 'boolean') {
+      return res.status(400).json({ error: 'assignCopilot must be a boolean' });
+    }
 
     const normalizedUrl = url.trim();
     if (normalizedUrl.length > MAX_GITHUB_URL_LENGTH) {
@@ -386,9 +389,10 @@ router.post('/new-issue', async (req, res) => {
       throw err;
     }
 
+    const shouldAssignCopilot = assignCopilot === true;
     let copilotAssigned = false;
     const issueNumber = data && Number.isInteger(data.number) ? data.number : null;
-    if (issueNumber !== null) {
+    if (shouldAssignCopilot && issueNumber !== null) {
       try {
         const assignment = await assignIssueToCopilot(githubToken, repoData.owner, repoData.repo, issueNumber);
         copilotAssigned = assignment.assigned;
@@ -403,6 +407,7 @@ router.post('/new-issue', async (req, res) => {
 
     res.json({
       ...toGitHubItem(data),
+      copilotAssignmentRequested: shouldAssignCopilot,
       copilotAssigned,
     });
   } catch (err) {

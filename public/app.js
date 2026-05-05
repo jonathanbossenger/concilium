@@ -608,7 +608,7 @@ class GitHubCard {
     if (!this.currentUrl) return;
     openNewIssueDialog(this.currentUrl, async (issue) => {
       await this.load(this.currentUrl);
-      if (issue && issue.copilotAssigned === false) {
+      if (issue && issue.copilotAssignmentRequested && issue.copilotAssigned === false) {
         this.setStatus('issue created (copilot assignment failed)', 'warn');
       } else {
         this.setStatus('issue created', 'ok');
@@ -1005,6 +1005,7 @@ const newIssueForm = $('#new-issue-form');
 const newIssueRepoInput = $('#new-issue-repo');
 const newIssueTitleInput = $('#new-issue-title');
 const newIssueBodyInput = $('#new-issue-body');
+const newIssueAssignCopilotInput = $('#new-issue-assign-copilot');
 const newIssueCreateBtn = $('#new-issue-create');
 const newIssueStatusEl = $('#new-issue-status');
 let editingId = null;
@@ -1358,12 +1359,14 @@ newIssueForm.addEventListener('submit', async (e) => {
   setNewIssueStatus('Creating issue…');
   try {
     const trimmedBody = newIssueBodyInput.value.trim();
+    const assignCopilot = !!newIssueAssignCopilotInput.checked;
     const r = await fetch('/api/system/new-issue', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         url: newIssueRepoUrl,
         title: newIssueTitleInput.value.trim(),
+        assignCopilot,
         ...(trimmedBody ? { body: trimmedBody } : {}),
       }),
     });
@@ -1373,7 +1376,7 @@ newIssueForm.addEventListener('submit', async (e) => {
       return;
     }
     if (newIssueCreatedHook) await newIssueCreatedHook(data);
-    if (data && data.copilotAssigned === false) {
+    if (assignCopilot && data && data.copilotAssigned === false) {
       newIssueForm.reset();
       setNewIssueStatus('Issue created, but Copilot assignment failed. Verify that the Copilot coding agent is enabled in your GitHub repository settings.', 'warn');
       updateNewIssueCreateState();
