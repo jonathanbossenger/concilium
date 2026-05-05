@@ -10,8 +10,6 @@ const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 const GIT_CLONE_TIMEOUT_MS = 120000;
-const AGENT_TASK_CACHE_TTL_MS = 5000;
-let activeAgentPRsCache = { value: null, expiresAt: 0 };
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -210,15 +208,6 @@ function toGitHubPull(item) {
   };
 }
 
-function execFileText(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, options, (err, stdout) => {
-      if (err) return reject(err);
-      resolve(stdout.toString().trim());
-    });
-  });
-}
-
 function execFileWithOutput(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
@@ -233,57 +222,6 @@ function execFileWithOutput(command, args, options = {}) {
       });
     });
   });
-}
-
-async function getActiveAgentPRsByRepo() {
-  const now = Date.now();
-  if (activeAgentPRsCache.value !== null && now < activeAgentPRsCache.expiresAt) {
-    return activeAgentPRsCache.value;
-  }
-
-  let stdout = '';
-  try {
-    // gh agent-task is currently a preview command and may evolve over time.
-    // We key activity by completedAt because null/empty means "still active".
-    stdout = await execFileText('gh', [
-      'agent-task',
-      'list',
-      '--json',
-      'state,completedAt,pullRequestNumber,repository',
-      '--limit',
-      '50',
-    ], { timeout: 5000 });
-  } catch (_err) {
-    const empty = new Map();
-    // Cache empty results on errors to avoid spawning `gh` repeatedly while
-    // the CLI is unavailable, unauthenticated, or timing out.
-    activeAgentPRsCache = { value: empty, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
-    return empty;
-  }
-
-  let rows = [];
-  try {
-    rows = JSON.parse(stdout);
-  } catch (_err) {
-    const empty = new Map();
-    activeAgentPRsCache = { value: empty, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
-    return empty;
-  }
-
-  const byRepo = new Map();
-  if (Array.isArray(rows)) {
-    for (const row of rows) {
-      if (!row || row.completedAt) continue;
-      const repo = typeof row.repository === 'string' ? row.repository.trim().toLowerCase() : '';
-      const prNumber = Number(row.pullRequestNumber);
-      if (!repo || !Number.isInteger(prNumber) || prNumber <= 0) continue;
-      if (!byRepo.has(repo)) byRepo.set(repo, new Set());
-      byRepo.get(repo).add(prNumber);
-    }
-  }
-
-  activeAgentPRsCache = { value: byRepo, expiresAt: now + AGENT_TASK_CACHE_TTL_MS };
-  return byRepo;
 }
 
 router.post('/github-url', (req, res) => {
@@ -326,22 +264,16 @@ router.post('/github-items', async (req, res) => {
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
-    const repoKey = `${repoData.owner}/${repoData.repo}`.toLowerCase();
     try {
-      const [rawIssues, rawPulls, activePRsByRepo] = await Promise.all([
+      const [rawIssues, rawPulls] = await Promise.all([
         fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
         fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
-        getActiveAgentPRsByRepo(),
       ]);
       const issues = Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
         : [];
-      const activePRs = activePRsByRepo.get(repoKey) || new Set();
       const pulls = Array.isArray(rawPulls)
-        ? rawPulls.map((item) => {
-          const pull = toGitHubPull(item);
-          return { ...pull, agentActive: activePRs.has(pull.number) };
-        })
+        ? rawPulls.map(toGitHubPull)
         : [];
       res.json({ url, issues, pulls });
     } catch (err) {
