@@ -222,11 +222,9 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
     };
   }
   const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
-  const assigned = assignees.some((assignee) => {
-    return assignee
-      && typeof assignee.login === 'string'
-      && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase();
-  });
+  const assigned = assignees.some((assignee) => assignee
+    && typeof assignee.login === 'string'
+    && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase());
   return {
     assigned,
     status: r.status,

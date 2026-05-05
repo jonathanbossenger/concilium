@@ -1375,7 +1375,7 @@ newIssueForm.addEventListener('submit', async (e) => {
     if (newIssueCreatedHook) await newIssueCreatedHook(data);
     if (data && data.copilotAssigned === false) {
       newIssueForm.reset();
-      setNewIssueStatus('Issue created, but Copilot assignment failed. Check GitHub repository settings to confirm Copilot coding agent is enabled.', 'warn');
+      setNewIssueStatus('Issue created, but Copilot assignment failed. Verify that the Copilot coding agent is enabled in your GitHub repository settings.', 'warn');
       updateNewIssueCreateState();
       return;
     }
