@@ -647,7 +647,8 @@ class GitHubCard {
         : 'pull request merged';
       this.setStatus(data.message || successFallback, 'ok');
       await this.load(this.currentUrl);
-    } catch (_) {
+    } catch (err) {
+      console.error('[concilium] pull request action failed:', err);
       this.setStatus(`failed to ${actionName}`, 'err');
     } finally {
       for (const actionBtn of group) actionBtn.disabled = false;
