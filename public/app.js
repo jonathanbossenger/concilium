@@ -522,7 +522,7 @@ class GitHubCard {
     this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
   }
 
-  renderList(el, items, emptyText) {
+  renderList(el, items, emptyText, { withPullActions = false } = {}) {
     el.replaceChildren();
     if (!items.length) {
       const li = document.createElement('li');
@@ -562,6 +562,37 @@ class GitHubCard {
         branchWrap.appendChild(copyBtn);
         li.appendChild(branchWrap);
       }
+      if (withPullActions) {
+        const actions = document.createElement('span');
+        actions.className = 'github-pr-actions';
+        const methodSelect = document.createElement('select');
+        methodSelect.className = 'github-pr-merge-method github-pr-action-control';
+        methodSelect.title = 'Select merge method';
+        const methods = [
+          { value: 'merge', label: 'Merge commit' },
+          { value: 'squash', label: 'Squash' },
+          { value: 'rebase', label: 'Rebase' },
+        ];
+        for (const method of methods) {
+          const opt = document.createElement('option');
+          opt.value = method.value;
+          opt.textContent = method.label;
+          methodSelect.appendChild(opt);
+        }
+        actions.appendChild(methodSelect);
+        const mergeBtn = document.createElement('button');
+        mergeBtn.type = 'button';
+        mergeBtn.className = 'github-pr-action github-pr-action-merge github-pr-action-control';
+        mergeBtn.textContent = 'Merge';
+        mergeBtn.title = 'Merge pull request';
+        mergeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.runPullAction(item, mergeBtn, methodSelect);
+        });
+        actions.appendChild(mergeBtn);
+        li.appendChild(actions);
+      }
       el.appendChild(li);
     }
   }
@@ -590,6 +621,41 @@ class GitHubCard {
       }, 1200);
     } catch (err) {
       console.error('[concilium] branch copy failed:', err);
+    }
+  }
+
+  async runPullAction(item, btn, methodSelect) {
+    const mergeMethod = methodSelect && methodSelect.value ? methodSelect.value : 'merge';
+    if (!confirm(`Merge #${item.number} using ${mergeMethod}?`)) return;
+    const wrap = btn.parentElement;
+    const controls = wrap ? [...wrap.querySelectorAll('.github-pr-action-control')] : [btn];
+    for (const control of controls) control.disabled = true;
+    this.setStatus(`merging #${item.number}…`, 'running');
+    try {
+      const r = await fetch('/api/system/github-pulls/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: this.currentUrl,
+          pullNumber: item.number,
+          action: 'merge',
+          sha: item.headSha || undefined,
+          mergeMethod,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        this.setStatus(data.error || `failed to merge #${item.number}`, 'err');
+        return;
+      }
+      const successFallback = `pull request #${item.number} merged`;
+      this.setStatus(data.message || successFallback, 'ok');
+      await this.load(this.currentUrl);
+    } catch (err) {
+      console.error('[concilium] pull request action failed:', err);
+      this.setStatus(`failed to merge #${item.number}`, 'err');
+    } finally {
+      for (const control of controls) control.disabled = false;
     }
   }
 
@@ -642,7 +708,7 @@ class GitHubCard {
       const url = data.url || repoUrlHint;
       this.setTitle(url);
       this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues');
-      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests');
+      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests', { withPullActions: true });
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
       if (err.name === 'AbortError') return;

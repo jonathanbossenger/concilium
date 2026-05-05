@@ -208,6 +208,7 @@ function toGitHubPull(item) {
   return {
     ...toGitHubItem(item),
     branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
+    headSha: item.head && typeof item.head.sha === 'string' ? item.head.sha : '',
   };
 }
 
@@ -290,6 +291,72 @@ router.post('/github-items', async (req, res) => {
         errorCode: detail.code,
       });
     }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
+});
+
+router.post('/github-pulls/action', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    const pullNumber = req.body && req.body.pullNumber;
+    const action = req.body && req.body.action;
+    const sha = req.body && req.body.sha;
+    const mergeMethod = req.body && req.body.mergeMethod;
+    if (typeof url !== 'string' || !url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+    if (!Number.isInteger(pullNumber) || pullNumber < 1) {
+      return res.status(400).json({ error: 'pullNumber must be a positive integer' });
+    }
+    if (action !== 'merge') {
+      return res.status(400).json({ error: 'action must be "merge"' });
+    }
+    if (sha !== undefined && typeof sha !== 'string') {
+      return res.status(400).json({ error: 'sha must be a string' });
+    }
+    if (mergeMethod !== undefined && mergeMethod !== 'merge' && mergeMethod !== 'squash' && mergeMethod !== 'rebase') {
+      return res.status(400).json({ error: 'mergeMethod must be one of "merge", "squash", or "rebase"' });
+    }
+    const repoData = parseGitHubRepo(url);
+    if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
+    const owner = repoData.owner;
+    const repo = repoData.repo;
+    if (!GITHUB_REPO_NAME_RE.test(owner) || !GITHUB_REPO_NAME_RE.test(repo)) {
+      return res.status(400).json({ error: 'invalid github repository url' });
+    }
+
+    const cfg = getConfig();
+    const githubToken = getGitHubToken(cfg);
+    if (!githubToken) {
+      return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+    }
+
+    const payload = {};
+    if (sha && sha.trim()) payload.sha = sha.trim();
+    if (mergeMethod) payload.merge_method = mergeMethod;
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`;
+    const resp = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: Object.keys(payload).length ? JSON.stringify(payload) : undefined,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data && typeof data.message === 'string' && data.message
+        ? data.message
+        : `GitHub action failed (HTTP ${resp.status})`;
+      return res.status(resp.status).json({ error: msg });
+    }
+    res.json({
+      ok: true,
+      action,
+      message: 'pull request merged',
+      merged: !!data.merged,
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
   }
