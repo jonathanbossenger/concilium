@@ -5,6 +5,8 @@ AI agents you have on your machine (Claude Code, Codex, Aider, Gemini, Copilot,
 Ollama, …), fire off tasks, watch live output, and keep a history — from a
 loopback web UI. Easy to start, stop, and restart, like Apache.
 
+[Read the announcement post](https://jonathanbossenger.com/2026/05/introducing-concilium/)
+
 [Watch the video](https://youtu.be/17Ykm0AtCYI?si=ugDNgYitcqzi5wOb)
 
 Your council of agents - Concilium!
