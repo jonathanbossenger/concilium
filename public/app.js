@@ -9,6 +9,7 @@ let draggingCardEl = null;
 let layoutReady = false;
 let homeDir = '';
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
+const COPILOT_ISSUE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 1A3.5 3.5 0 0 0 2 4.5V7a3 3 0 0 0-2 2.83V12a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V9.83A3 3 0 0 0 14 7V4.5A3.5 3.5 0 0 0 10.5 1h-5Zm6 6H13a1 1 0 0 1 1 1v1H2V8a1 1 0 0 1 1-1h1.5V4.5A1.5 1.5 0 0 1 6 3h4a1.5 1.5 0 0 1 1.5 1.5V7ZM5 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm6 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>';
 
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
@@ -606,7 +607,7 @@ class GitHubCard {
         if (issueHasCopilotAssigned(item)) {
           const assigned = document.createElement('span');
           assigned.className = 'github-issue-assigned';
-          assigned.textContent = '🤖';
+          assigned.innerHTML = COPILOT_ISSUE_ICON_SVG;
           assigned.title = 'Assigned to Copilot';
           assigned.setAttribute('aria-label', 'Assigned to Copilot');
           actions.appendChild(assigned);
@@ -614,7 +615,7 @@ class GitHubCard {
           const assignBtn = document.createElement('button');
           assignBtn.type = 'button';
           assignBtn.className = 'github-issue-action github-issue-action-assign';
-          assignBtn.textContent = '🤖';
+          assignBtn.innerHTML = COPILOT_ISSUE_ICON_SVG;
           assignBtn.title = 'Assign to Copilot agent';
           assignBtn.setAttribute('aria-label', 'Assign to Copilot agent');
           assignBtn.addEventListener('click', (ev) => {
