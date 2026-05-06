@@ -236,6 +236,13 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
   };
 }
 
+function getAssigneeLogins(data) {
+  if (!data || !Array.isArray(data.assignees)) return [];
+  return data.assignees
+    .map((assignee) => (assignee && typeof assignee.login === 'string' ? assignee.login : ''))
+    .filter(Boolean);
+}
+
 function toGitHubItem(item) {
   return {
     number: item.number,
@@ -252,13 +259,6 @@ function toGitHubPull(item) {
     branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
     headSha: item.head && typeof item.head.sha === 'string' ? item.head.sha : '',
   };
-}
-
-function getAssigneeLogins(data) {
-  if (!data || !Array.isArray(data.assignees)) return [];
-  return data.assignees
-    .map((assignee) => (assignee && typeof assignee.login === 'string' ? assignee.login : ''))
-    .filter(Boolean);
 }
 
 function execFileWithOutput(command, args, options = {}) {
