@@ -345,7 +345,8 @@ router.post('/github-pulls/action', async (req, res) => {
     const payload = {};
     if (sha && sha.trim()) payload.sha = sha.trim();
     if (mergeMethod) payload.merge_method = mergeMethod;
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`;
+    const encodedPullNumber = encodeURIComponent(String(pullNumber));
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}/merge`;
     const resp = await fetch(apiUrl, {
       method: 'PUT',
       headers: {
@@ -400,7 +401,8 @@ router.post('/github-issues/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/assignees`;
+    const encodedIssueNumber = encodeURIComponent(String(issueNumber));
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodedIssueNumber}/assignees`;
     const assigneeLogins = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
     const expectedLogins = new Set(assigneeLogins.map((login) => login.toLowerCase()));
     let lastFailure = null;
@@ -429,7 +431,7 @@ router.post('/github-issues/action', async (req, res) => {
           message: `issue #${issueNumber} has Copilot assigned`,
         });
       }
-      lastFailure = `GitHub did not report Copilot as an assignee for issue #${issueNumber}`;
+      lastFailure = `GitHub did not report Copilot as an assignee after assigning "${assigneeLogin}" on issue #${issueNumber}`;
     }
     return res.status(409).json({ error: lastFailure || 'failed to assign Copilot to issue' });
   } catch (err) {
