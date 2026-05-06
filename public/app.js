@@ -8,6 +8,8 @@ let draggingCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
+const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
+const COPILOT_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 1A3.5 3.5 0 0 0 2 4.5V7a3 3 0 0 0-2 2.83V12a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V9.83A3 3 0 0 0 14 7V4.5A3.5 3.5 0 0 0 10.5 1h-5Zm6 6H13a1 1 0 0 1 1 1v1H2V8a1 1 0 0 1 1-1h1.5V4.5A1.5 1.5 0 0 1 6 3h4a1.5 1.5 0 0 1 1.5 1.5V7ZM5 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm6 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>';
 
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
@@ -35,6 +37,12 @@ function toTildePath(p) {
     return '~' + p.slice(homeDir.length);
   }
   return p;
+}
+
+function issueHasCopilotAssigned(item) {
+  if (!item || !Array.isArray(item.assignees)) return false;
+  return item.assignees.some((assignee) => typeof assignee === 'string'
+    && COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
 }
 
 async function loadAgents() {
@@ -522,7 +530,7 @@ class GitHubCard {
     this.statusEl.className = 'card-status' + (cls ? ' ' + cls : '');
   }
 
-  renderList(el, items, emptyText, { withPullActions = false } = {}) {
+  renderList(el, items, emptyText, { withPullActions = false, withIssueActions = false } = {}) {
     el.replaceChildren();
     if (!items.length) {
       const li = document.createElement('li');
@@ -593,6 +601,32 @@ class GitHubCard {
         actions.appendChild(mergeBtn);
         li.appendChild(actions);
       }
+      if (withIssueActions) {
+        const actions = document.createElement('span');
+        actions.className = 'github-issue-actions';
+        if (issueHasCopilotAssigned(item)) {
+          const assigned = document.createElement('span');
+          assigned.className = 'github-issue-assigned';
+          assigned.innerHTML = COPILOT_ICON_SVG;
+          assigned.title = 'Assigned to Copilot';
+          assigned.setAttribute('aria-label', 'Assigned to Copilot');
+          actions.appendChild(assigned);
+        } else {
+          const assignBtn = document.createElement('button');
+          assignBtn.type = 'button';
+          assignBtn.className = 'github-issue-action github-issue-action-assign';
+          assignBtn.innerHTML = COPILOT_ICON_SVG;
+          assignBtn.title = 'Assign to Copilot agent';
+          assignBtn.setAttribute('aria-label', 'Assign to Copilot agent');
+          assignBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.runIssueAction(item, assignBtn);
+          });
+          actions.appendChild(assignBtn);
+        }
+        li.appendChild(actions);
+      }
       el.appendChild(li);
     }
   }
@@ -659,6 +693,36 @@ class GitHubCard {
     }
   }
 
+  async runIssueAction(item, btn) {
+    if (!confirm(`Assign issue #${item.number} to Copilot?`)) return;
+    btn.disabled = true;
+    this.setStatus(`assigning #${item.number}…`, 'running');
+    try {
+      const r = await fetch('/api/system/github-issues/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: this.currentUrl,
+          issueNumber: item.number,
+          action: 'assign_copilot',
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        this.setStatus(data.error || `failed to assign #${item.number}`, 'err');
+        return;
+      }
+      const successFallback = `issue #${item.number} assigned`;
+      this.setStatus(data.message || successFallback, 'ok');
+      await this.load(this.currentUrl);
+    } catch (err) {
+      console.error('[concilium] issue action failed:', err);
+      this.setStatus(`failed to assign #${item.number}`, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   setTitle(url) {
     if (!url) return;
     const short = url.replace(/^https:\/\/github\.com\//, '');
@@ -711,7 +775,7 @@ class GitHubCard {
       }
       const url = data.url || repoUrlHint;
       this.setTitle(url);
-      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues');
+      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues', { withIssueActions: true });
       this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests', { withPullActions: true });
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
@@ -1425,7 +1489,7 @@ newIssueForm.addEventListener('submit', async (e) => {
   setNewIssueStatus('Creating issue…');
   try {
     const trimmedBody = newIssueBodyInput.value.trim();
-    const assignCopilot = !!newIssueAssignCopilotInput.checked;
+    const assignCopilot = newIssueAssignCopilotInput.checked;
     const r = await fetch('/api/system/new-issue', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

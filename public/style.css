@@ -371,6 +371,12 @@ main:has(.card:only-child):not(.has-expanded) {
   align-items: center;
   gap: 0.3em;
 }
+.github-issue-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
 .github-pr-action {
   border: 1px solid var(--border-soft);
   border-radius: 4px;
@@ -402,6 +408,52 @@ main:has(.card:only-child):not(.has-expanded) {
 .github-pr-action-merge {
   color: var(--status-ok);
   border-color: var(--status-ok);
+}
+.github-issue-action {
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 1em;
+  line-height: 1;
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.github-issue-action:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.github-issue-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.github-issue-action-assign {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.github-issue-action svg,
+.github-issue-assigned svg {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
+.github-issue-assigned {
+  border: 1px solid var(--status-ok);
+  border-radius: 4px;
+  color: var(--status-ok);
+  background: var(--bg-input);
+  font-size: 1em;
+  line-height: 1;
+  width: 1.9em;
+  height: 1.9em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 main.has-expanded {
