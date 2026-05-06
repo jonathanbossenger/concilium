@@ -200,47 +200,56 @@ async function deleteGitHubRepo(githubToken, owner, repo) {
   return r.status === 204;
 }
 
-async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
-  const r = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/assignees`,
-    {
-      method: 'POST',
-      headers: {
-        ...githubHeaders(githubToken),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        assignees: [COPILOT_ISSUE_ASSIGNEE],
-      }),
-    },
-  );
-  const data = await r.json().catch((err) => {
-    console.warn('[concilium] failed to parse assignee response JSON:', err && err.message ? err.message : err);
-    return null;
-  });
-  if (!r.ok) {
-    return {
-      assigned: false,
-      status: r.status,
-      message: data && typeof data.message === 'string' ? data.message : '',
-    };
-  }
-  const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
-  const assigned = assignees.some((assignee) => assignee
-    && typeof assignee.login === 'string'
-    && COPILOT_ASSIGNEE_LOGIN_SET.has(assignee.login.toLowerCase()));
-  return {
-    assigned,
-    status: r.status,
-    message: assigned ? '' : 'copilot assignee missing in response',
-  };
-}
-
 function getAssigneeLogins(data) {
   if (!data || !Array.isArray(data.assignees)) return [];
   return data.assignees
     .map((assignee) => (assignee && typeof assignee.login === 'string' ? assignee.login : ''))
     .filter(Boolean);
+}
+
+async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
+  const encodedIssueNumber = encodeURIComponent(String(issueNumber));
+  const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodedIssueNumber}/assignees`;
+  let lastHttpError = null;
+  for (const assigneeLogin of COPILOT_ASSIGNEE_LOGINS) {
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ assignees: [assigneeLogin] }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = data && typeof data.message === 'string' && data.message
+        ? data.message
+        : `GitHub action failed (HTTP ${resp.status})`;
+      lastHttpError = { status: resp.status, message: msg };
+      continue;
+    }
+    const assignedLogins = getAssigneeLogins(data);
+    const assigned = assignedLogins.some((login) => COPILOT_ASSIGNEE_LOGIN_SET.has(login.toLowerCase()));
+    if (assigned) {
+      return {
+        assigned: true,
+        status: resp.status,
+        message: '',
+      };
+    }
+  }
+  if (lastHttpError) {
+    return {
+      assigned: false,
+      status: lastHttpError.status,
+      message: lastHttpError.message,
+    };
+  }
+  return {
+    assigned: false,
+    status: 409,
+    message: `GitHub did not confirm Copilot as an assignee (tried: ${COPILOT_ASSIGNEE_LOGINS.join(', ')})`,
+  };
 }
 
 function toGitHubItem(item) {
@@ -440,44 +449,15 @@ router.post('/github-issues/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const encodedIssueNumber = encodeURIComponent(String(issueNumber));
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodedIssueNumber}/assignees`;
-    const assigneeLogins = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
-    const expectedLogins = new Set(assigneeLogins.map((login) => login.toLowerCase()));
-    let lastFailure = null;
-    let lastHttpError = null;
-    for (const assigneeLogin of assigneeLogins) {
-      const resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          ...githubHeaders(githubToken),
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ assignees: [assigneeLogin] }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        const msg = data && typeof data.message === 'string' && data.message
-          ? data.message
-          : `GitHub action failed (HTTP ${resp.status})`;
-        lastHttpError = { status: resp.status, message: msg };
-        continue;
-      }
-      const assignedLogins = getAssigneeLogins(data);
-      const hasCopilotAssignee = assignedLogins.some((login) => expectedLogins.has(login.toLowerCase()));
-      if (hasCopilotAssignee) {
-        return res.json({
-          ok: true,
-          action,
-          message: `issue #${issueNumber} has Copilot assigned`,
-        });
-      }
-      lastFailure = `GitHub did not confirm Copilot as an assignee (tried: ${assigneeLogins.join(', ')})`;
+    const assignment = await assignIssueToCopilot(githubToken, owner, repo, issueNumber);
+    if (!assignment.assigned) {
+      return res.status(assignment.status || 409).json({ error: assignment.message || 'failed to assign Copilot to issue' });
     }
-    if (lastHttpError) {
-      return res.status(lastHttpError.status).json({ error: lastHttpError.message });
-    }
-    return res.status(409).json({ error: lastFailure || 'failed to assign Copilot to issue' });
+    return res.json({
+      ok: true,
+      action,
+      message: `issue #${issueNumber} has Copilot assigned`,
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
   }
