@@ -17,6 +17,7 @@ const MAX_ISSUE_BODY_BYTES = 65536;
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
 const COPILOT_ASSIGNEE_LOGINS = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
+const COPILOT_ASSIGNEE_LOGIN_SET = new Set(COPILOT_ASSIGNEE_LOGINS.map((login) => login.toLowerCase()));
 const COPILOT_ASSIGNEE = COPILOT_ISSUE_ASSIGNEE;
 
 function getGitHubToken(cfg) {
@@ -226,10 +227,9 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
     };
   }
   const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
-  const expectedCopilotLogins = new Set(COPILOT_ASSIGNEE_LOGINS.map((login) => login.toLowerCase()));
   const assigned = assignees.some((assignee) => assignee
     && typeof assignee.login === 'string'
-    && expectedCopilotLogins.has(assignee.login.toLowerCase()));
+    && COPILOT_ASSIGNEE_LOGIN_SET.has(assignee.login.toLowerCase()));
   return {
     assigned,
     status: r.status,
