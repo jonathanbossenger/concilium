@@ -433,7 +433,7 @@ router.post('/github-issues/action', async (req, res) => {
           message: `issue #${issueNumber} has Copilot assigned`,
         });
       }
-      lastFailure = 'GitHub did not confirm Copilot as an assignee';
+      lastFailure = `GitHub did not confirm Copilot as an assignee (tried: ${assigneeLogins.join(', ')})`;
     }
     if (lastHttpError) {
       return res.status(lastHttpError.status).json({ error: lastHttpError.message });
