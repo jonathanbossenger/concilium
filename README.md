@@ -169,7 +169,7 @@ These shortcuts work globally whenever a terminal or dialog does not have focus.
 |---|---|
 | `Alt+N` | Add a new session card |
 | `Alt+P` | Open the New Project dialog |
-| `Alt+,` | Open the Settings dialog |
+| `Alt+,` / `Cmd+,` | Open the Settings dialog (`Cmd+,` is the macOS convention) |
 | `Alt+T` | Cycle theme (Auto → Light → Dark → Auto) |
 | `Escape` | Close any open dialog (native browser behaviour) |
 

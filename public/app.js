@@ -1488,7 +1488,7 @@ function updateThemeButton() {
   const btn = $('#theme-toggle');
   // THEME_ICON values are static code-defined SVG strings, not user input.
   btn.innerHTML = THEME_ICON[t];
-  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]} (click to cycle)`);
+  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]} (click to cycle) (Alt+T)`);
   btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle) (Alt+T)`;
 }
 function cycleTheme() {
@@ -1532,6 +1532,16 @@ function isTypingContext(e) {
 }
 
 document.addEventListener('keydown', (e) => {
+  // Cmd+, (macOS platform convention for Settings) — handled independently
+  // of the Alt+key block so it works without Alt.
+  if (e.code === 'Comma' && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    if (!isTypingContext(e)) {
+      e.preventDefault();
+      $('#open-settings').click();
+      return;
+    }
+  }
+
   // Alt+key global shortcuts. Skip when focus is in any typing context
   // (form inputs, xterm terminal textarea, elements inside an open dialog).
   if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
