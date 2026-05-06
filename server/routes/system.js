@@ -237,11 +237,17 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
 }
 
 function toGitHubItem(item) {
+  const assignees = Array.isArray(item && item.assignees)
+    ? item.assignees
+      .map((assignee) => (assignee && typeof assignee.login === 'string' ? assignee.login : ''))
+      .filter(Boolean)
+    : [];
   return {
     number: item.number,
     title: item.title,
     url: item.html_url,
     state: item.state,
+    assignees,
   };
 }
 

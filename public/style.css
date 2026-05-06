@@ -414,9 +414,14 @@ main:has(.card:only-child):not(.has-expanded) {
   border-radius: 4px;
   background: var(--bg-input);
   color: var(--text-dim);
-  font-size: 0.85em;
-  line-height: 1.4;
-  padding: 0.15em 0.45em;
+  font-size: 1em;
+  line-height: 1;
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 .github-issue-action:hover:not(:disabled) {
@@ -430,6 +435,19 @@ main:has(.card:only-child):not(.has-expanded) {
 .github-issue-action-assign {
   color: var(--accent);
   border-color: var(--accent);
+}
+.github-issue-assigned {
+  border: 1px solid var(--status-ok);
+  border-radius: 4px;
+  color: var(--status-ok);
+  background: color-mix(in srgb, var(--status-ok) 12%, var(--bg-input));
+  font-size: 1em;
+  line-height: 1;
+  width: 1.9em;
+  height: 1.9em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 main.has-expanded {

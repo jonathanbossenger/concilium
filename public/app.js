@@ -8,6 +8,7 @@ let draggingCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
+const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 
 function currentTermTheme() {
   const s = getComputedStyle(document.documentElement);
@@ -35,6 +36,12 @@ function toTildePath(p) {
     return '~' + p.slice(homeDir.length);
   }
   return p;
+}
+
+function issueHasCopilotAssigned(item) {
+  if (!item || !Array.isArray(item.assignees)) return false;
+  return item.assignees.some((assignee) => typeof assignee === 'string'
+    && COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
 }
 
 async function loadAgents() {
@@ -596,17 +603,27 @@ class GitHubCard {
       if (withIssueActions) {
         const actions = document.createElement('span');
         actions.className = 'github-issue-actions';
-        const assignBtn = document.createElement('button');
-        assignBtn.type = 'button';
-        assignBtn.className = 'github-issue-action github-issue-action-assign';
-        assignBtn.textContent = 'Assign to Copilot agent';
-        assignBtn.title = 'Assign issue to Copilot';
-        assignBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this.runIssueAction(item, assignBtn);
-        });
-        actions.appendChild(assignBtn);
+        if (issueHasCopilotAssigned(item)) {
+          const assigned = document.createElement('span');
+          assigned.className = 'github-issue-assigned';
+          assigned.textContent = '🤖';
+          assigned.title = 'Assigned to Copilot';
+          assigned.setAttribute('aria-label', 'Assigned to Copilot');
+          actions.appendChild(assigned);
+        } else {
+          const assignBtn = document.createElement('button');
+          assignBtn.type = 'button';
+          assignBtn.className = 'github-issue-action github-issue-action-assign';
+          assignBtn.textContent = '🤖';
+          assignBtn.title = 'Assign to Copilot agent';
+          assignBtn.setAttribute('aria-label', 'Assign to Copilot agent');
+          assignBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.runIssueAction(item, assignBtn);
+          });
+          actions.appendChild(assignBtn);
+        }
         li.appendChild(actions);
       }
       el.appendChild(li);
