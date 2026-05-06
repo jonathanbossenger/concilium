@@ -13,7 +13,9 @@ const GIT_CLONE_TIMEOUT_MS = 120000;
 const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
-const COPILOT_ISSUE_ASSIGNEE = 'copilot-swe-agent[bot]';
+// REST issue-assignee login used by GitHub for Copilot assignment.
+const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
+const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -213,6 +215,13 @@ function toGitHubPull(item) {
   };
 }
 
+function getAssigneeLogins(data) {
+  if (!data || !Array.isArray(data.assignees)) return [];
+  return data.assignees
+    .map((assignee) => (assignee && typeof assignee.login === 'string' ? assignee.login : ''))
+    .filter(Boolean);
+}
+
 function execFileWithOutput(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
@@ -307,7 +316,7 @@ router.post('/github-pulls/action', async (req, res) => {
     if (typeof url !== 'string' || !url) {
       return res.status(400).json({ error: 'url is required' });
     }
-    if (!Number.isInteger(pullNumber) || pullNumber < 1) {
+    if (!Number.isSafeInteger(pullNumber) || pullNumber < 1) {
       return res.status(400).json({ error: 'pullNumber must be a positive integer' });
     }
     if (action !== 'merge') {
@@ -391,27 +400,38 @@ router.post('/github-issues/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/assignees`;
-    const resp = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        ...githubHeaders(githubToken),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ assignees: [COPILOT_ISSUE_ASSIGNEE] }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      const msg = data && typeof data.message === 'string' && data.message
-        ? data.message
-        : `GitHub action failed (HTTP ${resp.status})`;
-      return res.status(resp.status).json({ error: msg });
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/assignees`;
+    const assigneeLogins = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
+    const expectedLogins = new Set(assigneeLogins.map((login) => login.toLowerCase()));
+    let lastFailure = null;
+    for (const assigneeLogin of assigneeLogins) {
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          ...githubHeaders(githubToken),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ assignees: [assigneeLogin] }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg = data && typeof data.message === 'string' && data.message
+          ? data.message
+          : `GitHub action failed (HTTP ${resp.status})`;
+        return res.status(resp.status).json({ error: msg });
+      }
+      const assignedLogins = getAssigneeLogins(data);
+      const hasCopilotAssignee = assignedLogins.some((login) => expectedLogins.has(login.toLowerCase()));
+      if (hasCopilotAssignee) {
+        return res.json({
+          ok: true,
+          action,
+          message: `issue #${issueNumber} has Copilot assigned`,
+        });
+      }
+      lastFailure = `GitHub did not report Copilot as an assignee for issue #${issueNumber}`;
     }
-    res.json({
-      ok: true,
-      action,
-      message: `issue #${issueNumber} assigned to ${COPILOT_ISSUE_ASSIGNEE}`,
-    });
+    return res.status(409).json({ error: lastFailure || 'failed to assign Copilot to issue' });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || String(err) });
   }

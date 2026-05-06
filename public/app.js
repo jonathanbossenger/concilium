@@ -598,9 +598,9 @@ class GitHubCard {
         actions.className = 'github-issue-actions';
         const assignBtn = document.createElement('button');
         assignBtn.type = 'button';
-        assignBtn.className = 'github-issue-action github-issue-action-assign github-issue-action-control';
+        assignBtn.className = 'github-issue-action github-issue-action-assign';
         assignBtn.textContent = 'Assign to Copilot agent';
-        assignBtn.title = 'Assign issue to copilot-swe-agent[bot]';
+        assignBtn.title = 'Assign issue to Copilot';
         assignBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
@@ -676,7 +676,7 @@ class GitHubCard {
   }
 
   async runIssueAction(item, btn) {
-    if (!confirm(`Assign issue #${item.number} to copilot-swe-agent[bot]?`)) return;
+    if (!confirm(`Assign issue #${item.number} to Copilot?`)) return;
     btn.disabled = true;
     this.setStatus(`assigning #${item.number}…`, 'running');
     try {
