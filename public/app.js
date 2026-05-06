@@ -1471,7 +1471,7 @@ newIssueForm.addEventListener('submit', async (e) => {
   setNewIssueStatus('Creating issue…');
   try {
     const trimmedBody = newIssueBodyInput.value.trim();
-    const assignCopilot = !!newIssueAssignCopilotInput.checked;
+    const assignCopilot = newIssueAssignCopilotInput.checked;
     const r = await fetch('/api/system/new-issue', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

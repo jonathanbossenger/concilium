@@ -18,7 +18,6 @@ const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
 const COPILOT_ASSIGNEE_LOGINS = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
 const COPILOT_ASSIGNEE_LOGIN_SET = new Set(COPILOT_ASSIGNEE_LOGINS.map((login) => login.toLowerCase()));
-const COPILOT_ASSIGNEE = COPILOT_ISSUE_ASSIGNEE;
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -211,7 +210,7 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        assignees: [COPILOT_ASSIGNEE],
+        assignees: [COPILOT_ISSUE_ASSIGNEE],
       }),
     },
   );
@@ -549,7 +548,7 @@ router.post('/new-issue', async (req, res) => {
         copilotAssigned = assignment.assigned;
         if (!copilotAssigned) {
           const detail = assignment.message ? ` (${assignment.message})` : '';
-          console.warn(`[concilium] unable to assign issue #${issueNumber} to ${COPILOT_ASSIGNEE}${detail}`);
+          console.warn(`[concilium] unable to assign issue #${issueNumber} to ${COPILOT_ISSUE_ASSIGNEE}${detail}`);
         }
       } catch (assignErr) {
         console.warn('[concilium] copilot issue assignment failed:', assignErr && assignErr.message ? assignErr.message : assignErr);
