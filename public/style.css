@@ -618,7 +618,7 @@ dialog#new-issue-dialog {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 0;
-  width: min(720px, 92vw);
+  width: min(900px, 92vw);
   max-height: 86vh;
   box-shadow: var(--shadow-modal);
 }
