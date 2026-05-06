@@ -40,7 +40,8 @@ function toTildePath(p) {
 
 function issueHasCopilotAssigned(item) {
   if (!item || !Array.isArray(item.assignees)) return false;
-  return item.assignees.some((assignee) => COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
+  return item.assignees.some((assignee) => typeof assignee === 'string'
+    && COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
 }
 
 async function loadAgents() {

@@ -440,7 +440,7 @@ main:has(.card:only-child):not(.has-expanded) {
   border: 1px solid var(--status-ok);
   border-radius: 4px;
   color: var(--status-ok);
-  background: color-mix(in srgb, var(--status-ok) 12%, var(--bg-input));
+  background: var(--bg-input);
   font-size: 1em;
   line-height: 1;
   width: 1.9em;
