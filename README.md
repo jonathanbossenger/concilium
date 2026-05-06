@@ -23,6 +23,7 @@ Your council of agents - Concilium!
   - [Standalone](#standalone)
   - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
   - [Web UI](#web-ui)
+  - [Keyboard shortcuts](#keyboard-shortcuts)
   - [GitHub personal access token](#github-personal-access-token)
 - [Configuration](#configuration)
 - [API](#api)
@@ -159,6 +160,23 @@ Header controls:
   - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 
 ![Concilium settings dialog screenshot](screenshots/settings.png)
+
+### Keyboard shortcuts
+
+These shortcuts work globally whenever a terminal or dialog does not have focus.
+
+| Shortcut | Action |
+|---|---|
+| `Alt+N` | Add a new session card |
+| `Alt+P` | Open the New Project dialog |
+| `Alt+,` | Open the Settings dialog |
+| `Alt+T` | Cycle theme (Auto → Light → Dark → Auto) |
+| `Escape` | Close any open dialog (native browser behaviour) |
+
+> **Note:** `Alt+key` shortcuts are deliberately suppressed when an xterm
+> terminal has keyboard focus, so they do not interfere with readline
+> (`Alt+P` history search, `Alt+T` word-transpose, etc.) or other
+> terminal key bindings.
 
 ### GitHub personal access token
 

@@ -1489,12 +1489,12 @@ function updateThemeButton() {
   // THEME_ICON values are static code-defined SVG strings, not user input.
   btn.innerHTML = THEME_ICON[t];
   btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]} (click to cycle)`);
-  btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
+  btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle) (Alt+T)`;
 }
-$('#theme-toggle').addEventListener('click', () => {
-  const i = THEME_ORDER.indexOf(currentTheme());
-  applyTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
-});
+function cycleTheme() {
+  applyTheme(THEME_ORDER[(THEME_ORDER.indexOf(currentTheme()) + 1) % THEME_ORDER.length]);
+}
+$('#theme-toggle').addEventListener('click', () => cycleTheme());
 updateThemeButton();
 
 // Re-theme terminals when the OS flips light/dark while we're on Auto.
@@ -1516,6 +1516,49 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') reconnectAllStreams();
 });
 window.addEventListener('online', reconnectAllStreams);
+
+// --- keyboard shortcuts ---------------------------------------------------
+
+// Guard: returns true when the key event originates from a context that
+// expects keyboard input (form fields, xterm textarea, open dialogs).
+function isTypingContext(e) {
+  const el = e.target;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (el.isContentEditable) return true;
+  if (el.closest && el.closest('dialog[open]')) return true;
+  return false;
+}
+
+document.addEventListener('keydown', (e) => {
+  // Alt+key global shortcuts. Skip when:
+  //  • a modal dialog is open (typing inside form fields)
+  //  • an xterm terminal textarea has focus (preserve readline Alt shortcuts)
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    if (dlg.open || newProjectDlg.open || newIssueDlg.open) return;
+    if (e.target && e.target.classList && e.target.classList.contains('xterm-helper-textarea')) return;
+
+    switch (e.code) {
+      case 'KeyN':           // Alt+N — new session
+        e.preventDefault();
+        addCard();
+        break;
+      case 'KeyP':           // Alt+P — new project
+        e.preventDefault();
+        $('#new-project-btn').click();
+        break;
+      case 'Comma':          // Alt+, — settings
+        e.preventDefault();
+        $('#open-settings').click();
+        break;
+      case 'KeyT':           // Alt+T — cycle theme
+        e.preventDefault();
+        cycleTheme();
+        break;
+    }
+  }
+});
 
 // --- bootstrap -------------------------------------------------------------
 
