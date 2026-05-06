@@ -1532,12 +1532,10 @@ function isTypingContext(e) {
 }
 
 document.addEventListener('keydown', (e) => {
-  // Alt+key global shortcuts. Skip when:
-  //  • a modal dialog is open (typing inside form fields)
-  //  • an xterm terminal textarea has focus (preserve readline Alt shortcuts)
+  // Alt+key global shortcuts. Skip when focus is in any typing context
+  // (form inputs, xterm terminal textarea, elements inside an open dialog).
   if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-    if (dlg.open || newProjectDlg.open || newIssueDlg.open) return;
-    if (e.target && e.target.classList && e.target.classList.contains('xterm-helper-textarea')) return;
+    if (isTypingContext(e)) return;
 
     switch (e.code) {
       case 'KeyN':           // Alt+N — new session
