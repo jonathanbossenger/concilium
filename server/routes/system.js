@@ -16,7 +16,8 @@ const MAX_ISSUE_BODY_BYTES = 65536;
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
-const COPILOT_ASSIGNEE = 'copilot-swe-agent[bot]';
+const COPILOT_ASSIGNEE_LOGINS = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
+const COPILOT_ASSIGNEE = COPILOT_ISSUE_ASSIGNEE;
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -225,9 +226,10 @@ async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
     };
   }
   const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
+  const expectedCopilotLogins = new Set(COPILOT_ASSIGNEE_LOGINS.map((login) => login.toLowerCase()));
   const assigned = assignees.some((assignee) => assignee
     && typeof assignee.login === 'string'
-    && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase());
+    && expectedCopilotLogins.has(assignee.login.toLowerCase()));
   return {
     assigned,
     status: r.status,
