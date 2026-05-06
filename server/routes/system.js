@@ -16,6 +16,7 @@ const MAX_ISSUE_BODY_BYTES = 65536;
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
+const COPILOT_ASSIGNEE = 'copilot-swe-agent[bot]';
 
 function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
@@ -196,6 +197,42 @@ async function deleteGitHubRepo(githubToken, owner, repo) {
     headers: githubHeaders(githubToken),
   });
   return r.status === 204;
+}
+
+async function assignIssueToCopilot(githubToken, owner, repo, issueNumber) {
+  const r = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/assignees`,
+    {
+      method: 'POST',
+      headers: {
+        ...githubHeaders(githubToken),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        assignees: [COPILOT_ASSIGNEE],
+      }),
+    },
+  );
+  const data = await r.json().catch((err) => {
+    console.warn('[concilium] failed to parse assignee response JSON:', err && err.message ? err.message : err);
+    return null;
+  });
+  if (!r.ok) {
+    return {
+      assigned: false,
+      status: r.status,
+      message: data && typeof data.message === 'string' ? data.message : '',
+    };
+  }
+  const assignees = data && Array.isArray(data.assignees) ? data.assignees : [];
+  const assigned = assignees.some((assignee) => assignee
+    && typeof assignee.login === 'string'
+    && assignee.login.toLowerCase() === COPILOT_ASSIGNEE.toLowerCase());
+  return {
+    assigned,
+    status: r.status,
+    message: assigned ? '' : 'copilot assignee missing in response',
+  };
 }
 
 function toGitHubItem(item) {
@@ -446,10 +483,13 @@ router.post('/github-issues/action', async (req, res) => {
 
 router.post('/new-issue', async (req, res) => {
   try {
-    const { url, title, body } = req.body || {};
+    const { url, title, body, assignCopilot } = req.body || {};
     if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'url is required' });
     if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ error: 'title is required' });
     if (body !== undefined && typeof body !== 'string') return res.status(400).json({ error: 'body must be a string' });
+    if (assignCopilot !== undefined && typeof assignCopilot !== 'boolean') {
+      return res.status(400).json({ error: 'assignCopilot must be a boolean' });
+    }
 
     const normalizedUrl = url.trim();
     if (normalizedUrl.length > MAX_GITHUB_URL_LENGTH) {
@@ -498,7 +538,27 @@ router.post('/new-issue', async (req, res) => {
       throw err;
     }
 
-    res.json(toGitHubItem(data));
+    const shouldAssignCopilot = assignCopilot === true;
+    let copilotAssigned = false;
+    const issueNumber = data && Number.isInteger(data.number) ? data.number : null;
+    if (shouldAssignCopilot && issueNumber !== null) {
+      try {
+        const assignment = await assignIssueToCopilot(githubToken, repoData.owner, repoData.repo, issueNumber);
+        copilotAssigned = assignment.assigned;
+        if (!copilotAssigned) {
+          const detail = assignment.message ? ` (${assignment.message})` : '';
+          console.warn(`[concilium] unable to assign issue #${issueNumber} to ${COPILOT_ASSIGNEE}${detail}`);
+        }
+      } catch (assignErr) {
+        console.warn('[concilium] copilot issue assignment failed:', assignErr && assignErr.message ? assignErr.message : assignErr);
+      }
+    }
+
+    res.json({
+      ...toGitHubItem(data),
+      copilotAssignmentRequested: shouldAssignCopilot,
+      copilotAssigned,
+    });
   } catch (err) {
     const detail = classifyGitHubError(err);
     res.status(err.status || 500).json({ error: detail.message });
