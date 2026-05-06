@@ -406,6 +406,7 @@ router.post('/github-issues/action', async (req, res) => {
     const assigneeLogins = [COPILOT_ISSUE_ASSIGNEE, COPILOT_ISSUE_ASSIGNEE_FALLBACK];
     const expectedLogins = new Set(assigneeLogins.map((login) => login.toLowerCase()));
     let lastFailure = null;
+    let lastHttpError = null;
     for (const assigneeLogin of assigneeLogins) {
       const resp = await fetch(apiUrl, {
         method: 'POST',
@@ -420,7 +421,8 @@ router.post('/github-issues/action', async (req, res) => {
         const msg = data && typeof data.message === 'string' && data.message
           ? data.message
           : `GitHub action failed (HTTP ${resp.status})`;
-        return res.status(resp.status).json({ error: msg });
+        lastHttpError = { status: resp.status, message: msg };
+        continue;
       }
       const assignedLogins = getAssigneeLogins(data);
       const hasCopilotAssignee = assignedLogins.some((login) => expectedLogins.has(login.toLowerCase()));
@@ -431,7 +433,10 @@ router.post('/github-issues/action', async (req, res) => {
           message: `issue #${issueNumber} has Copilot assigned`,
         });
       }
-      lastFailure = `GitHub did not report Copilot as an assignee after assigning "${assigneeLogin}" on issue #${issueNumber}`;
+      lastFailure = 'GitHub did not confirm Copilot as an assignee';
+    }
+    if (lastHttpError) {
+      return res.status(lastHttpError.status).json({ error: lastHttpError.message });
     }
     return res.status(409).json({ error: lastFailure || 'failed to assign Copilot to issue' });
   } catch (err) {
