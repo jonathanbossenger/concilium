@@ -367,8 +367,8 @@ router.post('/github-pulls/action', async (req, res) => {
     if (!Number.isSafeInteger(pullNumber) || pullNumber < 1) {
       return res.status(400).json({ error: 'pullNumber must be a positive integer' });
     }
-    if (action !== 'merge') {
-      return res.status(400).json({ error: 'action must be "merge"' });
+    if (action !== 'merge' && action !== 'close') {
+      return res.status(400).json({ error: 'action must be "merge" or "close"' });
     }
     if (sha !== undefined && typeof sha !== 'string') {
       return res.status(400).json({ error: 'sha must be a string' });
@@ -390,13 +390,19 @@ router.post('/github-pulls/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const payload = {};
-    if (sha && sha.trim()) payload.sha = sha.trim();
-    if (mergeMethod) payload.merge_method = mergeMethod;
     const encodedPullNumber = encodeURIComponent(String(pullNumber));
-    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}/merge`;
+    const apiUrl = action === 'close'
+      ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}`
+      : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}/merge`;
+    const payload = {};
+    if (action === 'merge') {
+      if (sha && sha.trim()) payload.sha = sha.trim();
+      if (mergeMethod) payload.merge_method = mergeMethod;
+    } else {
+      payload.state = 'closed';
+    }
     const resp = await fetch(apiUrl, {
-      method: 'PUT',
+      method: action === 'close' ? 'PATCH' : 'PUT',
       headers: {
         ...githubHeaders(githubToken),
         'content-type': 'application/json',
@@ -413,7 +419,7 @@ router.post('/github-pulls/action', async (req, res) => {
     res.json({
       ok: true,
       action,
-      message: 'pull request merged',
+      message: action === 'close' ? 'pull request closed' : 'pull request merged',
       merged: !!data.merged,
     });
   } catch (err) {
