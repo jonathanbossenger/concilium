@@ -679,7 +679,7 @@ class GitHubCard {
     const actionLabel = isMerge ? 'merge' : 'close';
     const statusVerb = isMerge ? 'merging' : 'closing';
     const successVerb = isMerge ? 'merged' : 'closed';
-    const mergeMethod = isMerge && methodSelect && methodSelect.value ? methodSelect.value : 'merge';
+    const mergeMethod = isMerge ? ((methodSelect && methodSelect.value) || 'merge') : undefined;
     const confirmMessage = isMerge
       ? `Merge #${item.number} using ${mergeMethod}?`
       : `Close #${item.number}?`;

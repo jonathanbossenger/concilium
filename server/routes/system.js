@@ -390,10 +390,6 @@ router.post('/github-pulls/action', async (req, res) => {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
     }
 
-    const encodedPullNumber = encodeURIComponent(String(pullNumber));
-    const apiUrl = action === 'close'
-      ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}`
-      : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}/merge`;
     const payload = {};
     if (action === 'merge') {
       if (sha && sha.trim()) payload.sha = sha.trim();
@@ -401,6 +397,10 @@ router.post('/github-pulls/action', async (req, res) => {
     } else {
       payload.state = 'closed';
     }
+    const encodedPullNumber = encodeURIComponent(String(pullNumber));
+    const apiUrl = action === 'close'
+      ? `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}`
+      : `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodedPullNumber}/merge`;
     const resp = await fetch(apiUrl, {
       method: action === 'close' ? 'PATCH' : 'PUT',
       headers: {
