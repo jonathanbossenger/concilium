@@ -689,10 +689,22 @@ class GitHubCard {
           assignBtn.addEventListener('click', (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
-            this.runIssueAction(item, assignBtn);
+            this.runIssueAction(item, assignBtn, 'assign_copilot');
           });
           actions.appendChild(assignBtn);
         }
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'github-issue-action github-issue-action-close';
+        closeBtn.innerHTML = CLOSE_ICON_SVG;
+        closeBtn.title = 'Close issue';
+        closeBtn.setAttribute('aria-label', 'Close issue');
+        closeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.runIssueAction(item, closeBtn, 'close');
+        });
+        actions.appendChild(closeBtn);
         li.appendChild(actions);
       }
       el.appendChild(li);
@@ -803,10 +815,26 @@ class GitHubCard {
     }
   }
 
-  async runIssueAction(item, btn) {
-    if (!confirm(`Assign issue #${item.number} to Copilot?`)) return;
+  async runIssueAction(item, btn, action = 'assign_copilot') {
+    const issueActionConfig = {
+      assign_copilot: {
+        confirm: `Assign issue #${item.number} to Copilot?`,
+        progress: 'assigning',
+        failureVerb: 'assign',
+        successFallback: `issue #${item.number} assigned`,
+      },
+      close: {
+        confirm: `Close issue #${item.number}?`,
+        progress: 'closing',
+        failureVerb: 'close',
+        successFallback: `issue #${item.number} closed`,
+      },
+    };
+    const actionConfig = issueActionConfig[action];
+    if (!actionConfig) return;
+    if (!confirm(actionConfig.confirm)) return;
     btn.disabled = true;
-    this.setStatus(`assigning #${item.number}…`, 'running');
+    this.setStatus(`${actionConfig.progress} #${item.number}…`, 'running');
     try {
       const r = await fetch('/api/system/github-issues/action', {
         method: 'POST',
@@ -814,20 +842,19 @@ class GitHubCard {
         body: JSON.stringify({
           url: this.currentUrl,
           issueNumber: item.number,
-          action: 'assign_copilot',
+          action,
         }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        this.setStatus(data.error || `failed to assign #${item.number}`, 'err');
+        this.setStatus(data.error || `failed to ${actionConfig.failureVerb} #${item.number}`, 'err');
         return;
       }
-      const successFallback = `issue #${item.number} assigned`;
-      this.setStatus(data.message || successFallback, 'ok');
+      this.setStatus(data.message || actionConfig.successFallback, 'ok');
       await this.load(this.currentUrl);
     } catch (err) {
       console.error('[concilium] issue action failed:', err);
-      this.setStatus(`failed to assign #${item.number}`, 'err');
+      this.setStatus(`failed to ${actionConfig.failureVerb} #${item.number}`, 'err');
     } finally {
       btn.disabled = false;
     }

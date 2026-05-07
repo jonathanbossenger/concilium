@@ -473,8 +473,8 @@ router.post('/github-issues/action', async (req, res) => {
     if (!Number.isSafeInteger(issueNumber) || issueNumber < 1) {
       return res.status(400).json({ error: 'issueNumber must be a positive integer' });
     }
-    if (action !== 'assign_copilot') {
-      return res.status(400).json({ error: 'action must be "assign_copilot"' });
+    if (action !== 'assign_copilot' && action !== 'close') {
+      return res.status(400).json({ error: 'action must be "assign_copilot" or "close"' });
     }
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
@@ -488,6 +488,31 @@ router.post('/github-issues/action', async (req, res) => {
     const githubToken = getGitHubToken(cfg);
     if (!githubToken) {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+    }
+
+    if (action === 'close') {
+      const encodedIssueNumber = encodeURIComponent(String(issueNumber));
+      const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodedIssueNumber}`;
+      const resp = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          ...githubHeaders(githubToken),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ state: 'closed' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg = data && typeof data.message === 'string' && data.message
+          ? data.message
+          : `GitHub action failed (HTTP ${resp.status})`;
+        return res.status(resp.status).json({ error: msg });
+      }
+      return res.json({
+        ok: true,
+        action,
+        message: `issue #${issueNumber} closed`,
+      });
     }
 
     const assignment = await assignIssueToCopilot(githubToken, owner, repo, issueNumber);
