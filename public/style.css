@@ -425,6 +425,23 @@ main:has(.card:only-child):not(.has-expanded) {
   height: 1em;
   display: block;
 }
+.github-pr-action-ready {
+  color: var(--accent);
+  border-color: var(--accent);
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  font-size: 1em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.github-pr-action-ready svg {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
 .github-pr-action-close {
   color: var(--status-err);
   border-color: var(--status-err);

@@ -12,6 +12,7 @@ const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot
 const COPILOT_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7.998 15.035c-4.562 0-7.873-2.914-7.998-3.749V9.338c.085-.628.677-1.686 1.588-2.065.013-.07.024-.143.036-.218.029-.183.06-.384.126-.612-.201-.508-.254-1.084-.254-1.656 0-.87.128-1.769.693-2.484.579-.733 1.494-1.124 2.724-1.261 1.206-.134 2.262.034 2.944.765.05.053.096.108.139.165.044-.057.094-.112.143-.165.682-.731 1.738-.899 2.944-.765 1.23.137 2.145.528 2.724 1.261.566.715.693 1.614.693 2.484 0 .572-.053 1.148-.254 1.656.066.228.098.429.126.612.012.076.024.148.037.218.924.385 1.522 1.471 1.591 2.095v1.872c0 .766-3.351 3.795-8.002 3.795Zm0-1.485c2.28 0 4.584-1.11 5.002-1.433V7.862l-.023-.116c-.49.21-1.075.291-1.727.291-1.146 0-2.059-.327-2.71-.991A3.222 3.222 0 0 1 8 6.303a3.24 3.24 0 0 1-.544.743c-.65.664-1.563.991-2.71.991-.652 0-1.236-.081-1.727-.291l-.023.116v4.255c.419.323 2.722 1.433 5.002 1.433ZM6.762 2.83c-.193-.206-.637-.413-1.682-.297-1.019.113-1.479.404-1.713.7-.247.312-.369.789-.369 1.554 0 .793.129 1.171.308 1.371.162.181.519.379 1.442.379.853 0 1.339-.235 1.638-.54.315-.322.527-.827.617-1.553.117-.935-.037-1.395-.241-1.614Zm4.155-.297c-1.044-.116-1.488.091-1.681.297-.204.219-.359.679-.242 1.614.091.726.303 1.231.618 1.553.299.305.784.54 1.638.54.922 0 1.28-.198 1.442-.379.179-.2.308-.578.308-1.371 0-.765-.123-1.242-.37-1.554-.233-.296-.693-.587-1.713-.7Z"/><path d="M6.25 9.037a.75.75 0 0 1 .75.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 .75-.75Zm4.25.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 1.5 0Z"/></svg>';
 const COPILOT_ASSIGNED_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0l4.5-4.5Z"/></svg>';
 const MERGE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.27a2.751 2.751 0 1 1-1.5 0V5.607a2.751 2.751 0 1 1 1.95-.453ZM4.25 13.5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM4.25 5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>';
+const READY_FOR_REVIEW_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>';
 
 function currentTermTheme() {
@@ -595,33 +596,48 @@ class GitHubCard {
       if (withPullActions) {
         const actions = document.createElement('span');
         actions.className = 'github-pr-actions';
-        const methodSelect = document.createElement('select');
-        methodSelect.className = 'github-pr-merge-method github-pr-action-control';
-        methodSelect.title = 'Select merge method';
-        const methods = [
-          { value: 'merge', label: 'Merge commit' },
-          { value: 'squash', label: 'Squash' },
-          { value: 'rebase', label: 'Rebase' },
-        ];
-        for (const method of methods) {
-          const opt = document.createElement('option');
-          opt.value = method.value;
-          opt.textContent = method.label;
-          methodSelect.appendChild(opt);
+        if (item.draft) {
+          const readyBtn = document.createElement('button');
+          readyBtn.type = 'button';
+          readyBtn.className = 'github-pr-action github-pr-action-ready github-pr-action-control';
+          readyBtn.innerHTML = READY_FOR_REVIEW_ICON_SVG;
+          readyBtn.title = 'Mark pull request ready for review';
+          readyBtn.setAttribute('aria-label', 'Mark pull request ready for review');
+          readyBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.runMarkReadyAction(item, readyBtn);
+          });
+          actions.appendChild(readyBtn);
+        } else {
+          const methodSelect = document.createElement('select');
+          methodSelect.className = 'github-pr-merge-method github-pr-action-control';
+          methodSelect.title = 'Select merge method';
+          const methods = [
+            { value: 'merge', label: 'Merge commit' },
+            { value: 'squash', label: 'Squash' },
+            { value: 'rebase', label: 'Rebase' },
+          ];
+          for (const method of methods) {
+            const opt = document.createElement('option');
+            opt.value = method.value;
+            opt.textContent = method.label;
+            methodSelect.appendChild(opt);
+          }
+          actions.appendChild(methodSelect);
+          const mergeBtn = document.createElement('button');
+          mergeBtn.type = 'button';
+          mergeBtn.className = 'github-pr-action github-pr-action-merge github-pr-action-control';
+          mergeBtn.innerHTML = MERGE_ICON_SVG;
+          mergeBtn.title = 'Merge pull request';
+          mergeBtn.setAttribute('aria-label', 'Merge pull request');
+          mergeBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.runPullAction(item, mergeBtn, { action: 'merge', methodSelect });
+          });
+          actions.appendChild(mergeBtn);
         }
-        actions.appendChild(methodSelect);
-        const mergeBtn = document.createElement('button');
-        mergeBtn.type = 'button';
-        mergeBtn.className = 'github-pr-action github-pr-action-merge github-pr-action-control';
-        mergeBtn.innerHTML = MERGE_ICON_SVG;
-        mergeBtn.title = 'Merge pull request';
-        mergeBtn.setAttribute('aria-label', 'Merge pull request');
-        mergeBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this.runPullAction(item, mergeBtn, { action: 'merge', methodSelect });
-        });
-        actions.appendChild(mergeBtn);
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'github-pr-action github-pr-action-close github-pr-action-control';
@@ -732,6 +748,41 @@ class GitHubCard {
       this.setStatus(`failed to ${actionLabel} #${item.number}`, 'err');
     } finally {
       for (const control of controls) control.disabled = false;
+    }
+  }
+
+  async runMarkReadyAction(item, btn) {
+    if (!item.nodeId) {
+      this.setStatus(`cannot mark #${item.number} ready (missing GraphQL id)`, 'err');
+      return;
+    }
+    if (!confirm(`Mark draft #${item.number} ready for review?`)) return;
+    btn.disabled = true;
+    this.setStatus(`marking #${item.number} ready…`, 'running');
+    try {
+      const r = await fetch('/api/system/github-pulls/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: this.currentUrl,
+          pullNumber: item.number,
+          action: 'mark_ready',
+          nodeId: item.nodeId,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        this.setStatus(data.error || `failed to mark #${item.number} ready`, 'err');
+        return;
+      }
+      const successFallback = `pull request #${item.number} ready for review`;
+      this.setStatus(data.message || successFallback, 'ok');
+      await this.load(this.currentUrl);
+    } catch (err) {
+      console.error('[concilium] mark-ready action failed:', err);
+      this.setStatus(`failed to mark #${item.number} ready`, 'err');
+    } finally {
+      btn.disabled = false;
     }
   }
 

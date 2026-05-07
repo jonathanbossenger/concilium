@@ -267,6 +267,8 @@ function toGitHubPull(item) {
     ...toGitHubItem(item),
     branch: item.head && typeof item.head.ref === 'string' ? item.head.ref : '',
     headSha: item.head && typeof item.head.sha === 'string' ? item.head.sha : '',
+    draft: !!item.draft,
+    nodeId: typeof item.node_id === 'string' ? item.node_id : '',
   };
 }
 
@@ -361,20 +363,24 @@ router.post('/github-pulls/action', async (req, res) => {
     const action = req.body && req.body.action;
     const sha = req.body && req.body.sha;
     const mergeMethod = req.body && req.body.mergeMethod;
+    const nodeId = req.body && req.body.nodeId;
     if (typeof url !== 'string' || !url) {
       return res.status(400).json({ error: 'url is required' });
     }
     if (!Number.isSafeInteger(pullNumber) || pullNumber < 1) {
       return res.status(400).json({ error: 'pullNumber must be a positive integer' });
     }
-    if (action !== 'merge' && action !== 'close') {
-      return res.status(400).json({ error: 'action must be "merge" or "close"' });
+    if (action !== 'merge' && action !== 'close' && action !== 'mark_ready') {
+      return res.status(400).json({ error: 'action must be "merge", "close", or "mark_ready"' });
     }
     if (sha !== undefined && typeof sha !== 'string') {
       return res.status(400).json({ error: 'sha must be a string' });
     }
     if (mergeMethod !== undefined && mergeMethod !== 'merge' && mergeMethod !== 'squash' && mergeMethod !== 'rebase') {
       return res.status(400).json({ error: 'mergeMethod must be one of "merge", "squash", or "rebase"' });
+    }
+    if (action === 'mark_ready' && (typeof nodeId !== 'string' || !nodeId)) {
+      return res.status(400).json({ error: 'nodeId is required to mark a pull request ready for review' });
     }
     const repoData = parseGitHubRepo(url);
     if (!repoData) return res.status(400).json({ error: 'invalid github repository url' });
@@ -388,6 +394,35 @@ router.post('/github-pulls/action', async (req, res) => {
     const githubToken = getGitHubToken(cfg);
     if (!githubToken) {
       return res.status(400).json({ error: 'set a GitHub token in Settings first' });
+    }
+
+    if (action === 'mark_ready') {
+      const mutation = 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{number isDraft}}}';
+      const resp = await fetch('https://api.github.com/graphql', {
+        method: 'POST',
+        headers: {
+          ...githubHeaders(githubToken),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ query: mutation, variables: { id: nodeId } }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      const gqlError = Array.isArray(data && data.errors) && data.errors.length
+        ? data.errors[0]
+        : null;
+      if (!resp.ok || gqlError) {
+        const msg = (gqlError && typeof gqlError.message === 'string' && gqlError.message)
+          || (data && typeof data.message === 'string' && data.message)
+          || `GitHub action failed (HTTP ${resp.status})`;
+        return res.status(resp.ok ? 422 : resp.status).json({ error: msg });
+      }
+      const pr = data && data.data && data.data.markPullRequestReadyForReview && data.data.markPullRequestReadyForReview.pullRequest;
+      return res.json({
+        ok: true,
+        action,
+        message: `pull request #${pullNumber} marked ready for review`,
+        draft: pr ? !!pr.isDraft : false,
+      });
     }
 
     const payload = {};
