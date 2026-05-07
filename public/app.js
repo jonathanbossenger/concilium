@@ -600,7 +600,7 @@ class GitHubCard {
         mergeBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          this.runPullAction(item, mergeBtn, methodSelect, 'merge');
+          this.runPullAction(item, mergeBtn, { action: 'merge', methodSelect });
         });
         actions.appendChild(mergeBtn);
         const closeBtn = document.createElement('button');
@@ -612,7 +612,7 @@ class GitHubCard {
         closeBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          this.runPullAction(item, closeBtn, methodSelect, 'close');
+          this.runPullAction(item, closeBtn, { action: 'close' });
         });
         actions.appendChild(closeBtn);
         li.appendChild(actions);
@@ -674,12 +674,12 @@ class GitHubCard {
     }
   }
 
-  async runPullAction(item, btn, methodSelect, action = 'merge') {
-    const mergeMethod = methodSelect && methodSelect.value ? methodSelect.value : 'merge';
+  async runPullAction(item, btn, { action = 'merge', methodSelect = null } = {}) {
     const isMerge = action === 'merge';
     const actionLabel = isMerge ? 'merge' : 'close';
     const statusVerb = isMerge ? 'merging' : 'closing';
     const successVerb = isMerge ? 'merged' : 'closed';
+    const mergeMethod = isMerge && methodSelect && methodSelect.value ? methodSelect.value : 'merge';
     const confirmMessage = isMerge
       ? `Merge #${item.number} using ${mergeMethod}?`
       : `Close #${item.number}?`;
