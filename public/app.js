@@ -24,11 +24,30 @@ function currentTermTheme() {
   };
 }
 
+function formatUptime(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const units = [
+    ['month', 30 * 24 * 60 * 60],
+    ['week', 7 * 24 * 60 * 60],
+    ['day', 24 * 60 * 60],
+    ['hour', 60 * 60],
+    ['minute', 60],
+    ['second', 1],
+  ];
+  for (const [label, size] of units) {
+    if (totalSeconds >= size) {
+      const value = Math.floor(totalSeconds / size);
+      return `${value} ${label}${value === 1 ? '' : 's'}`;
+    }
+  }
+  return '0 seconds';
+}
+
 async function loadHealth() {
   try {
     const r = await fetch('/api/health');
     const data = await r.json();
-    $('#health').textContent = `pid ${data.pid} · up ${Math.round(data.uptime)}s`;
+    $('#health').textContent = `pid ${data.pid} · up ${formatUptime(data.uptime)}`;
     if (data.homeDir) homeDir = data.homeDir;
   } catch (_) {
     $('#health').textContent = 'offline';
