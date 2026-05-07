@@ -710,7 +710,6 @@ class GitHubCard {
   }
 
   async runIssueAction(item, btn, action = 'assign_copilot') {
-    const actionVerb = action === 'close' ? 'close' : 'assign';
     const actionProgress = action === 'close' ? 'closing' : 'assigning';
     const actionFailed = action === 'close' ? 'close' : 'assign';
     if (!confirm(action === 'close'
