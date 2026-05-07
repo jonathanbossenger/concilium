@@ -486,6 +486,10 @@ main:has(.card:only-child):not(.has-expanded) {
   color: var(--accent);
   border-color: var(--accent);
 }
+.github-issue-action-close {
+  color: var(--status-err);
+  border-color: var(--status-err);
+}
 .github-issue-action svg,
 .github-issue-assigned svg {
   width: 1em;
