@@ -771,7 +771,7 @@ class GitHubCard {
       }
       const successFallback = `pull request #${item.number} ${successVerb}`;
       this.setStatus(data.message || successFallback, 'ok');
-      await this.load(this.currentUrl);
+      await this.load(this.currentUrl, { excludePullNumbers: new Set([item.number]) });
     } catch (err) {
       console.error('[concilium] pull request action failed:', err);
       this.setStatus(`failed to ${actionLabel} #${item.number}`, 'err');
@@ -851,7 +851,8 @@ class GitHubCard {
         return;
       }
       this.setStatus(data.message || actionConfig.successFallback, 'ok');
-      await this.load(this.currentUrl);
+      const loadOpts = action === 'close' ? { excludeIssueNumbers: new Set([item.number]) } : {};
+      await this.load(this.currentUrl, loadOpts);
     } catch (err) {
       console.error('[concilium] issue action failed:', err);
       this.setStatus(`failed to ${actionConfig.failureVerb} #${item.number}`, 'err');
@@ -883,7 +884,7 @@ class GitHubCard {
     });
   }
 
-  async load(repoUrlHint = '') {
+  async load(repoUrlHint = '', { excludeIssueNumbers = null, excludePullNumbers = null } = {}) {
     if (this._loadAbortCtrl) this._loadAbortCtrl.abort();
     this._loadAbortCtrl = new AbortController();
     const { signal } = this._loadAbortCtrl;
@@ -912,8 +913,20 @@ class GitHubCard {
       }
       const url = data.url || repoUrlHint;
       this.setTitle(url);
-      this.renderList(this.issuesEl, Array.isArray(data.issues) ? data.issues : [], 'no open issues', { withIssueActions: true });
-      this.renderList(this.pullsEl, Array.isArray(data.pulls) ? data.pulls : [], 'no open pull requests', { withPullActions: true });
+      // GitHub's /issues?state=open and /pulls?state=open endpoints can briefly
+      // include an item we just transitioned out of `open` (PATCH/PUT propagation
+      // lag). When the caller knows an item should no longer appear, filter it
+      // from the freshly fetched list so the UI doesn't show it as still open.
+      let issues = Array.isArray(data.issues) ? data.issues : [];
+      let pulls = Array.isArray(data.pulls) ? data.pulls : [];
+      if (excludeIssueNumbers && excludeIssueNumbers.size) {
+        issues = issues.filter((i) => !excludeIssueNumbers.has(i.number));
+      }
+      if (excludePullNumbers && excludePullNumbers.size) {
+        pulls = pulls.filter((p) => !excludePullNumbers.has(p.number));
+      }
+      this.renderList(this.issuesEl, issues, 'no open issues', { withIssueActions: true });
+      this.renderList(this.pullsEl, pulls, 'no open pull requests', { withPullActions: true });
       this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
     } catch (err) {
       if (err.name === 'AbortError') return;
