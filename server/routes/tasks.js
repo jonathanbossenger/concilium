@@ -20,8 +20,7 @@ function getTerminalAgent() {
       return { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
     }
 
-    const rawComSpec = process.env.COMSPEC || process.env.ComSpec;
-    const comSpecPath = typeof rawComSpec === 'string' ? rawComSpec.trim() : '';
+    const comSpecPath = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
     if (comSpecPath && commandExists(comSpecPath)) {
       return { id: '_terminal', name: 'Terminal', command: comSpecPath, args: [], interactive: true };
     }

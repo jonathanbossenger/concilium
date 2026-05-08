@@ -87,7 +87,8 @@ Your council of agents - Concilium!
 - macOS, Linux, or modern Windows with PowerShell
 - A C toolchain only if `node-pty`'s prebuilt binaries aren't available for
   your platform; the current `node-pty` package ships prebuilds for macOS
-  arm64/x64 and Windows x64/arm64
+  arm64/x64 and Windows x64/arm64, while some Linux installs may still build
+  from source
 
 External CLIs the server invokes (must be on `$PATH`):
 
