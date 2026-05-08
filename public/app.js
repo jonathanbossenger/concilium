@@ -1,5 +1,4 @@
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => root.querySelectorAll(sel);
+const $ = (selector, root = document) => root.querySelector(selector);
 
 let agentsById = new Map();
 const cards = new Set();
@@ -19,12 +18,12 @@ const READY_FOR_REVIEW_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 1
 const CLOSE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>';
 
 function currentTermTheme() {
-  const s = getComputedStyle(document.documentElement);
+  const styles = getComputedStyle(document.documentElement);
   return {
-    background: s.getPropertyValue('--term-bg').trim() || '#111111',
-    foreground: s.getPropertyValue('--term-fg').trim() || '#dddddd',
-    cursor: s.getPropertyValue('--term-cursor').trim() || '#dddddd',
-    selectionBackground: s.getPropertyValue('--term-selection').trim() || 'rgba(120,180,255,0.30)',
+    background: styles.getPropertyValue('--term-bg').trim() || '#111111',
+    foreground: styles.getPropertyValue('--term-fg').trim() || '#dddddd',
+    cursor: styles.getPropertyValue('--term-cursor').trim() || '#dddddd',
+    selectionBackground: styles.getPropertyValue('--term-selection').trim() || 'rgba(120,180,255,0.30)',
   };
 }
 
@@ -49,8 +48,8 @@ function formatUptime(seconds) {
 
 async function loadHealth() {
   try {
-    const r = await fetch('/api/health');
-    const data = await r.json();
+    const response = await fetch('/api/health');
+    const data = await response.json();
     $('#health').textContent = `pid ${data.pid} · up ${formatUptime(data.uptime)}`;
     if (data.homeDir) homeDir = data.homeDir;
   } catch (_) {
@@ -58,11 +57,11 @@ async function loadHealth() {
   }
 }
 
-function toTildePath(p) {
-  if (homeDir && (p === homeDir || p.startsWith(homeDir + '/'))) {
-    return '~' + p.slice(homeDir.length);
+function toTildePath(path) {
+  if (homeDir && (path === homeDir || path.startsWith(homeDir + '/'))) {
+    return '~' + path.slice(homeDir.length);
   }
-  return p;
+  return path;
 }
 
 function issueHasCopilotAssigned(item) {
@@ -72,9 +71,9 @@ function issueHasCopilotAssigned(item) {
 }
 
 async function loadAgents() {
-  const r = await fetch('/api/agents');
-  const agents = await r.json();
-  agentsById = new Map(agents.map((a) => [a.id, a]));
+  const response = await fetch('/api/agents');
+  const agents = await response.json();
+  agentsById = new Map(agents.map((agent) => [agent.id, agent]));
   for (const card of cards) card.refreshAgentSelect();
 }
 
@@ -86,12 +85,12 @@ function fillAgentSelect(select, currentValue) {
   placeholder.disabled = true;
   placeholder.selected = !currentValue;
   select.appendChild(placeholder);
-  for (const a of agentsById.values()) {
-    const opt = document.createElement('option');
-    opt.value = a.id;
-    opt.textContent = a.name + (a.interactive ? ' · interactive' : '');
-    if (currentValue === a.id) opt.selected = true;
-    select.appendChild(opt);
+  for (const agent of agentsById.values()) {
+    const option = document.createElement('option');
+    option.value = agent.id;
+    option.textContent = agent.name + (agent.interactive ? ' · interactive' : '');
+    if (currentValue === agent.id) option.selected = true;
+    select.appendChild(option);
   }
 }
 
@@ -100,45 +99,45 @@ function cardInsertTarget(main, clientX, clientY) {
   if (siblings.length === 0) return null;
   let closestCard = null;
   let closestRect = null;
-  let closestDist = Number.POSITIVE_INFINITY;
-  for (const el of siblings) {
-    const rect = el.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = clientX - cx;
-    const dy = clientY - cy;
-    const dist = dx * dx + dy * dy;
-    if (dist < closestDist) {
-      closestDist = dist;
-      closestCard = el;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (const sibling of siblings) {
+    const rect = sibling.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const offsetX = clientX - centerX;
+    const offsetY = clientY - centerY;
+    const distance = offsetX * offsetX + offsetY * offsetY;
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestCard = sibling;
       closestRect = rect;
     }
   }
   if (!closestCard || !closestRect) return null;
-  const dx = clientX - (closestRect.left + closestRect.width / 2);
-  const dy = clientY - (closestRect.top + closestRect.height / 2);
-  const before = Math.abs(dx) > Math.abs(dy) ? dx < 0 : dy < 0;
-  return before ? closestCard : closestCard.nextElementSibling;
+  const offsetX = clientX - (closestRect.left + closestRect.width / 2);
+  const offsetY = clientY - (closestRect.top + closestRect.height / 2);
+  const insertBefore = Math.abs(offsetX) > Math.abs(offsetY) ? offsetX < 0 : offsetY < 0;
+  return insertBefore ? closestCard : closestCard.nextElementSibling;
 }
 
 function enableCardDragging(cardEl, handleEl) {
   handleEl.draggable = true;
 
-  handleEl.addEventListener('dragstart', (e) => {
-    const target = e.target;
+  handleEl.addEventListener('dragstart', (dragEvent) => {
+    const target = dragEvent.target;
     if (target && target.closest('button, select, input, a, .card-actions, .card-status')) {
-      e.preventDefault();
+      dragEvent.preventDefault();
       return;
     }
     if (cardEl.classList.contains('expanded')) {
-      e.preventDefault();
+      dragEvent.preventDefault();
       return;
     }
     draggingCardEl = cardEl;
     cardEl.classList.add('dragging');
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', 'card');
+    if (dragEvent.dataTransfer) {
+      dragEvent.dataTransfer.effectAllowed = 'move';
+      dragEvent.dataTransfer.setData('text/plain', 'card');
     }
   });
 
@@ -151,8 +150,8 @@ function enableCardDragging(cardEl, handleEl) {
 
 class Card {
   constructor() {
-    const tpl = $('#card-template');
-    this.el = tpl.content.firstElementChild.cloneNode(true);
+    const template = $('#card-template');
+    this.el = template.content.firstElementChild.cloneNode(true);
     this.agentSelect = $('.card-agent', this.el);
     this.cwd = $('.card-cwd', this.el);
     this.cwdBrowse = $('.card-cwd-browse', this.el);
@@ -184,8 +183,8 @@ class Card {
 
     this.refreshAgentSelect();
 
-    this.taskForm.addEventListener('submit', (e) => { e.preventDefault(); if (!this.currentTaskId) this.run(); });
-    this.runBtn.addEventListener('click', (e) => { if (this.currentTaskId) { e.preventDefault(); this.kill(); } });
+    this.taskForm.addEventListener('submit', (submitEvent) => { submitEvent.preventDefault(); if (!this.currentTaskId) this.run(); });
+    this.runBtn.addEventListener('click', (clickEvent) => { if (this.currentTaskId) { clickEvent.preventDefault(); this.kill(); } });
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
@@ -232,9 +231,9 @@ class Card {
     try { this.fitAddon.fit(); } catch (_) { return; }
     const cols = this.term.cols;
     const rows = this.term.rows;
-    const sig = `${cols}x${rows}`;
-    if (sig === this.lastSentSize) return;
-    this.lastSentSize = sig;
+    const sizeSignature = `${cols}x${rows}`;
+    if (sizeSignature === this.lastSentSize) return;
+    this.lastSentSize = sizeSignature;
     if (!this.currentTaskId) return;
     fetch(`/api/tasks/${this.currentTaskId}/resize`, {
       method: 'POST',
@@ -291,13 +290,13 @@ class Card {
     const cwd = this.cwd.value.trim();
     if (cwd) body.cwd = cwd;
 
-    const r = await fetch('/api/tasks', {
+    const response = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await r.json();
-    if (!r.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
+    const data = await response.json();
+    if (!response.ok) { this.setStatus(data.error || 'failed', 'err'); return; }
 
     this.taskIds.add(data.task_id);
     this.lastTaskId = data.task_id;
@@ -325,42 +324,42 @@ class Card {
     const streamUrl = this.lastEventId !== null
       ? `/api/stream/${taskId}?since=${this.lastEventId}`
       : `/api/stream/${taskId}`;
-    const src = new EventSource(streamUrl);
-    this.currentSource = src;
+    const eventSource = new EventSource(streamUrl);
+    this.currentSource = eventSource;
 
     // Restore running status when the EventSource (re)opens successfully.
     // Only do this when recovering from an onerror — on the initial connect
     // attach() has already set the correct status above.
-    src.onopen = () => {
+    eventSource.onopen = () => {
       if (this.currentTaskId === taskId && this._reconnecting) {
         this._reconnecting = false;
         this.setStatus('task running…', 'running');
       }
     };
 
-    src.addEventListener('output', (e) => {
-      let ev;
-      try { ev = JSON.parse(e.data); } catch (_) { return; }
+    eventSource.addEventListener('output', (messageEvent) => {
+      let outputEvent;
+      try { outputEvent = JSON.parse(messageEvent.data); } catch (_) { return; }
       // Skip stdin events: the PTY echoes user input back as stdout, so
       // rendering stdin would double-print every keystroke.
-      if (ev.stream === 'stdin') return;
+      if (outputEvent.stream === 'stdin') return;
       // Track the latest row id so we can resume from here if the stream is
       // interrupted and the EventSource needs to be recreated (?since=).
-      if (ev.id) this.lastEventId = ev.id;
-      this.term.write(ev.data);
+      if (outputEvent.id) this.lastEventId = outputEvent.id;
+      this.term.write(outputEvent.data);
     });
-    src.addEventListener('end', (e) => {
-      let info = {};
-      try { info = JSON.parse(e.data); } catch (_) {}
-      const tail = `\r\n\x1b[2m[exit ${info.exitCode ?? '?'}${info.signal ? ' ' + info.signal : ''}]\x1b[0m\r\n`;
-      this.term.write(tail);
-      this.setStatus(`task ${info.status || 'ended'}`, info.status === 'done' ? 'ok' : 'err');
+    eventSource.addEventListener('end', (messageEvent) => {
+      let exitInfo = {};
+      try { exitInfo = JSON.parse(messageEvent.data); } catch (_) {}
+      const exitLine = `\r\n\x1b[2m[exit ${exitInfo.exitCode ?? '?'}${exitInfo.signal ? ' ' + exitInfo.signal : ''}]\x1b[0m\r\n`;
+      this.term.write(exitLine);
+      this.setStatus(`task ${exitInfo.status || 'ended'}`, exitInfo.status === 'done' ? 'ok' : 'err');
       this.setRunning(false);
-      src.close();
-      if (this.currentSource === src) this.currentSource = null;
+      eventSource.close();
+      if (this.currentSource === eventSource) this.currentSource = null;
       this.currentTaskId = null;
     });
-    src.onerror = () => {
+    eventSource.onerror = () => {
       const capturedTaskId = this.currentTaskId;
       if (!capturedTaskId) { this.setRunning(false); return; }
       // Show reconnecting status but do NOT close the EventSource — the browser
@@ -373,13 +372,13 @@ class Card {
       if (this._errorCheckPending) return;
       this._errorCheckPending = true;
       // Re-fetch to check whether the task still exists. Close only on 404.
-      fetch(`/api/tasks/${capturedTaskId}`).then((check) => {
+      fetch(`/api/tasks/${capturedTaskId}`).then((checkResponse) => {
         this._errorCheckPending = false;
         if (this.currentTaskId !== capturedTaskId) return; // superseded
-        if (!check.ok) {
+        if (!checkResponse.ok) {
           // Task is gone — nothing to reconnect to.
-          src.close();
-          if (this.currentSource === src) this.currentSource = null;
+          eventSource.close();
+          if (this.currentSource === eventSource) this.currentSource = null;
           this.setStatus('task lost connection', 'err');
           this.currentTaskId = null;
           this.setRunning(false);
@@ -408,15 +407,15 @@ class Card {
     const taskId = this.currentTaskId;
     let taskData;
     try {
-      const r = await fetch(`/api/tasks/${taskId}`);
+      const response = await fetch(`/api/tasks/${taskId}`);
       if (this.currentTaskId !== taskId) return; // superseded
-      if (!r.ok) {
+      if (!response.ok) {
         this.setStatus('task lost connection', 'err');
         this.currentTaskId = null;
         this.setRunning(false);
         return;
       }
-      taskData = await r.json();
+      taskData = await response.json();
     } catch (_) {
       if (this.currentTaskId !== taskId) return; // superseded
       // Network still down — attach optimistically; onerror will keep retrying.
@@ -431,9 +430,9 @@ class Card {
   toggleExpand() {
     const main = $('#cards');
     const willExpand = !this.el.classList.contains('expanded');
-    const apply = () => {
-      for (const c of cards) c.el.classList.remove('expanded');
-      for (const c of termCards) c.el.classList.remove('expanded');
+    const applyExpand = () => {
+      for (const card of cards) card.el.classList.remove('expanded');
+      for (const card of termCards) card.el.classList.remove('expanded');
       if (willExpand) {
         this.el.classList.add('expanded');
         main.classList.add('has-expanded');
@@ -445,18 +444,18 @@ class Card {
         this.expandBtn.title = 'Expand';
       }
     };
-    if (!document.startViewTransition) { apply(); return; }
+    if (!document.startViewTransition) { applyExpand(); return; }
     this.el.style.viewTransitionName = 'card-active';
-    const t = document.startViewTransition(apply);
-    t.finished.finally(() => { this.el.style.viewTransitionName = ''; });
+    const transition = document.startViewTransition(applyExpand);
+    transition.finished.finally(() => { this.el.style.viewTransitionName = ''; });
   }
 
   async browseCwd() {
     this.cwdBrowse.disabled = true;
     try {
-      const r = await fetch('/api/system/pick-directory', { method: 'POST' });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
+      const response = await fetch('/api/system/pick-directory', { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
       if (data.path) { this.cwd.value = toTildePath(data.path); saveLayout(); this.checkGitHub(); }
     } finally {
       this.cwdBrowse.disabled = false;
@@ -469,21 +468,21 @@ class Card {
   }
 
   async checkGitHub() {
-    const dir = this.cwd.value.trim();
-    if (!dir) { this.githubUrl = ''; this.setGitHubBtnMode('hidden'); return; }
+    const directoryPath = this.cwd.value.trim();
+    if (!directoryPath) { this.githubUrl = ''; this.setGitHubBtnMode('hidden'); return; }
     // Cancel any in-flight request so stale responses don't overwrite newer results.
     if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
     this._githubAbortCtrl = new AbortController();
     const { signal } = this._githubAbortCtrl;
     try {
-      const r = await fetch('/api/system/github-url', {
+      const response = await fetch('/api/system/github-url', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: dir }),
+        body: JSON.stringify({ path: directoryPath }),
         signal,
       });
-      if (!r.ok) { this.githubUrl = ''; this.setGitHubBtnMode('create'); return; }
-      const data = await r.json().catch(() => ({}));
+      if (!response.ok) { this.githubUrl = ''; this.setGitHubBtnMode('create'); return; }
+      const data = await response.json().catch(() => ({}));
       if (data.url) {
         this.githubUrl = data.url;
         this.setGitHubBtnMode('browse');
@@ -544,8 +543,8 @@ class Card {
 
 class GitHubCard {
   constructor() {
-    const tpl = $('#github-card-template');
-    this.el = tpl.content.firstElementChild.cloneNode(true);
+    const template = $('#github-card-template');
+    this.el = template.content.firstElementChild.cloneNode(true);
     this.titleEl = $('.card-term-label', this.el);
     this.statusEl = $('.card-status', this.el);
     this.closeBtn = $('.card-close', this.el);
@@ -573,42 +572,42 @@ class GitHubCard {
   renderList(el, items, emptyText, { withPullActions = false, withIssueActions = false } = {}) {
     el.replaceChildren();
     if (!items.length) {
-      const li = document.createElement('li');
-      li.className = 'muted';
-      li.textContent = emptyText;
-      el.appendChild(li);
+      const emptyItem = document.createElement('li');
+      emptyItem.className = 'muted';
+      emptyItem.textContent = emptyText;
+      el.appendChild(emptyItem);
       return;
     }
     for (const item of items) {
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.href = item.url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = `#${item.number} ${item.title}`;
-      a.className = 'github-list-link';
-      li.appendChild(a);
+      const listItem = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = item.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = `#${item.number} ${item.title}`;
+      link.className = 'github-list-link';
+      listItem.appendChild(link);
       if (item.branch) {
         const branchWrap = document.createElement('span');
         branchWrap.className = 'github-branch';
-        const code = document.createElement('code');
-        code.className = 'github-branch-name';
-        code.textContent = item.branch;
-        code.title = item.branch;
-        branchWrap.appendChild(code);
+        const branchCode = document.createElement('code');
+        branchCode.className = 'github-branch-name';
+        branchCode.textContent = item.branch;
+        branchCode.title = item.branch;
+        branchWrap.appendChild(branchCode);
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
         copyBtn.className = 'github-branch-copy';
         copyBtn.setAttribute('aria-label', `Copy branch name ${item.branch}`);
         copyBtn.title = 'Copy branch name';
         copyBtn.innerHTML = '<svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/></svg>';
-        copyBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        copyBtn.addEventListener('click', (clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
           this.copyBranch(item.branch, copyBtn);
         });
         branchWrap.appendChild(copyBtn);
-        li.appendChild(branchWrap);
+        listItem.appendChild(branchWrap);
       }
       if (withPullActions) {
         const actions = document.createElement('span');
@@ -620,9 +619,9 @@ class GitHubCard {
           readyBtn.innerHTML = READY_FOR_REVIEW_ICON_SVG;
           readyBtn.title = 'Mark pull request ready for review';
           readyBtn.setAttribute('aria-label', 'Mark pull request ready for review');
-          readyBtn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
+          readyBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
             this.runMarkReadyAction(item, readyBtn);
           });
           actions.appendChild(readyBtn);
@@ -636,10 +635,10 @@ class GitHubCard {
             { value: 'rebase', label: 'Rebase' },
           ];
           for (const method of methods) {
-            const opt = document.createElement('option');
-            opt.value = method.value;
-            opt.textContent = method.label;
-            methodSelect.appendChild(opt);
+            const option = document.createElement('option');
+            option.value = method.value;
+            option.textContent = method.label;
+            methodSelect.appendChild(option);
           }
           actions.appendChild(methodSelect);
           const mergeBtn = document.createElement('button');
@@ -648,9 +647,9 @@ class GitHubCard {
           mergeBtn.innerHTML = MERGE_ICON_SVG;
           mergeBtn.title = 'Merge pull request';
           mergeBtn.setAttribute('aria-label', 'Merge pull request');
-          mergeBtn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
+          mergeBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
             this.runPullAction(item, mergeBtn, { action: 'merge', methodSelect });
           });
           actions.appendChild(mergeBtn);
@@ -661,13 +660,13 @@ class GitHubCard {
         closeBtn.innerHTML = CLOSE_ICON_SVG;
         closeBtn.title = 'Close pull request';
         closeBtn.setAttribute('aria-label', 'Close pull request');
-        closeBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        closeBtn.addEventListener('click', (clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
           this.runPullAction(item, closeBtn, { action: 'close' });
         });
         actions.appendChild(closeBtn);
-        li.appendChild(actions);
+        listItem.appendChild(actions);
       }
       if (withIssueActions) {
         const actions = document.createElement('span');
@@ -686,9 +685,9 @@ class GitHubCard {
           assignBtn.innerHTML = COPILOT_ICON_SVG;
           assignBtn.title = 'Assign to Copilot agent';
           assignBtn.setAttribute('aria-label', 'Assign to Copilot agent');
-          assignBtn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
+          assignBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
             this.runIssueAction(item, assignBtn, 'assign_copilot');
           });
           actions.appendChild(assignBtn);
@@ -699,46 +698,46 @@ class GitHubCard {
         closeBtn.innerHTML = CLOSE_ICON_SVG;
         closeBtn.title = 'Close issue';
         closeBtn.setAttribute('aria-label', 'Close issue');
-        closeBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+        closeBtn.addEventListener('click', (clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
           this.runIssueAction(item, closeBtn, 'close');
         });
         actions.appendChild(closeBtn);
-        li.appendChild(actions);
+        listItem.appendChild(actions);
       }
-      el.appendChild(li);
+      el.appendChild(listItem);
     }
   }
 
-  async copyBranch(branch, btn) {
+  async copyBranch(branch, copyButton) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(branch);
       } else {
-        const ta = document.createElement('textarea');
-        ta.value = branch;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'absolute';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
+        const fallbackTextarea = document.createElement('textarea');
+        fallbackTextarea.value = branch;
+        fallbackTextarea.setAttribute('readonly', '');
+        fallbackTextarea.style.position = 'absolute';
+        fallbackTextarea.style.left = '-9999px';
+        document.body.appendChild(fallbackTextarea);
+        fallbackTextarea.select();
         document.execCommand('copy');
-        ta.remove();
+        fallbackTextarea.remove();
       }
-      btn.classList.add('copied');
-      btn.title = 'Copied!';
-      clearTimeout(btn._copyTimer);
-      btn._copyTimer = setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.title = 'Copy branch name';
+      copyButton.classList.add('copied');
+      copyButton.title = 'Copied!';
+      clearTimeout(copyButton._copyTimer);
+      copyButton._copyTimer = setTimeout(() => {
+        copyButton.classList.remove('copied');
+        copyButton.title = 'Copy branch name';
       }, 1200);
     } catch (err) {
       console.error('[concilium] branch copy failed:', err);
     }
   }
 
-  async runPullAction(item, btn, { action = 'merge', methodSelect = null } = {}) {
+  async runPullAction(item, actionButton, { action = 'merge', methodSelect = null } = {}) {
     const isMerge = action === 'merge';
     const actionLabel = isMerge ? 'merge' : 'close';
     const statusVerb = isMerge ? 'merging' : 'closing';
@@ -748,12 +747,12 @@ class GitHubCard {
       ? `Merge #${item.number} using ${mergeMethod}?`
       : `Close #${item.number}?`;
     if (!confirm(confirmMessage)) return;
-    const wrap = btn.parentElement;
-    const controls = wrap ? [...wrap.querySelectorAll('.github-pr-action-control')] : [btn];
+    const actionsContainer = actionButton.parentElement;
+    const controls = actionsContainer ? [...actionsContainer.querySelectorAll('.github-pr-action-control')] : [actionButton];
     for (const control of controls) control.disabled = true;
     this.setStatus(`${statusVerb} #${item.number}…`, 'running');
     try {
-      const r = await fetch('/api/system/github-pulls/action', {
+      const response = await fetch('/api/system/github-pulls/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -764,8 +763,8 @@ class GitHubCard {
           mergeMethod: isMerge ? mergeMethod : undefined,
         }),
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
         this.setStatus(data.error || `failed to ${actionLabel} #${item.number}`, 'err');
         return;
       }
@@ -780,16 +779,16 @@ class GitHubCard {
     }
   }
 
-  async runMarkReadyAction(item, btn) {
+  async runMarkReadyAction(item, readyButton) {
     if (!item.nodeId) {
       this.setStatus(`cannot mark #${item.number} ready (missing GraphQL id)`, 'err');
       return;
     }
     if (!confirm(`Mark draft #${item.number} ready for review?`)) return;
-    btn.disabled = true;
+    readyButton.disabled = true;
     this.setStatus(`marking #${item.number} ready…`, 'running');
     try {
-      const r = await fetch('/api/system/github-pulls/action', {
+      const response = await fetch('/api/system/github-pulls/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -799,8 +798,8 @@ class GitHubCard {
           nodeId: item.nodeId,
         }),
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
         this.setStatus(data.error || `failed to mark #${item.number} ready`, 'err');
         return;
       }
@@ -811,11 +810,11 @@ class GitHubCard {
       console.error('[concilium] mark-ready action failed:', err);
       this.setStatus(`failed to mark #${item.number} ready`, 'err');
     } finally {
-      btn.disabled = false;
+      readyButton.disabled = false;
     }
   }
 
-  async runIssueAction(item, btn, action = 'assign_copilot') {
+  async runIssueAction(item, issueButton, action = 'assign_copilot') {
     const issueActionConfig = {
       assign_copilot: {
         confirm: `Assign issue #${item.number} to Copilot?`,
@@ -833,10 +832,10 @@ class GitHubCard {
     const actionConfig = issueActionConfig[action];
     if (!actionConfig) return;
     if (!confirm(actionConfig.confirm)) return;
-    btn.disabled = true;
+    issueButton.disabled = true;
     this.setStatus(`${actionConfig.progress} #${item.number}…`, 'running');
     try {
-      const r = await fetch('/api/system/github-issues/action', {
+      const response = await fetch('/api/system/github-issues/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -845,8 +844,8 @@ class GitHubCard {
           action,
         }),
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
         this.setStatus(data.error || `failed to ${actionConfig.failureVerb} #${item.number}`, 'err');
         return;
       }
@@ -857,7 +856,7 @@ class GitHubCard {
       console.error('[concilium] issue action failed:', err);
       this.setStatus(`failed to ${actionConfig.failureVerb} #${item.number}`, 'err');
     } finally {
-      btn.disabled = false;
+      issueButton.disabled = false;
     }
   }
 
@@ -895,7 +894,7 @@ class GitHubCard {
     this.refreshBtn.classList.add('spinning');
     this.refreshBtn.disabled = true;
     try {
-      const r = await fetch('/api/system/github-items', {
+      const response = await fetch('/api/system/github-items', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url: repoUrlHint }),
@@ -903,9 +902,9 @@ class GitHubCard {
       });
       let data = {};
       try {
-        data = await r.json();
+        data = await response.json();
       } catch (_) {}
-      if (!r.ok) {
+      if (!response.ok) {
         this.setStatus(data.error || 'failed', 'err');
         this.renderList(this.issuesEl, [], 'unable to load');
         this.renderList(this.pullsEl, [], 'unable to load');
@@ -920,10 +919,10 @@ class GitHubCard {
       let issues = Array.isArray(data.issues) ? data.issues : [];
       let pulls = Array.isArray(data.pulls) ? data.pulls : [];
       if (excludeIssueNumbers && excludeIssueNumbers.size) {
-        issues = issues.filter((i) => !excludeIssueNumbers.has(i.number));
+        issues = issues.filter((issue) => !excludeIssueNumbers.has(issue.number));
       }
       if (excludePullNumbers && excludePullNumbers.size) {
-        pulls = pulls.filter((p) => !excludePullNumbers.has(p.number));
+        pulls = pulls.filter((pull) => !excludePullNumbers.has(pull.number));
       }
       this.renderList(this.issuesEl, issues, 'no open issues', { withIssueActions: true });
       this.renderList(this.pullsEl, pulls, 'no open pull requests', { withPullActions: true });
@@ -949,8 +948,8 @@ class GitHubCard {
 
 class TerminalCard {
   constructor() {
-    const tpl = $('#terminal-card-template');
-    this.el = tpl.content.firstElementChild.cloneNode(true);
+    const template = $('#terminal-card-template');
+    this.el = template.content.firstElementChild.cloneNode(true);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
     this.statusEl = $('.card-status', this.el);
@@ -974,9 +973,9 @@ class TerminalCard {
   toggleExpand() {
     const main = $('#cards');
     const willExpand = !this.el.classList.contains('expanded');
-    const apply = () => {
-      for (const c of cards) c.el.classList.remove('expanded');
-      for (const c of termCards) c.el.classList.remove('expanded');
+    const applyExpand = () => {
+      for (const card of cards) card.el.classList.remove('expanded');
+      for (const card of termCards) card.el.classList.remove('expanded');
       if (willExpand) {
         this.el.classList.add('expanded');
         main.classList.add('has-expanded');
@@ -988,10 +987,10 @@ class TerminalCard {
         this.expandBtn.title = 'Expand';
       }
     };
-    if (!document.startViewTransition) { apply(); return; }
+    if (!document.startViewTransition) { applyExpand(); return; }
     this.el.style.viewTransitionName = 'card-active';
-    const t = document.startViewTransition(apply);
-    t.finished.finally(() => { this.el.style.viewTransitionName = ''; });
+    const transition = document.startViewTransition(applyExpand);
+    transition.finished.finally(() => { this.el.style.viewTransitionName = ''; });
   }
 
   // Must be called AFTER the card element is attached to the DOM.
@@ -1023,9 +1022,9 @@ class TerminalCard {
     try { this.fitAddon.fit(); } catch (_) { return; }
     const cols = this.term.cols;
     const rows = this.term.rows;
-    const sig = `${cols}x${rows}`;
-    if (sig === this.lastSentSize) return;
-    this.lastSentSize = sig;
+    const sizeSignature = `${cols}x${rows}`;
+    if (sizeSignature === this.lastSentSize) return;
+    this.lastSentSize = sizeSignature;
     if (!this.taskId) return;
     fetch(`/api/tasks/${this.taskId}/resize`, {
       method: 'POST',
@@ -1053,13 +1052,13 @@ class TerminalCard {
   }
 
   async launch(cwd) {
-    const r = await fetch('/api/tasks/terminal', {
+    const response = await fetch('/api/tasks/terminal', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ cwd }),
     });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) { this.setStatus(data.error || `failed to start terminal (${r.status})`, 'err'); return; }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { this.setStatus(data.error || `failed to start terminal (${response.status})`, 'err'); return; }
     // Update label with cwd basename so multiple terminals are distinguishable.
     if (cwd) {
       const label = $('.card-term-label', this.el);
@@ -1073,23 +1072,23 @@ class TerminalCard {
   }
 
   attach(taskId) {
-    const src = new EventSource(`/api/stream/${taskId}`);
-    this.currentSource = src;
+    const eventSource = new EventSource(`/api/stream/${taskId}`);
+    this.currentSource = eventSource;
 
-    src.addEventListener('output', (e) => {
-      let ev;
-      try { ev = JSON.parse(e.data); } catch (_) { return; }
-      if (ev.stream === 'stdin') return;
-      this.term.write(ev.data);
+    eventSource.addEventListener('output', (messageEvent) => {
+      let outputEvent;
+      try { outputEvent = JSON.parse(messageEvent.data); } catch (_) { return; }
+      if (outputEvent.stream === 'stdin') return;
+      this.term.write(outputEvent.data);
     });
 
-    src.addEventListener('end', () => {
-      src.close();
-      if (this.currentSource === src) this.currentSource = null;
+    eventSource.addEventListener('end', () => {
+      eventSource.close();
+      if (this.currentSource === eventSource) this.currentSource = null;
       this.close();
     });
 
-    src.onerror = () => {
+    eventSource.onerror = () => {
       if (!this.taskId) return;
       this.setStatus('reconnecting…', 'warn');
     };
@@ -1103,11 +1102,11 @@ class TerminalCard {
     if (this.el.classList.contains('expanded')) {
       $('#cards').classList.remove('has-expanded');
     }
-    const id = this.taskId;
+    const taskIdToDelete = this.taskId;
     this.taskId = null;
     if (this.el.parentNode) this.el.remove();
-    if (id) {
-      await fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {});
+    if (taskIdToDelete) {
+      await fetch(`/api/tasks/${taskIdToDelete}`, { method: 'DELETE' }).catch(() => {});
     }
   }
 }
@@ -1170,14 +1169,14 @@ function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {
 
 function currentLayoutState() {
   const order = [...$('#cards').querySelectorAll('.card')];
-  const byEl = new Map([...cards].map((c) => [c.el, c]));
+  const cardByElement = new Map([...cards].map((card) => [card.el, card]));
   return order
-    .map((el) => byEl.get(el))
+    .map((el) => cardByElement.get(el))
     .filter(Boolean)
-    .map((c) => ({
-      agentId: c.agentSelect.value,
-      cwd: c.cwd.value,
-      lastTaskId: c.lastTaskId || null,
+    .map((card) => ({
+      agentId: card.agentSelect.value,
+      cwd: card.cwd.value,
+      lastTaskId: card.lastTaskId || null,
     }));
 }
 
@@ -1191,56 +1190,56 @@ function saveLayout() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(currentLayoutState()),
-    }).then((r) => {
-      if (!r.ok) console.error('[concilium] failed to save layout: HTTP', r.status);
+    }).then((response) => {
+      if (!response.ok) console.error('[concilium] failed to save layout: HTTP', response.status);
     }).catch((err) => console.error('[concilium] failed to save layout:', err));
   }, 150);
 }
 
 async function restoreLayout() {
-  let states;
+  let savedStates;
   try {
-    const r = await fetch('/api/system/layout');
-    if (r.ok) states = await r.json();
+    const response = await fetch('/api/system/layout');
+    if (response.ok) savedStates = await response.json();
   } catch (err) {
     console.error('[concilium] failed to load saved layout:', err);
   }
-  if (!Array.isArray(states) || states.length === 0) {
+  if (!Array.isArray(savedStates) || savedStates.length === 0) {
     addCard();
   } else {
     // Create all cards synchronously so the DOM is populated in order.
-    const entries = states.map((s) => {
-      const card = addCard({ agentId: s.agentId, cwd: s.cwd });
-      return { card, s };
+    const entries = savedStates.map((savedState) => {
+      const card = addCard({ agentId: savedState.agentId, cwd: savedState.cwd });
+      return { card, savedState };
     });
     // Fan out task-existence checks in parallel to avoid serial RTTs.
-    await Promise.all(entries.map(async ({ card, s }) => {
-      const agentMissing = s.agentId && !agentsById.has(s.agentId);
-      if (!s.lastTaskId) {
-        if (agentMissing) card.setStatus(`agent "${s.agentId}" no longer exists`, 'err');
+    await Promise.all(entries.map(async ({ card, savedState }) => {
+      const agentMissing = savedState.agentId && !agentsById.has(savedState.agentId);
+      if (!savedState.lastTaskId) {
+        if (agentMissing) card.setStatus(`agent "${savedState.agentId}" no longer exists`, 'err');
         return;
       }
       try {
-        const taskCheck = await fetch(`/api/tasks/${s.lastTaskId}`);
-        if (taskCheck.ok) {
-          const taskData = await taskCheck.json();
-          card.taskIds.add(s.lastTaskId);
-          card.lastTaskId = s.lastTaskId;
+        const taskCheckResponse = await fetch(`/api/tasks/${savedState.lastTaskId}`);
+        if (taskCheckResponse.ok) {
+          const taskData = await taskCheckResponse.json();
+          card.taskIds.add(savedState.lastTaskId);
+          card.lastTaskId = savedState.lastTaskId;
           card.term.reset();
           // If the agent was deleted, write the warning to the terminal so it
           // doesn't conflict with the running/ended status set by attach().
           if (agentMissing) {
-            card.term.writeln(`\x1b[33m[agent "${s.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
+            card.term.writeln(`\x1b[33m[agent "${savedState.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
           }
-          card.attach(s.lastTaskId, taskData);
+          card.attach(savedState.lastTaskId, taskData);
         } else {
           card.setStatus(
-            agentMissing ? `agent "${s.agentId}" no longer exists` : 'previous task no longer available',
+            agentMissing ? `agent "${savedState.agentId}" no longer exists` : 'previous task no longer available',
             'err',
           );
         }
       } catch (err) {
-        console.error(`[concilium] failed to restore task #${s.lastTaskId}:`, err);
+        console.error(`[concilium] failed to restore task #${savedState.lastTaskId}:`, err);
       }
     }));
   }
@@ -1257,17 +1256,17 @@ window.addEventListener('beforeunload', () => {
   );
 });
 
-$('#cards').addEventListener('dragover', (e) => {
+$('#cards').addEventListener('dragover', (dragEvent) => {
   if (!draggingCardEl) return;
-  e.preventDefault();
+  dragEvent.preventDefault();
   const main = $('#cards');
-  const target = cardInsertTarget(main, e.clientX, e.clientY);
+  const target = cardInsertTarget(main, dragEvent.clientX, dragEvent.clientY);
   main.insertBefore(draggingCardEl, target);
 });
 
 // --- settings dialog -------------------------------------------------------
 
-const dlg = $('#settings-dialog');
+const settingsDialog = $('#settings-dialog');
 const agentForm = $('#agent-form');
 const githubTokenForm = $('#github-token-form');
 const githubTokenInput = $('#github-token');
@@ -1307,95 +1306,96 @@ function setFormMode(mode, agent) {
 }
 
 async function refreshAgentsTable() {
-  const r = await fetch('/api/agents');
-  const agents = await r.json();
+  const response = await fetch('/api/agents');
+  const agents = await response.json();
   const tbody = $('#agents-table tbody');
   tbody.replaceChildren();
-  for (const a of agents) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${a.id}</td>
-      <td>${a.name || ''}</td>
-      <td><code>${a.command}${a.args ? ' ' + a.args.join(' ') : ''}</code></td>
-      <td>${a.interactive ? 'PTY' : 'piped'}</td>
+  for (const agent of agents) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${agent.id}</td>
+      <td>${agent.name || ''}</td>
+      <td><code>${agent.command}${agent.args ? ' ' + agent.args.join(' ') : ''}</code></td>
+      <td>${agent.interactive ? 'PTY' : 'piped'}</td>
       <td class="actions"></td>`;
-    const actions = tr.querySelector('.actions');
+    const actions = row.querySelector('.actions');
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'row-btn';
     editBtn.textContent = 'edit';
-    editBtn.addEventListener('click', () => setFormMode('edit', a));
+    editBtn.addEventListener('click', () => setFormMode('edit', agent));
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'row-btn danger';
     delBtn.textContent = 'delete';
     delBtn.addEventListener('click', async () => {
-      if (!confirm(`Delete agent "${a.id}"?`)) return;
-      const r = await fetch(`/api/agents/${encodeURIComponent(a.id)}`, { method: 'DELETE' });
-      if (!r.ok) { alert('delete failed'); return; }
+      if (!confirm(`Delete agent "${agent.id}"?`)) return;
+      const deleteResponse = await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' });
+      if (!deleteResponse.ok) { alert('delete failed'); return; }
       await refreshAgentsTable();
       await loadAgents();
     });
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
-    tbody.appendChild(tr);
+    tbody.appendChild(row);
   }
 }
 
 async function refreshDiscoverTable() {
-  const r = await fetch('/api/agents/discover');
-  const items = await r.json();
-  const existing = new Set((await (await fetch('/api/agents')).json()).map((a) => a.id));
+  const discoverResponse = await fetch('/api/agents/discover');
+  const discoveredAgents = await discoverResponse.json();
+  const existingAgentsResponse = await fetch('/api/agents');
+  const existingIds = new Set((await existingAgentsResponse.json()).map((agent) => agent.id));
   const tbody = $('#discover-table tbody');
   tbody.replaceChildren();
-  for (const it of items) {
-    const tr = document.createElement('tr');
-    const pathCell = it.found
-      ? `<span class="found">${it.found}</span>`
+  for (const discovered of discoveredAgents) {
+    const row = document.createElement('tr');
+    const pathCell = discovered.found
+      ? `<span class="found">${discovered.found}</span>`
       : `<span class="muted">not found</span>`;
-    tr.innerHTML = `
-      <td>${it.id}</td>
-      <td><code>${it.command}</code></td>
+    row.innerHTML = `
+      <td>${discovered.id}</td>
+      <td><code>${discovered.command}</code></td>
       <td>${pathCell}</td>
       <td class="actions"></td>`;
-    const actions = tr.querySelector('.actions');
-    if (it.found && !existing.has(it.id)) {
+    const actions = row.querySelector('.actions');
+    if (discovered.found && !existingIds.has(discovered.id)) {
       const addBtn = document.createElement('button');
       addBtn.type = 'button';
       addBtn.className = 'row-btn';
       addBtn.textContent = 'add';
       addBtn.addEventListener('click', async () => {
-        const r = await fetch('/api/agents', {
+        const addResponse = await fetch('/api/agents', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            id: it.id,
-            name: it.name,
-            command: it.found,
-            interactive: it.interactive,
+            id: discovered.id,
+            name: discovered.name,
+            command: discovered.found,
+            interactive: discovered.interactive,
           }),
         });
-        if (!r.ok) { alert('add failed'); return; }
+        if (!addResponse.ok) { alert('add failed'); return; }
         await refreshAgentsTable();
         await refreshDiscoverTable();
         await loadAgents();
       });
       actions.appendChild(addBtn);
-    } else if (existing.has(it.id)) {
+    } else if (existingIds.has(discovered.id)) {
       actions.innerHTML = '<span class="muted">already added</span>';
     }
-    tbody.appendChild(tr);
+    tbody.appendChild(row);
   }
 }
 
 async function loadGitHubToken() {
-  const r = await fetch('/api/system/github-token');
+  const response = await fetch('/api/system/github-token');
   githubTokenInput.value = '';
   githubTokenInput.placeholder = 'ghp_...';
-  if (!r.ok) {
+  if (!response.ok) {
     return;
   }
-  const data = await r.json().catch((err) => {
+  const data = await response.json().catch((err) => {
     console.error('[concilium] failed to parse github-token response:', err);
     return {};
   });
@@ -1442,14 +1442,14 @@ async function checkNewProjectName(name) {
   newProjectCheckAbortCtrl = new AbortController();
   const { signal } = newProjectCheckAbortCtrl;
   try {
-    const r = await fetch('/api/system/new-project/check', {
+    const response = await fetch('/api/system/new-project/check', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name }),
       signal,
     });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
       setNewProjectStatus(data.error || 'Unable to validate project name.', 'err');
       return false;
     }
@@ -1471,9 +1471,9 @@ async function checkNewProjectName(name) {
 async function browseNewProjectTarget() {
   newProjectBrowseBtn.disabled = true;
   try {
-    const r = await fetch('/api/system/pick-directory', { method: 'POST' });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
+    const response = await fetch('/api/system/pick-directory', { method: 'POST' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
       setNewProjectStatus(data.error || 'browse failed', 'err');
       return;
     }
@@ -1486,8 +1486,8 @@ async function browseNewProjectTarget() {
   }
 }
 
-agentForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+agentForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
   const args = agentForm.args.value.trim() ? agentForm.args.value.trim().split(/\s+/) : [];
   const payload = {
     name: agentForm.name.value.trim() || agentForm.id.value.trim(),
@@ -1495,23 +1495,23 @@ agentForm.addEventListener('submit', async (e) => {
     interactive: agentForm.interactive.checked,
     args,
   };
-  let r;
+  let response;
   if (editingId) {
-    r = await fetch(`/api/agents/${encodeURIComponent(editingId)}`, {
+    response = await fetch(`/api/agents/${encodeURIComponent(editingId)}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
   } else {
     payload.id = agentForm.id.value.trim();
-    r = await fetch('/api/agents', {
+    response = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
   }
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
     alert(err.error || 'save failed');
     return;
   }
@@ -1520,20 +1520,20 @@ agentForm.addEventListener('submit', async (e) => {
   await loadAgents();
 });
 
-$('#agent-cancel').addEventListener('click', (e) => { e.preventDefault(); setFormMode('add'); });
+$('#agent-cancel').addEventListener('click', (clickEvent) => { clickEvent.preventDefault(); setFormMode('add'); });
 $('#discover-btn').addEventListener('click', refreshDiscoverTable);
-githubTokenForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+githubTokenForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
   const submitBtn = githubTokenForm.querySelector('button[type="submit"]');
   const submitLabel = submitBtn ? submitBtn.dataset.label || submitBtn.textContent : '';
   if (submitBtn && !submitBtn.dataset.label) submitBtn.dataset.label = submitLabel;
-  const r = await fetch('/api/system/github-token', {
+  const response = await fetch('/api/system/github-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ GITHUB_TOKEN: githubTokenInput.value }),
   });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
     alert(err.error || 'save failed');
     return;
   }
@@ -1547,12 +1547,12 @@ githubTokenClearBtn.addEventListener('click', () => {
   githubTokenInput.value = '';
   githubTokenInput.focus();
 });
-$('#close-settings').addEventListener('click', () => dlg.close());
+$('#close-settings').addEventListener('click', () => settingsDialog.close());
 $('#open-settings').addEventListener('click', async () => {
   setFormMode('add');
   $('#discover-table tbody').replaceChildren();
   await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
-  dlg.showModal();
+  settingsDialog.showModal();
 });
 
 $('#new-card-btn').addEventListener('click', () => addCard());
@@ -1572,8 +1572,8 @@ newProjectDlg.addEventListener('close', () => {
 newProjectNameInput.addEventListener('input', updateNewProjectCreateState);
 newProjectTargetInput.addEventListener('input', updateNewProjectCreateState);
 newProjectBrowseBtn.addEventListener('click', browseNewProjectTarget);
-newProjectForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+newProjectForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
   if (newProjectCreateBtn.disabled) return;
 
   const originalButtonText = newProjectCreateBtn.textContent;
@@ -1590,7 +1590,7 @@ newProjectForm.addEventListener('submit', async (e) => {
 
     newProjectCreateBtn.textContent = 'Creating…';
     setNewProjectStatus('Creating repository and cloning locally…');
-    const r = await fetch('/api/system/new-project', {
+    const response = await fetch('/api/system/new-project', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -1599,11 +1599,11 @@ newProjectForm.addEventListener('submit', async (e) => {
         private: newProjectPrivateInput.checked,
       }),
     });
-    const data = await r.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({}));
 
-    if (!r.ok) {
-      const base = data.error || 'Project creation failed.';
-      const withRepoUrl = data.repoUrl ? `${base} ${data.repoUrl}` : base;
+    if (!response.ok) {
+      const baseError = data.error || 'Project creation failed.';
+      const withRepoUrl = data.repoUrl ? `${baseError} ${data.repoUrl}` : baseError;
       setNewProjectStatus(withRepoUrl, 'err');
       return;
     }
@@ -1629,8 +1629,8 @@ newIssueDlg.addEventListener('close', () => {
   newIssueCreatedHook = null;
 });
 newIssueTitleInput.addEventListener('input', updateNewIssueCreateState);
-newIssueForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+newIssueForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
   if (newIssueCreateBtn.disabled) return;
 
   const originalButtonText = newIssueCreateBtn.textContent;
@@ -1640,7 +1640,7 @@ newIssueForm.addEventListener('submit', async (e) => {
   try {
     const trimmedBody = newIssueBodyInput.value.trim();
     const assignCopilot = newIssueAssignCopilotInput.checked;
-    const r = await fetch('/api/system/new-issue', {
+    const response = await fetch('/api/system/new-issue', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -1650,8 +1650,8 @@ newIssueForm.addEventListener('submit', async (e) => {
         ...(trimmedBody ? { body: trimmedBody } : {}),
       }),
     });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
       setNewIssueStatus(data.error || 'Failed to create issue. Please try again.', 'err');
       return;
     }
@@ -1698,16 +1698,16 @@ function applyTheme(theme) {
   for (const card of termCards) card.applyTermTheme();
 }
 function updateThemeButton() {
-  const t = currentTheme();
-  const btn = $('#theme-toggle');
+  const theme = currentTheme();
+  const themeButton = $('#theme-toggle');
   // THEME_ICON values are static code-defined SVG strings, not user input.
-  btn.innerHTML = THEME_ICON[t];
-  btn.setAttribute('aria-label', `Theme: ${THEME_LABEL[t]} (click to cycle)`);
-  btn.title = `Theme: ${THEME_LABEL[t]} (click to cycle)`;
+  themeButton.innerHTML = THEME_ICON[theme];
+  themeButton.setAttribute('aria-label', `Theme: ${THEME_LABEL[theme]} (click to cycle)`);
+  themeButton.title = `Theme: ${THEME_LABEL[theme]} (click to cycle)`;
 }
 $('#theme-toggle').addEventListener('click', () => {
-  const i = THEME_ORDER.indexOf(currentTheme());
-  applyTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length]);
+  const currentIndex = THEME_ORDER.indexOf(currentTheme());
+  applyTheme(THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length]);
 });
 updateThemeButton();
 
