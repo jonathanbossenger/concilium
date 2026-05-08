@@ -1,306 +1,440 @@
-#!/usr/bin/env bash
-# conciliumctl — Apache-style lifecycle for concilium.
-#
-#   conciliumctl start | stop | restart | status | logs
-#   conciliumctl install | uninstall   (registers a launchd or systemd --user service)
+#!/usr/bin/env node
 
-set -euo pipefail
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn, spawnSync } = require('child_process');
 
-# Resolve script location through symlinks (npm link creates one).
-SCRIPT="$0"
-while [[ -L "$SCRIPT" ]]; do
-  SCRIPT="$(readlink "$SCRIPT")"
-  [[ "$SCRIPT" != /* ]] && SCRIPT="$(cd "$(dirname "$0")" && pwd)/$SCRIPT"
-done
-BIN_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
-PROJECT_ROOT="$(cd "$BIN_DIR/.." && pwd)"
-NODE_BIN="$(command -v node || true)"
+const SCRIPT = fs.realpathSync(process.argv[1]);
+const BIN_DIR = path.dirname(SCRIPT);
+const PROJECT_ROOT = path.resolve(BIN_DIR, '..');
+const NODE_BIN = process.execPath;
 
-STATE_DIR="$HOME/.concilium"
-PID_FILE="$STATE_DIR/run.pid"
-LOG_FILE="$STATE_DIR/server.log"
-CONFIG_FILE="$STATE_DIR/config.yaml"
+const STATE_DIR = path.join(os.homedir(), '.concilium');
+const PID_FILE = path.join(STATE_DIR, 'run.pid');
+const LOG_FILE = path.join(STATE_DIR, 'server.log');
+const CONFIG_FILE = path.join(STATE_DIR, 'config.yaml');
 
-PLATFORM="$(uname -s)"
-SERVICE_LABEL="com.user.concilium"
-PLIST_PATH="$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist"
-SYSTEMD_DIR="$HOME/.config/systemd/user"
-SYSTEMD_UNIT="$SYSTEMD_DIR/concilium.service"
+const PLATFORM = process.platform;
+const SERVICE_LABEL = 'com.user.concilium';
+const PLIST_PATH = path.join(os.homedir(), 'Library', 'LaunchAgents', `${SERVICE_LABEL}.plist`);
+const SYSTEMD_DIR = path.join(os.homedir(), '.config', 'systemd', 'user');
+const SYSTEMD_UNIT = path.join(SYSTEMD_DIR, 'concilium.service');
 
-mkdir -p "$STATE_DIR"
+fs.mkdirSync(STATE_DIR, { recursive: true });
 
-# --- helpers --------------------------------------------------------------
-
-read_port() {
-  if [[ -f "$CONFIG_FILE" ]]; then
-    awk '/^port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo 7878
-  else
-    echo 7878
-  fi
-}
-PORT="$(read_port)"
-PORT="${PORT:-7878}"
-
-is_service_installed() {
-  case "$PLATFORM" in
-    Darwin) [[ -f "$PLIST_PATH" ]] ;;
-    Linux)  [[ -f "$SYSTEMD_UNIT" ]] ;;
-    *) return 1 ;;
-  esac
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-is_standalone_running() {
-  [[ -f "$PID_FILE" ]] || return 1
-  local pid
-  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-  [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || return 1
-  kill -0 "$pid" 2>/dev/null
+function readPort() {
+  if (!fs.existsSync(CONFIG_FILE)) return 7878;
+  try {
+    const yaml = fs.readFileSync(CONFIG_FILE, 'utf8');
+    const match = yaml.match(/^\s*port:\s*["']?(\d+)["']?\s*$/m);
+    if (!match) return 7878;
+    const port = Number.parseInt(match[1], 10);
+    return Number.isFinite(port) && port > 0 ? port : 7878;
+  } catch {
+    return 7878;
+  }
 }
 
-is_responding() {
-  curl -sf -m 1 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1
+const PORT = readPort();
+
+async function fetchHealth() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    const response = await fetch(`http://127.0.0.1:${PORT}/api/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
-# Emit an OSC 8 hyperlink when stdout is a TTY; plain URL otherwise (so logs
-# and pipes stay readable). Clickable in iTerm2, Terminal.app, VS Code, etc.
-print_url() {
-  local url="http://127.0.0.1:$PORT"
-  if [[ -t 1 ]]; then
-    printf '  open:   \e]8;;%s\e\\%s\e]8;;\e\\\n' "$url" "$url"
-  else
-    echo "  open:   $url"
-  fi
+async function isResponding() {
+  try {
+    await fetchHealth();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-# --- standalone mode ------------------------------------------------------
-
-start_standalone() {
-  if is_standalone_running; then
-    echo "already running (pid $(cat "$PID_FILE"))"
-    return 0
-  fi
-  if [[ -z "$NODE_BIN" ]]; then
-    echo "error: node not found in PATH" >&2
-    return 1
-  fi
-  cd "$PROJECT_ROOT"
-  nohup "$NODE_BIN" "$PROJECT_ROOT/server/index.js" >> "$LOG_FILE" 2>&1 &
-  local pid=$!
-  echo "$pid" > "$PID_FILE"
-  disown 2>/dev/null || true
-  # wait briefly for it to bind the port
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if is_responding; then
-      echo "started (pid $pid, port $PORT, mode standalone)"
-      print_url
-      return 0
-    fi
-    sleep 0.2
-  done
-  if is_standalone_running; then
-    echo "started (pid $pid, port $PORT, mode standalone — not yet responding; tail $LOG_FILE)"
-    print_url
-  else
-    rm -f "$PID_FILE"
-    echo "error: failed to start; tail $LOG_FILE" >&2
-    return 1
-  fi
+function printUrl() {
+  const url = `http://127.0.0.1:${PORT}`;
+  if (process.stdout.isTTY) {
+    process.stdout.write(`  open:   \u001b]8;;${url}\u001b\\${url}\u001b]8;;\u001b\\\n`);
+    return;
+  }
+  console.log(`  open:   ${url}`);
 }
 
-stop_standalone() {
-  if ! is_standalone_running; then
-    rm -f "$PID_FILE"
-    echo "not running"
-    return 0
-  fi
-  local pid
-  pid="$(cat "$PID_FILE")"
-  kill "$pid" 2>/dev/null || true
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    kill -0 "$pid" 2>/dev/null || break
-    sleep 0.3
-  done
-  if kill -0 "$pid" 2>/dev/null; then
-    kill -9 "$pid" 2>/dev/null || true
-  fi
-  rm -f "$PID_FILE"
-  echo "stopped (was pid $pid)"
+function readPid() {
+  try {
+    const pid = Number.parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
 }
 
-# --- service mode ---------------------------------------------------------
-
-start_service() {
-  case "$PLATFORM" in
-    Darwin) launchctl load -w "$PLIST_PATH" 2>/dev/null || launchctl start "$SERVICE_LABEL" ;;
-    Linux)  systemctl --user start concilium ;;
-  esac
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if is_responding; then
-      echo "started (mode service, port $PORT)"
-      print_url
-      return 0
-    fi
-    sleep 0.3
-  done
-  echo "service started but not responding yet; tail $LOG_FILE"
-  print_url
+function canSignal(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-stop_service() {
-  case "$PLATFORM" in
-    Darwin) launchctl unload "$PLIST_PATH" 2>/dev/null || true ;;
-    Linux)  systemctl --user stop concilium 2>/dev/null || true ;;
-  esac
-  echo "stopped (service)"
+function isServiceInstalled() {
+  if (PLATFORM === 'darwin') return fs.existsSync(PLIST_PATH);
+  if (PLATFORM === 'linux') return fs.existsSync(SYSTEMD_UNIT);
+  return false;
 }
 
-# --- commands -------------------------------------------------------------
-
-cmd_start() {
-  if is_responding; then echo "already running (port $PORT)"; return 0; fi
-  if is_service_installed; then start_service; else start_standalone; fi
+function isStandaloneRunning() {
+  const pid = readPid();
+  return pid !== null && canSignal(pid);
 }
 
-cmd_stop() {
-  if is_service_installed; then stop_service; else stop_standalone; fi
+function applyTemplate(templatePath, replacements) {
+  let content = fs.readFileSync(templatePath, 'utf8');
+  for (const [key, value] of Object.entries(replacements)) {
+    content = content.split(key).join(value);
+  }
+  return content;
 }
 
-cmd_restart() {
-  cmd_stop || true
-  sleep 0.4
-  cmd_start
+function run(file, args, options = {}) {
+  const result = spawnSync(file, args, {
+    stdio: options.stdio || 'inherit',
+    cwd: options.cwd || PROJECT_ROOT,
+    env: options.env || process.env,
+    windowsHide: true,
+  });
+  if (result.error) {
+    if (options.ignoreError) return false;
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    if (options.ignoreError) return false;
+    process.exit(result.status || 1);
+  }
+  return true;
 }
 
-cmd_status() {
-  if is_responding; then
-    local body mode
-    body="$(curl -s "http://127.0.0.1:$PORT/api/health" 2>/dev/null || echo '{}')"
-    if is_service_installed; then
-      mode="service"
-    elif is_standalone_running; then
-      mode="standalone"
-    else
-      mode="external (not managed by conciliumctl)"
-    fi
-    echo "running"
-    echo "  port:   $PORT"
-    echo "  mode:   $mode"
-    echo "  health: $body"
-    print_url
-  elif is_standalone_running; then
-    echo "stale: pid file present (pid $(cat "$PID_FILE")) but not responding"
-  else
-    [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
-    echo "stopped"
-    if is_service_installed; then
-      echo "  service installed but not running"
-    fi
-  fi
+async function startStandalone() {
+  if (isStandaloneRunning()) {
+    console.log(`already running (pid ${readPid()})`);
+    return;
+  }
+
+  const logFd = fs.openSync(LOG_FILE, 'a');
+  const child = spawn(NODE_BIN, [path.join(PROJECT_ROOT, 'server', 'index.js')], {
+    cwd: PROJECT_ROOT,
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+    env: process.env,
+    windowsHide: true,
+  });
+  fs.closeSync(logFd);
+  child.unref();
+  fs.writeFileSync(PID_FILE, `${child.pid}\n`);
+
+  for (let i = 0; i < 10; i += 1) {
+    if (await isResponding()) {
+      console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone)`);
+      printUrl();
+      return;
+    }
+    await sleep(200);
+  }
+
+  if (isStandaloneRunning()) {
+    console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone — not yet responding; tail ${LOG_FILE})`);
+    printUrl();
+    return;
+  }
+
+  try { fs.unlinkSync(PID_FILE); } catch {}
+  console.error(`error: failed to start; tail ${LOG_FILE}`);
+  process.exit(1);
 }
 
-cmd_logs() {
-  touch "$LOG_FILE"
-  exec tail -n 200 -f "$LOG_FILE"
+async function stopStandalone() {
+  const pid = readPid();
+  if (pid === null || !canSignal(pid)) {
+    try { fs.unlinkSync(PID_FILE); } catch {}
+    console.log('not running');
+    return;
+  }
+
+  try { process.kill(pid); } catch {}
+  for (let i = 0; i < 10; i += 1) {
+    if (!canSignal(pid)) break;
+    await sleep(300);
+  }
+  if (canSignal(pid)) {
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
+  try { fs.unlinkSync(PID_FILE); } catch {}
+  console.log(`stopped (was pid ${pid})`);
 }
 
-cmd_install() {
-  if [[ -z "$NODE_BIN" ]]; then
-    echo "error: node not found in PATH" >&2
-    return 1
-  fi
-  if is_standalone_running; then
-    echo "stopping standalone instance first…"
-    stop_standalone
-  fi
+async function startService() {
+  if (PLATFORM === 'darwin') {
+    if (!run('launchctl', ['load', '-w', PLIST_PATH], { stdio: 'ignore', ignoreError: true })) {
+      run('launchctl', ['start', SERVICE_LABEL]);
+    }
+  } else if (PLATFORM === 'linux') {
+    run('systemctl', ['--user', 'start', 'concilium']);
+  }
 
-  local user_path="$PATH"
-
-  case "$PLATFORM" in
-    Darwin)
-      mkdir -p "$(dirname "$PLIST_PATH")"
-      sed -e "s|@LABEL@|$SERVICE_LABEL|g" \
-          -e "s|@NODE_BIN@|$NODE_BIN|g" \
-          -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
-          -e "s|@LOG_FILE@|$LOG_FILE|g" \
-          -e "s|@USER_PATH@|$user_path|g" \
-          "$PROJECT_ROOT/install/com.user.concilium.plist.tmpl" > "$PLIST_PATH"
-      launchctl unload "$PLIST_PATH" 2>/dev/null || true
-      launchctl load -w "$PLIST_PATH"
-      echo "installed launchd agent"
-      echo "  plist: $PLIST_PATH"
-      echo "  log:   $LOG_FILE"
-      echo "service starts on login. To start now: conciliumctl start"
-      ;;
-    Linux)
-      mkdir -p "$SYSTEMD_DIR"
-      sed -e "s|@NODE_BIN@|$NODE_BIN|g" \
-          -e "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" \
-          -e "s|@LOG_FILE@|$LOG_FILE|g" \
-          -e "s|@USER_PATH@|$user_path|g" \
-          "$PROJECT_ROOT/install/concilium.service.tmpl" > "$SYSTEMD_UNIT"
-      systemctl --user daemon-reload
-      systemctl --user enable --now concilium
-      echo "installed systemd --user unit"
-      echo "  unit: $SYSTEMD_UNIT"
-      echo "  log:  $LOG_FILE"
-      ;;
-    *)
-      echo "unsupported platform: $PLATFORM" >&2
-      return 1
-      ;;
-  esac
+  for (let i = 0; i < 10; i += 1) {
+    if (await isResponding()) {
+      console.log(`started (mode service, port ${PORT})`);
+      printUrl();
+      return;
+    }
+    await sleep(300);
+  }
+  console.log(`service started but not responding yet; tail ${LOG_FILE}`);
+  printUrl();
 }
 
-cmd_uninstall() {
-  case "$PLATFORM" in
-    Darwin)
-      if [[ -f "$PLIST_PATH" ]]; then
-        launchctl unload "$PLIST_PATH" 2>/dev/null || true
-        rm -f "$PLIST_PATH"
-        echo "uninstalled (removed $PLIST_PATH)"
-      else
-        echo "not installed"
-      fi
-      ;;
-    Linux)
-      if [[ -f "$SYSTEMD_UNIT" ]]; then
-        systemctl --user disable --now concilium 2>/dev/null || true
-        rm -f "$SYSTEMD_UNIT"
-        systemctl --user daemon-reload
-        echo "uninstalled (removed $SYSTEMD_UNIT)"
-      else
-        echo "not installed"
-      fi
-      ;;
-  esac
+function stopService() {
+  if (PLATFORM === 'darwin') {
+    run('launchctl', ['unload', PLIST_PATH], { stdio: 'ignore', ignoreError: true });
+  } else if (PLATFORM === 'linux') {
+    run('systemctl', ['--user', 'stop', 'concilium'], { stdio: 'ignore', ignoreError: true });
+  }
+  console.log('stopped (service)');
 }
 
-usage() {
-  cat <<EOF
-conciliumctl — concilium service control
+function tailText(content, lines) {
+  if (!content) return '';
+  const parts = content.split(/\r?\n/);
+  const slice = parts.slice(-lines);
+  const text = slice.join('\n');
+  return text && !text.endsWith('\n') ? `${text}\n` : text;
+}
+
+async function cmdStart() {
+  if (await isResponding()) {
+    console.log(`already running (port ${PORT})`);
+    return;
+  }
+  if (isServiceInstalled()) {
+    await startService();
+  } else {
+    await startStandalone();
+  }
+}
+
+async function cmdStop() {
+  if (isServiceInstalled()) {
+    stopService();
+  } else {
+    await stopStandalone();
+  }
+}
+
+async function cmdRestart() {
+  await cmdStop();
+  await sleep(400);
+  await cmdStart();
+}
+
+async function cmdStatus() {
+  if (await isResponding()) {
+    const body = JSON.stringify(await fetchHealth());
+    let mode = 'external (not managed by conciliumctl)';
+    if (isServiceInstalled()) mode = 'service';
+    else if (isStandaloneRunning()) mode = 'standalone';
+    console.log('running');
+    console.log(`  port:   ${PORT}`);
+    console.log(`  mode:   ${mode}`);
+    console.log(`  health: ${body}`);
+    printUrl();
+    return;
+  }
+
+  if (isStandaloneRunning()) {
+    console.log(`stale: pid file present (pid ${readPid()}) but not responding`);
+    return;
+  }
+
+  try { fs.unlinkSync(PID_FILE); } catch {}
+  console.log('stopped');
+  if (isServiceInstalled()) {
+    console.log('  service installed but not running');
+  }
+}
+
+async function cmdLogs() {
+  fs.closeSync(fs.openSync(LOG_FILE, 'a'));
+  const initial = fs.readFileSync(LOG_FILE, 'utf8');
+  process.stdout.write(tailText(initial, 200));
+
+  let position = Buffer.byteLength(initial);
+  const interval = setInterval(() => {
+    let size;
+    try {
+      size = fs.statSync(LOG_FILE).size;
+    } catch {
+      return;
+    }
+    if (size < position) position = 0;
+    if (size === position) return;
+    const stream = fs.createReadStream(LOG_FILE, { start: position, end: size - 1, encoding: 'utf8' });
+    position = size;
+    stream.pipe(process.stdout, { end: false });
+  }, 500);
+
+  const stop = () => {
+    clearInterval(interval);
+    process.exit(0);
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+  await new Promise(() => {});
+}
+
+async function cmdInstall() {
+  if (isStandaloneRunning()) {
+    console.log('stopping standalone instance first…');
+    await stopStandalone();
+  }
+
+  const userPath = process.env.PATH || '';
+
+  if (PLATFORM === 'darwin') {
+    fs.mkdirSync(path.dirname(PLIST_PATH), { recursive: true });
+    const plist = applyTemplate(path.join(PROJECT_ROOT, 'install', 'com.user.concilium.plist.tmpl'), {
+      '@LABEL@': SERVICE_LABEL,
+      '@NODE_BIN@': NODE_BIN,
+      '@PROJECT_ROOT@': PROJECT_ROOT,
+      '@LOG_FILE@': LOG_FILE,
+      '@USER_PATH@': userPath,
+    });
+    fs.writeFileSync(PLIST_PATH, plist);
+    run('launchctl', ['unload', PLIST_PATH], { stdio: 'ignore', ignoreError: true });
+    run('launchctl', ['load', '-w', PLIST_PATH]);
+    console.log('installed launchd agent');
+    console.log(`  plist: ${PLIST_PATH}`);
+    console.log(`  log:   ${LOG_FILE}`);
+    console.log('service starts on login. To start now: conciliumctl start');
+    return;
+  }
+
+  if (PLATFORM === 'linux') {
+    fs.mkdirSync(SYSTEMD_DIR, { recursive: true });
+    const unit = applyTemplate(path.join(PROJECT_ROOT, 'install', 'concilium.service.tmpl'), {
+      '@NODE_BIN@': NODE_BIN,
+      '@PROJECT_ROOT@': PROJECT_ROOT,
+      '@LOG_FILE@': LOG_FILE,
+      '@USER_PATH@': userPath,
+    });
+    fs.writeFileSync(SYSTEMD_UNIT, unit);
+    run('systemctl', ['--user', 'daemon-reload']);
+    run('systemctl', ['--user', 'enable', '--now', 'concilium']);
+    console.log('installed systemd --user unit');
+    console.log(`  unit: ${SYSTEMD_UNIT}`);
+    console.log(`  log:  ${LOG_FILE}`);
+    return;
+  }
+
+  console.error(`install is not supported on ${os.platform()} yet; use "conciliumctl start" for standalone mode`);
+  process.exit(1);
+}
+
+function cmdUninstall() {
+  if (PLATFORM === 'darwin') {
+    if (!fs.existsSync(PLIST_PATH)) {
+      console.log('not installed');
+      return;
+    }
+    run('launchctl', ['unload', PLIST_PATH], { stdio: 'ignore', ignoreError: true });
+    fs.unlinkSync(PLIST_PATH);
+    console.log(`uninstalled (removed ${PLIST_PATH})`);
+    return;
+  }
+
+  if (PLATFORM === 'linux') {
+    if (!fs.existsSync(SYSTEMD_UNIT)) {
+      console.log('not installed');
+      return;
+    }
+    run('systemctl', ['--user', 'disable', '--now', 'concilium'], { stdio: 'ignore', ignoreError: true });
+    fs.unlinkSync(SYSTEMD_UNIT);
+    run('systemctl', ['--user', 'daemon-reload']);
+    console.log(`uninstalled (removed ${SYSTEMD_UNIT})`);
+    return;
+  }
+
+  console.log('not installed');
+}
+
+function usage() {
+  console.log(`conciliumctl — concilium service control
 
 Usage:
   conciliumctl start        start (service if installed, standalone otherwise)
   conciliumctl stop         stop
   conciliumctl restart      restart
   conciliumctl status       show running status and port
-  conciliumctl logs         tail $LOG_FILE
+  conciliumctl logs         tail ${LOG_FILE}
   conciliumctl install      install as a user service (launchd / systemd --user)
   conciliumctl uninstall    remove the user service
 
-Project: $PROJECT_ROOT
-State:   $STATE_DIR
-EOF
+Project: ${PROJECT_ROOT}
+State:   ${STATE_DIR}`);
 }
 
-case "${1:-}" in
-  start)     cmd_start ;;
-  stop)      cmd_stop ;;
-  restart)   cmd_restart ;;
-  status)    cmd_status ;;
-  logs)      cmd_logs ;;
-  install)   cmd_install ;;
-  uninstall) cmd_uninstall ;;
-  -h|--help|help|"") usage ;;
-  *) echo "unknown command: $1" >&2; usage; exit 2 ;;
-esac
+async function main() {
+  const command = process.argv[2] || '';
+  switch (command) {
+    case 'start':
+      await cmdStart();
+      break;
+    case 'stop':
+      await cmdStop();
+      break;
+    case 'restart':
+      await cmdRestart();
+      break;
+    case 'status':
+      await cmdStatus();
+      break;
+    case 'logs':
+      await cmdLogs();
+      break;
+    case 'install':
+      await cmdInstall();
+      break;
+    case 'uninstall':
+      cmdUninstall();
+      break;
+    case '-h':
+    case '--help':
+    case 'help':
+    case '':
+      usage();
+      break;
+    default:
+      console.error(`unknown command: ${command}`);
+      usage();
+      process.exit(2);
+  }
+}
+
+main().catch((err) => {
+  console.error(err && err.message ? err.message : String(err));
+  process.exit(1);
+});

@@ -1,9 +1,32 @@
 const express = require('express');
+const { spawnSync } = require('child_process');
 const { getConfig } = require('../config');
 const manager = require('../manager');
 const store = require('../store');
 
 const router = express.Router();
+
+function commandExists(command) {
+  if (!command) return false;
+  const checker = process.platform === 'win32' ? 'where' : 'which';
+  const result = spawnSync(checker, [command], { stdio: 'ignore', windowsHide: true });
+  return result.status === 0;
+}
+
+function getTerminalAgent() {
+  if (process.platform === 'win32') {
+    const command = [
+      'pwsh.exe',
+      'powershell.exe',
+      process.env.ComSpec,
+    ].find(commandExists) || 'powershell.exe';
+    const args = /(?:^|\\)(?:pwsh|powershell)(?:\.exe)?$/i.test(command) ? ['-NoLogo'] : [];
+    return { id: '_terminal', name: 'Terminal', command, args, interactive: true };
+  }
+
+  const command = process.env.SHELL || '/bin/sh';
+  return { id: '_terminal', name: 'Terminal', command, args: [], interactive: true };
+}
 
 router.get('/', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);
@@ -28,8 +51,7 @@ router.post('/', (req, res) => {
 
 router.post('/terminal', (req, res) => {
   const { cwd } = req.body || {};
-  const shell = process.env.SHELL || '/bin/sh';
-  const shellAgent = { id: '_terminal', name: 'Terminal', command: shell, args: [], interactive: true };
+  const shellAgent = getTerminalAgent();
   try {
     const task_id = manager.launch(shellAgent, '', cwd);
     res.json({ task_id });
