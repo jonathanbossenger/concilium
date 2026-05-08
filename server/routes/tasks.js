@@ -15,13 +15,16 @@ function commandExists(command) {
 
 function getTerminalAgent() {
   if (process.platform === 'win32') {
-    const command = [
-      'pwsh.exe',
-      'powershell.exe',
-      process.env.ComSpec,
-    ].find(commandExists) || 'powershell.exe';
-    const args = /(?:^|\\)(?:pwsh|powershell)(?:\.exe)?$/i.test(command) ? ['-NoLogo'] : [];
-    return { id: '_terminal', name: 'Terminal', command, args, interactive: true };
+    const powerShell = ['pwsh.exe', 'powershell.exe'].find(commandExists);
+    if (powerShell) {
+      return { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
+    }
+
+    if (commandExists(process.env.ComSpec)) {
+      return { id: '_terminal', name: 'Terminal', command: process.env.ComSpec, args: [], interactive: true };
+    }
+
+    throw new Error('no interactive shell found (tried pwsh.exe, powershell.exe, and ComSpec)');
   }
 
   const command = process.env.SHELL || '/bin/sh';
