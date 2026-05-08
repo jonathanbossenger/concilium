@@ -20,8 +20,9 @@ function getTerminalAgent() {
       return { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
     }
 
-    if (commandExists(process.env.ComSpec)) {
-      return { id: '_terminal', name: 'Terminal', command: process.env.ComSpec, args: [], interactive: true };
+    const comSpec = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
+    if (comSpec && commandExists(comSpec)) {
+      return { id: '_terminal', name: 'Terminal', command: comSpec, args: [], interactive: true };
     }
 
     throw new Error('no interactive shell found (tried pwsh.exe, powershell.exe, and ComSpec)');

@@ -86,7 +86,8 @@ Your council of agents - Concilium!
 - Node.js 18+ (tested on 24)
 - macOS, Linux, or modern Windows with PowerShell
 - A C toolchain only if `node-pty`'s prebuilt binaries aren't available for
-  your platform; on macOS arm64/x64 and Windows x64/arm64 the prebuilds are used
+  your platform; the current `node-pty` package ships prebuilds for macOS
+  arm64/x64 and Windows x64/arm64
 
 External CLIs the server invokes (must be on `$PATH`):
 
@@ -117,8 +118,8 @@ The `postinstall` step restores the executable bit on
 `node-pty`'s `spawn-helper` (npm strips it during install — without this,
 PTY spawns fail with `posix_spawnp failed.`).
 
-To get `conciliumctl` on your `$PATH` (including PowerShell via npm's generated
-command shims):
+To get `conciliumctl` available in your terminal (`npm link` generates the
+cross-platform command shims, including PowerShell):
 
 ```bash
 npm link
