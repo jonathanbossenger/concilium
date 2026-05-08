@@ -20,12 +20,12 @@ function getTerminalAgent() {
       return { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
     }
 
-    const comSpec = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
-    if (comSpec && commandExists(comSpec)) {
-      return { id: '_terminal', name: 'Terminal', command: comSpec, args: [], interactive: true };
+    const comSpecPath = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
+    if (comSpecPath && commandExists(comSpecPath)) {
+      return { id: '_terminal', name: 'Terminal', command: comSpecPath, args: [], interactive: true };
     }
 
-    throw new Error('no interactive shell found (tried pwsh.exe, powershell.exe, and ComSpec)');
+    throw new Error('No interactive shell found on Windows. Please install PowerShell or ensure cmd.exe is available via the ComSpec environment variable.');
   }
 
   const command = process.env.SHELL || '/bin/sh';
