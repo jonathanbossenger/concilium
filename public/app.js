@@ -8,7 +8,7 @@ let activeCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
-const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+const IS_MAC = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
 const GITHUB_BTN_LABEL_BROWSE = 'Browse GitHub issues and pull requests';
@@ -126,6 +126,10 @@ function focusCardFromNode(node) {
   if (!(node instanceof Element)) return;
   const cardEl = node.closest('.card');
   if (cardEl) activeCardEl = cardEl;
+}
+
+function clearActiveCardIfMatch(cardEl) {
+  if (activeCardEl === cardEl) activeCardEl = null;
 }
 
 function activeSessionCard() {
@@ -646,6 +650,7 @@ class Card {
     const ids = [...this.taskIds];
     this.taskIds.clear();
     cards.delete(this);
+    clearActiveCardIfMatch(this.el);
     this.el.remove();
     saveLayout();
     // Fire-and-forget deletes; server will kill any still-running tasks first.
@@ -1056,6 +1061,7 @@ class GitHubCard {
 
   close() {
     if (this._loadAbortCtrl) this._loadAbortCtrl.abort();
+    clearActiveCardIfMatch(this.el);
     if (this.el.parentNode) this.el.remove();
   }
 }
@@ -1218,6 +1224,7 @@ class TerminalCard {
     }
     const taskIdToDelete = this.taskId;
     this.taskId = null;
+    clearActiveCardIfMatch(this.el);
     if (this.el.parentNode) this.el.remove();
     if (taskIdToDelete) {
       await fetch(`/api/tasks/${taskIdToDelete}`, { method: 'DELETE' }).catch(() => {});
@@ -1832,6 +1839,9 @@ shortcutsButton.title = `Keyboard shortcuts (${primaryLabel}+Alt+/)`;
 shortcutsButton.setAttribute('aria-label', `Keyboard shortcuts (${primaryLabel}+Alt+/)`);
 shortcutsButton.addEventListener('click', openShortcutsDialog);
 $('#close-shortcuts').addEventListener('click', () => shortcutsDialog.close());
+for (const shortcutCodeEl of shortcutsDialog.querySelectorAll('code')) {
+  shortcutCodeEl.textContent = shortcutCodeEl.textContent.replace('Cmd/Ctrl', primaryLabel);
+}
 
 // Re-theme terminals when the OS flips light/dark while we're on Auto.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
