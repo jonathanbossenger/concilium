@@ -29,8 +29,8 @@ function createTerminalConfigError(message) {
 // and ComSpec are inherited at process start, so shell configuration changes
 // should be picked up by restarting Concilium.
 function getWindowsTerminalAgent() {
-  if (windowsTerminalAgentCache) return windowsTerminalAgentCache;
-  if (windowsTerminalAgentError) throw windowsTerminalAgentError;
+  if (windowsTerminalAgentCache !== null) return windowsTerminalAgentCache;
+  if (windowsTerminalAgentError !== null) throw windowsTerminalAgentError;
 
   const powerShell = ['pwsh.exe', 'powershell.exe'].find(commandExists);
   if (powerShell) {
@@ -44,7 +44,7 @@ function getWindowsTerminalAgent() {
     return windowsTerminalAgentCache;
   }
 
-  windowsTerminalAgentError = createTerminalConfigError('No interactive shell found on Windows. Please install PowerShell or ensure a valid shell is available via the ComSpec environment variable.');
+  windowsTerminalAgentError = createTerminalConfigError('No interactive shell found on Windows. Please install PowerShell or ensure the ComSpec environment variable points to a valid shell executable.');
   throw windowsTerminalAgentError;
 }
 
