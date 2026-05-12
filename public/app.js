@@ -155,10 +155,21 @@ function isTypingContext(node) {
 }
 
 function isPrimaryModifierPressed(keyboardEvent) {
+  // AltGr presents as Ctrl+Alt on many international layouts; ignore it so
+  // typing special characters does not accidentally trigger global shortcuts.
   if (keyboardEvent.getModifierState && keyboardEvent.getModifierState('AltGraph')) return false;
   const hasPrimary = keyboardEvent.metaKey || keyboardEvent.ctrlKey;
   if (!hasPrimary) return false;
+  // Reject "both held" combinations and require a single primary modifier.
   if (keyboardEvent.metaKey && keyboardEvent.ctrlKey) return false;
+  return true;
+}
+
+function triggerHeaderAction(keyboardEvent, selector) {
+  const button = $(selector);
+  if (!button) return false;
+  keyboardEvent.preventDefault();
+  button.click();
   return true;
 }
 
@@ -206,18 +217,15 @@ function handleKeyboardShortcut(keyboardEvent) {
     return;
   }
   if (keyCode === 'KeyP') {
-    keyboardEvent.preventDefault();
-    $('#new-project-btn').click();
+    triggerHeaderAction(keyboardEvent, '#new-project-btn');
     return;
   }
   if (keyCode === 'KeyS') {
-    keyboardEvent.preventDefault();
-    $('#open-settings').click();
+    triggerHeaderAction(keyboardEvent, '#open-settings');
     return;
   }
   if (keyCode === 'KeyT') {
-    keyboardEvent.preventDefault();
-    $('#theme-toggle').click();
+    triggerHeaderAction(keyboardEvent, '#theme-toggle');
     return;
   }
   if (keyCode === 'Slash') {
