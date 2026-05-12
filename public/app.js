@@ -1216,7 +1216,6 @@ async function restoreLayout() {
     await Promise.all(entries.map(async ({ card, savedState }) => {
       if (savedState.lastTaskId) {
         card.taskIds.add(savedState.lastTaskId);
-        card.lastTaskId = savedState.lastTaskId;
       }
       const agentMissing = savedState.agentId && !agentsById.has(savedState.agentId);
       if (!savedState.agentId) {
