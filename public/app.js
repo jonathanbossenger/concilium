@@ -1212,34 +1212,23 @@ async function restoreLayout() {
       const card = addCard({ agentId: savedState.agentId, cwd: savedState.cwd });
       return { card, savedState };
     });
-    // Fan out task-existence checks in parallel to avoid serial RTTs.
+    // Fan out session resumes in parallel to avoid serial RTTs.
     await Promise.all(entries.map(async ({ card, savedState }) => {
+      if (savedState.lastTaskId) {
+        card.taskIds.add(savedState.lastTaskId);
+        card.lastTaskId = savedState.lastTaskId;
+      }
       const agentMissing = savedState.agentId && !agentsById.has(savedState.agentId);
-      if (!savedState.lastTaskId) {
-        if (agentMissing) card.setStatus(`agent "${savedState.agentId}" no longer exists`, 'err');
+      if (!savedState.agentId) return;
+      if (agentMissing) {
+        card.setStatus(`agent "${savedState.agentId}" no longer exists`, 'err');
         return;
       }
       try {
-        const taskCheckResponse = await fetch(`/api/tasks/${savedState.lastTaskId}`);
-        if (taskCheckResponse.ok) {
-          const taskData = await taskCheckResponse.json();
-          card.taskIds.add(savedState.lastTaskId);
-          card.lastTaskId = savedState.lastTaskId;
-          card.term.reset();
-          // If the agent was deleted, write the warning to the terminal so it
-          // doesn't conflict with the running/ended status set by attach().
-          if (agentMissing) {
-            card.term.writeln(`\x1b[33m[agent "${savedState.agentId}" no longer exists — select a new agent to run again]\x1b[0m`);
-          }
-          card.attach(savedState.lastTaskId, taskData);
-        } else {
-          card.setStatus(
-            agentMissing ? `agent "${savedState.agentId}" no longer exists` : 'previous task no longer available',
-            'err',
-          );
-        }
+        await card.run();
       } catch (err) {
-        console.error(`[concilium] failed to restore task #${savedState.lastTaskId}:`, err);
+        console.error('[concilium] failed to resume saved card session:', err);
+        card.setStatus('failed to resume saved session', 'err');
       }
     }));
   }
