@@ -4,9 +4,11 @@ let agentsById = new Map();
 const cards = new Set();
 const termCards = new Set();
 let draggingCardEl = null;
+let activeCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
+const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
 const GITHUB_BTN_LABEL_BROWSE = 'Browse GitHub issues and pull requests';
@@ -118,6 +120,110 @@ function cardInsertTarget(main, clientX, clientY) {
   const offsetY = clientY - (closestRect.top + closestRect.height / 2);
   const insertBefore = Math.abs(offsetX) > Math.abs(offsetY) ? offsetX < 0 : offsetY < 0;
   return insertBefore ? closestCard : closestCard.nextElementSibling;
+}
+
+function focusCardFromNode(node) {
+  if (!(node instanceof Element)) return;
+  const cardEl = node.closest('.card');
+  if (cardEl) activeCardEl = cardEl;
+}
+
+function activeSessionCard() {
+  if (activeCardEl && activeCardEl.isConnected) {
+    for (const card of cards) {
+      if (card.el === activeCardEl) return card;
+    }
+  }
+  return cards.values().next().value || null;
+}
+
+function activeAnyCard() {
+  if (activeCardEl && activeCardEl.isConnected) {
+    for (const card of cards) {
+      if (card.el === activeCardEl) return card;
+    }
+    for (const card of termCards) {
+      if (card.el === activeCardEl) return card;
+    }
+  }
+  return cards.values().next().value || termCards.values().next().value || null;
+}
+
+function isTypingContext(node) {
+  if (!(node instanceof Element)) return false;
+  return !!node.closest('input, textarea, select, [contenteditable], [role="textbox"], .xterm-helper-textarea');
+}
+
+function isPrimaryModifierPressed(keyboardEvent) {
+  if (keyboardEvent.getModifierState && keyboardEvent.getModifierState('AltGraph')) return false;
+  const hasPrimary = keyboardEvent.metaKey || keyboardEvent.ctrlKey;
+  if (!hasPrimary) return false;
+  if (keyboardEvent.metaKey && keyboardEvent.ctrlKey) return false;
+  return true;
+}
+
+function openShortcutsDialog() {
+  const shortcutsDialog = $('#shortcuts-dialog');
+  if (!shortcutsDialog) return;
+  if (shortcutsDialog.open) return;
+  try {
+    shortcutsDialog.showModal();
+  } catch (_) {}
+}
+
+function handleKeyboardShortcut(keyboardEvent) {
+  if (keyboardEvent.defaultPrevented || keyboardEvent.repeat || keyboardEvent.isComposing) return;
+  if (!isPrimaryModifierPressed(keyboardEvent)) return;
+  if (!keyboardEvent.altKey || keyboardEvent.shiftKey) return;
+  if (isTypingContext(keyboardEvent.target) || isTypingContext(document.activeElement)) return;
+
+  const keyCode = keyboardEvent.code;
+  if (keyCode === 'KeyN') {
+    keyboardEvent.preventDefault();
+    addCard();
+    return;
+  }
+  if (keyCode === 'KeyR') {
+    const card = activeSessionCard();
+    if (!card) return;
+    keyboardEvent.preventDefault();
+    if (card.currentTaskId) card.kill();
+    else card.run();
+    return;
+  }
+  if (keyCode === 'Backquote') {
+    const card = activeSessionCard();
+    if (!card) return;
+    keyboardEvent.preventDefault();
+    addTerminalCard(card.cwd.value.trim(), card.el);
+    return;
+  }
+  if (keyCode === 'KeyE') {
+    const card = activeAnyCard();
+    if (!card) return;
+    keyboardEvent.preventDefault();
+    card.toggleExpand();
+    return;
+  }
+  if (keyCode === 'KeyP') {
+    keyboardEvent.preventDefault();
+    $('#new-project-btn').click();
+    return;
+  }
+  if (keyCode === 'KeyS') {
+    keyboardEvent.preventDefault();
+    $('#open-settings').click();
+    return;
+  }
+  if (keyCode === 'KeyT') {
+    keyboardEvent.preventDefault();
+    $('#theme-toggle').click();
+    return;
+  }
+  if (keyCode === 'Slash') {
+    keyboardEvent.preventDefault();
+    openShortcutsDialog();
+  }
 }
 
 function enableCardDragging(cardEl, handleEl) {
@@ -1287,6 +1393,7 @@ const newIssueBodyInput = $('#new-issue-body');
 const newIssueAssignCopilotInput = $('#new-issue-assign-copilot');
 const newIssueCreateBtn = $('#new-issue-create');
 const newIssueStatusEl = $('#new-issue-status');
+const shortcutsDialog = $('#shortcuts-dialog');
 let editingId = null;
 let newProjectCheckAbortCtrl = null;
 let newIssueRepoUrl = '';
@@ -1711,6 +1818,13 @@ $('#theme-toggle').addEventListener('click', () => {
 });
 updateThemeButton();
 
+const shortcutsButton = $('#open-shortcuts');
+const primaryLabel = IS_MAC ? 'Cmd' : 'Ctrl';
+shortcutsButton.title = `Keyboard shortcuts (${primaryLabel}+Alt+/)`;
+shortcutsButton.setAttribute('aria-label', `Keyboard shortcuts (${primaryLabel}+Alt+/)`);
+shortcutsButton.addEventListener('click', openShortcutsDialog);
+$('#close-shortcuts').addEventListener('click', () => shortcutsDialog.close());
+
 // Re-theme terminals when the OS flips light/dark while we're on Auto.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
   if (currentTheme() === 'auto') {
@@ -1730,6 +1844,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') reconnectAllStreams();
 });
 window.addEventListener('online', reconnectAllStreams);
+document.addEventListener('focusin', (focusEvent) => focusCardFromNode(focusEvent.target), true);
+document.addEventListener('pointerdown', (pointerEvent) => focusCardFromNode(pointerEvent.target), true);
+window.addEventListener('keydown', handleKeyboardShortcut, true);
 
 // --- bootstrap -------------------------------------------------------------
 

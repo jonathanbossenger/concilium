@@ -23,6 +23,7 @@ Your council of agents - Concilium!
   - [Standalone](#standalone)
   - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
   - [Web UI](#web-ui)
+  - [Keyboard shortcuts](#keyboard-shortcuts)
   - [GitHub personal access token](#github-personal-access-token)
 - [Configuration](#configuration)
 - [API](#api)
@@ -157,8 +158,23 @@ Header controls:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
   - Set or clear an optional `githubToken` used for authenticated GitHub API calls
+- **⌨** — opens the keyboard shortcuts help dialog.
 
 ![Concilium settings dialog screenshot](screenshots/settings.png)
+
+### Keyboard shortcuts
+
+Global shortcuts use **Cmd/Ctrl + Alt + key**. They are ignored while typing in
+inputs, textareas, selects, contenteditable fields, or terminal input.
+
+- **Cmd/Ctrl + Alt + N** — New session
+- **Cmd/Ctrl + Alt + R** — Start/Kill active session
+- **Cmd/Ctrl + Alt + `** — Open terminal for active session
+- **Cmd/Ctrl + Alt + E** — Expand/collapse active card
+- **Cmd/Ctrl + Alt + P** — New project
+- **Cmd/Ctrl + Alt + S** — Open settings
+- **Cmd/Ctrl + Alt + T** — Cycle theme
+- **Cmd/Ctrl + Alt + /** — Show keyboard shortcuts
 
 ### GitHub personal access token
 
