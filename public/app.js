@@ -1219,7 +1219,10 @@ async function restoreLayout() {
         card.lastTaskId = savedState.lastTaskId;
       }
       const agentMissing = savedState.agentId && !agentsById.has(savedState.agentId);
-      if (!savedState.agentId) return;
+      if (!savedState.agentId) {
+        card.setStatus('select an agent', 'warn');
+        return;
+      }
       if (agentMissing) {
         card.setStatus(`agent "${savedState.agentId}" no longer exists`, 'err');
         return;
