@@ -225,6 +225,22 @@ function tailText(content, lines) {
   return text && !text.endsWith('\n') ? `${text}\n` : text;
 }
 
+function createMissingLogWatcher(stop) {
+  let missingCount = 0;
+  return {
+    markMissing() {
+      missingCount += 1;
+      if (missingCount < 5) return false;
+      console.error(`log file missing; stopping follow: ${LOG_FILE}`);
+      stop(0);
+      return true;
+    },
+    reset() {
+      missingCount = 0;
+    },
+  };
+}
+
 async function cmdStart() {
   if (await isResponding()) {
     console.log(`already running (port ${PORT})`);
@@ -283,13 +299,28 @@ async function cmdLogs() {
   process.stdout.write(tailText(initial, 200));
 
   let position = Buffer.byteLength(initial);
-  const interval = setInterval(() => {
+  let interval = null;
+  const onMissingLog = createMissingLogWatcher(stop);
+  function stop(code = 0) {
+    if (interval) clearInterval(interval);
+    process.exit(code);
+  }
+
+  interval = setInterval(() => {
     let size;
     try {
       size = fs.statSync(LOG_FILE).size;
-    } catch {
+    } catch (err) {
+      if (err && err.code === 'ENOENT') {
+        position = 0;
+        onMissingLog.markMissing();
+        return;
+      }
+      console.error(`failed to read log file: ${err.message}`);
+      stop(1);
       return;
     }
+    onMissingLog.reset();
     if (size < position) position = 0;
     if (size === position) return;
     const stream = fs.createReadStream(LOG_FILE, { start: position, end: size - 1, encoding: 'utf8' });
@@ -297,10 +328,6 @@ async function cmdLogs() {
     stream.pipe(process.stdout, { end: false });
   }, 500);
 
-  const stop = () => {
-    clearInterval(interval);
-    process.exit(0);
-  };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
   await new Promise(() => {});

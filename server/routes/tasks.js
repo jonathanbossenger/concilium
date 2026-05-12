@@ -5,27 +5,49 @@ const manager = require('../manager');
 const store = require('../store');
 
 const router = express.Router();
+const commandExistsCache = new Map();
+let windowsTerminalAgentCache = null;
+let windowsTerminalAgentError = null;
 
 function commandExists(command) {
   if (!command) return false;
+  if (commandExistsCache.has(command)) return commandExistsCache.get(command);
   const checker = process.platform === 'win32' ? 'where' : 'which';
   const result = spawnSync(checker, [command], { stdio: 'ignore', windowsHide: true });
-  return result.status === 0;
+  const exists = result.status === 0;
+  commandExistsCache.set(command, exists);
+  return exists;
+}
+
+function createTerminalConfigError(message) {
+  const err = new Error(message);
+  err.statusCode = 422;
+  return err;
+}
+
+function getWindowsTerminalAgent() {
+  if (windowsTerminalAgentCache) return windowsTerminalAgentCache;
+  if (windowsTerminalAgentError) throw windowsTerminalAgentError;
+
+  const powerShell = ['pwsh.exe', 'powershell.exe'].find(commandExists);
+  if (powerShell) {
+    windowsTerminalAgentCache = { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
+    return windowsTerminalAgentCache;
+  }
+
+  const comSpecPath = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
+  if (comSpecPath && commandExists(comSpecPath)) {
+    windowsTerminalAgentCache = { id: '_terminal', name: 'Terminal', command: comSpecPath, args: [], interactive: true };
+    return windowsTerminalAgentCache;
+  }
+
+  windowsTerminalAgentError = createTerminalConfigError('No interactive shell found on Windows. Please install PowerShell or ensure cmd.exe is available via the ComSpec environment variable.');
+  throw windowsTerminalAgentError;
 }
 
 function getTerminalAgent() {
   if (process.platform === 'win32') {
-    const powerShell = ['pwsh.exe', 'powershell.exe'].find(commandExists);
-    if (powerShell) {
-      return { id: '_terminal', name: 'Terminal', command: powerShell, args: ['-NoLogo'], interactive: true };
-    }
-
-    const comSpecPath = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
-    if (comSpecPath && commandExists(comSpecPath)) {
-      return { id: '_terminal', name: 'Terminal', command: comSpecPath, args: [], interactive: true };
-    }
-
-    throw new Error('No interactive shell found on Windows. Please install PowerShell or ensure cmd.exe is available via the ComSpec environment variable.');
+    return getWindowsTerminalAgent();
   }
 
   const command = process.env.SHELL || '/bin/sh';
@@ -54,13 +76,13 @@ router.post('/', (req, res) => {
 });
 
 router.post('/terminal', (req, res) => {
-  const { cwd } = req.body || {};
-  const shellAgent = getTerminalAgent();
   try {
+    const { cwd } = req.body || {};
+    const shellAgent = getTerminalAgent();
     const task_id = manager.launch(shellAgent, '', cwd);
     res.json({ task_id });
   } catch (err) {
-    res.status(500).json({ error: err.message, code: err.code });
+    res.status(err.statusCode || 500).json({ error: err.message, code: err.code });
   }
 });
 
