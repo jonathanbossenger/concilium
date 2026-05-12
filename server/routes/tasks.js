@@ -25,6 +25,9 @@ function createTerminalConfigError(message) {
   return err;
 }
 
+// Cache Windows shell discovery for the lifetime of the server process. PATH
+// and ComSpec are inherited at process start, so shell configuration changes
+// should be picked up by restarting Concilium.
 function getWindowsTerminalAgent() {
   if (windowsTerminalAgentCache) return windowsTerminalAgentCache;
   if (windowsTerminalAgentError) throw windowsTerminalAgentError;
@@ -35,13 +38,13 @@ function getWindowsTerminalAgent() {
     return windowsTerminalAgentCache;
   }
 
-  const comSpecPath = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
-  if (comSpecPath && commandExists(comSpecPath)) {
-    windowsTerminalAgentCache = { id: '_terminal', name: 'Terminal', command: comSpecPath, args: [], interactive: true };
+  const comSpec = typeof process.env.ComSpec === 'string' ? process.env.ComSpec.trim() : '';
+  if (comSpec && commandExists(comSpec)) {
+    windowsTerminalAgentCache = { id: '_terminal', name: 'Terminal', command: comSpec, args: [], interactive: true };
     return windowsTerminalAgentCache;
   }
 
-  windowsTerminalAgentError = createTerminalConfigError('No interactive shell found on Windows. Please install PowerShell or ensure cmd.exe is available via the ComSpec environment variable.');
+  windowsTerminalAgentError = createTerminalConfigError('No interactive shell found on Windows. Please install PowerShell or ensure a valid shell is available via the ComSpec environment variable.');
   throw windowsTerminalAgentError;
 }
 
