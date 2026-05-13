@@ -86,8 +86,9 @@ Your council of agents — Concilium!
   Settings.
 - **Session restore** — the card layout (agent, working directory, last task)
   is persisted server-side in SQLite, so reloading the page or restarting
-  the server brings your sessions back. Closing a card permanently removes
-  it (and the tasks it launched) from the saved layout.
+  the server brings your sessions back and automatically starts each saved
+  session with its configured agent and working directory. Closing a card
+  permanently removes it (and the tasks it launched) from the saved layout.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
 - **Real terminal in the browser** — each card embeds an
