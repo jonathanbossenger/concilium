@@ -1226,11 +1226,26 @@ async function restoreLayout() {
         card.setStatus(`agent "${savedState.agentId}" no longer exists`, 'err');
         return;
       }
-      try {
-        await card.run();
-      } catch (err) {
-        console.error('[concilium] failed to resume saved card session:', err);
-        card.setStatus('failed to resume saved session', 'err');
+      const tryResume = async () => {
+        try {
+          await card.run();
+          return card.statusEl.classList.contains('err')
+            ? new Error(card.statusEl.textContent || 'unknown error')
+            : null;
+        } catch (err) {
+          return err;
+        }
+      };
+
+      let resumeErr = await tryResume();
+      if (resumeErr) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        resumeErr = await tryResume();
+      }
+      if (resumeErr) {
+        console.error('[concilium] failed to resume saved card session:', resumeErr);
+        const detail = resumeErr.message ? `: ${resumeErr.message}` : '';
+        card.setStatus(`failed to resume saved session${detail}`, 'err');
       }
     }));
   }
