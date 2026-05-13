@@ -48,8 +48,9 @@ Your council of agents - Concilium!
   persisted to the saved layout. Header controls (select, buttons, GitHub
   link) stay clickable; dragging is disabled while a card is expanded.
 - **Pop-out terminal cards** — the **>_** button on any session card opens
-  an independent shell terminal in a new card (using `$SHELL`, inserted
-  right after the triggering card). Useful for running side commands —
+  an independent shell terminal in a new card (using `$SHELL` on macOS/Linux
+  and PowerShell on Windows, inserted right after the triggering card).
+  Useful for running side commands —
   `git status`, `ls`, `tail` — in the same working directory as your agent
   without leaving the dashboard. Terminal cards expand and close like any
   other card; closing one ends the shell and drops its history.
@@ -83,9 +84,11 @@ Your council of agents - Concilium!
 ## Requirements
 
 - Node.js 18+ (tested on 24)
-- macOS or Linux
+- macOS, Linux, or modern Windows with PowerShell
 - A C toolchain only if `node-pty`'s prebuilt binaries aren't available for
-  your platform; on macOS arm64/x64 and Linux x64/arm64 the prebuilds are used
+  your platform; the current `node-pty` package ships prebuilds for macOS
+  arm64/x64 and Windows x64/arm64, while some Linux installs may still build
+  from source
 
 External CLIs the server invokes (must be on `$PATH`):
 
@@ -104,11 +107,20 @@ cd concilium
 npm install
 ```
 
+PowerShell works too:
+
+```powershell
+git clone https://github.com/jonathanbossenger/concilium.git
+Set-Location concilium
+npm install
+```
+
 The `postinstall` step restores the executable bit on
 `node-pty`'s `spawn-helper` (npm strips it during install — without this,
 PTY spawns fail with `posix_spawnp failed.`).
 
-To get `conciliumctl` on your `$PATH`:
+To get `conciliumctl` available in your terminal (`npm link` generates the
+cross-platform command shims, including PowerShell):
 
 ```bash
 npm link
@@ -119,24 +131,27 @@ npm link
 ### Standalone
 
 ```bash
-./bin/conciliumctl start         # daemonizes node, writes PID file
-./bin/conciliumctl status
-./bin/conciliumctl restart
-./bin/conciliumctl stop
-./bin/conciliumctl logs          # tail -f the server log
+conciliumctl start         # daemonizes node, writes PID file
+conciliumctl status
+conciliumctl restart
+conciliumctl stop
+conciliumctl logs          # follow the server log
 ```
 
 ### As a user service (auto-start on login)
 
 ```bash
-./bin/conciliumctl install       # writes launchd plist or systemd --user unit
-./bin/conciliumctl status        # mode: service
-./bin/conciliumctl uninstall
+conciliumctl install       # writes launchd plist or systemd --user unit
+conciliumctl status        # mode: service
+conciliumctl uninstall
 ```
 
 The install step bakes the absolute path to `node`, the project root, and
 your current `$PATH` into the service definition, so the dashboard can find
 agents installed via Homebrew, nvm, etc.
+
+On Windows, `conciliumctl start|stop|restart|status|logs` work in standalone
+mode from PowerShell, but `install`/`uninstall` are not supported yet.
 
 ### Web UI
 
@@ -248,7 +263,7 @@ All endpoints are JSON; loopback only.
 | `GET`    | `/api/agents/discover` | scan `$PATH` for known CLIs |
 | `GET`    | `/api/tasks` | task history (newest first) |
 | `POST`   | `/api/tasks` | start task `{agent_id, prompt?, cwd?}` → `{task_id}` |
-| `POST`   | `/api/tasks/terminal` | start a `$SHELL` PTY task `{cwd?}` → `{task_id}` (powers pop-out terminal cards) |
+| `POST`   | `/api/tasks/terminal` | start the default interactive shell PTY task (`$SHELL` on macOS/Linux, PowerShell on Windows) `{cwd?}` → `{task_id}` |
 | `GET`    | `/api/tasks/:id` | task + all events |
 | `DELETE` | `/api/tasks/:id` | remove task (kills first if live), drops events + log file |
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
