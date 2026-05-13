@@ -1236,7 +1236,7 @@ async function restoreLayout() {
         try {
           const result = await card.run();
           if (result && result.ok) return null;
-          const message = result && result.error ? result.error : 'unknown error';
+          const message = result && result.error ? result.error : 'resume failed with no error details';
           return new Error(message);
         } catch (err) {
           return err;
