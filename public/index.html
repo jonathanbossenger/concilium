@@ -81,6 +81,7 @@
       <header class="card-header">
         <span class="card-term-label">Terminal</span>
         <span class="card-status"></span>
+        <button type="button" class="card-git-ref" aria-label="Git commands reference" title="Git commands reference"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm0 2.122a2.25 2.25 0 1 0-1.5 0v.878A2.25 2.25 0 0 0 5.75 8.5h1.5v2.128a2.251 2.251 0 1 0 1.5 0V8.5h1.5a2.25 2.25 0 0 0 2.25-2.25v-.878a2.25 2.25 0 1 0-1.5 0v.878a.75.75 0 0 1-.75.75h-4.5A.75.75 0 0 1 5 6.25v-.878zm3.75 7.378a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm3-8.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z"/></svg></button>
         <button type="button" class="card-expand" title="Expand">&#x2922;</button>
         <button type="button" class="card-close" title="Close terminal">&times;</button>
       </header>
@@ -214,6 +215,17 @@
         <li><code>Cmd/Ctrl + Alt + T</code><span>Cycle theme</span></li>
         <li><code>Cmd/Ctrl + Alt + /</code><span>Show shortcuts</span></li>
       </ul>
+    </div>
+  </dialog>
+
+  <dialog id="git-cheatsheet-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Git commands reference</h2>
+        <button type="button" class="close-btn" id="close-git-cheatsheet" title="Close">&times;</button>
+      </div>
+      <p class="footnote">Click a command to paste it into the terminal.</p>
+      <div id="git-cheatsheet-content" class="git-cheatsheet-grid"></div>
     </div>
   </dialog>
 

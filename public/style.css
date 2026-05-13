@@ -800,3 +800,86 @@ dialog section h3 {
   border-radius: 4px;
   padding: 0.2em 0.35em;
 }
+
+/* --- git cheat sheet button (terminal card header) --- */
+.card-git-ref {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1.3em;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.card-git-ref:hover { background: var(--bg-input); color: var(--text); border-color: var(--border-soft); }
+
+/* --- git cheat sheet dialog --- */
+dialog#git-cheatsheet-dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0;
+  width: min(760px, 92vw);
+  max-height: 86vh;
+  box-shadow: var(--shadow-modal);
+}
+dialog#git-cheatsheet-dialog::backdrop { background: var(--backdrop); }
+.git-cheatsheet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1em;
+  overflow-y: auto;
+}
+@media (max-width: 560px) {
+  .git-cheatsheet-grid { grid-template-columns: 1fr; }
+}
+.git-cmd-section h3 {
+  margin: 0 0 0.5em 0;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.git-cmd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3em;
+}
+.git-cmd-btn {
+  width: 100%;
+  background: var(--bg-output);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.4em 0.55em;
+  font-size: 0.85em;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+.git-cmd-btn:hover { background: var(--bg-hover); }
+.git-cmd-btn code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.git-cmd-btn span {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
