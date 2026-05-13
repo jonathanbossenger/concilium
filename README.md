@@ -1,15 +1,27 @@
 # Concilium
 
-A straightforward, locally-installed multi-agent orchestration dashboard. Configure CLI
-AI agents you have on your machine (Claude Code, Codex, Aider, Gemini, Copilot,
-Ollama, …), fire off tasks, watch live output, and keep a history — from a
-loopback web UI. Easy to start, stop, and restart, like Apache.
+Concilium is a locally-installed dashboard for running multiple CLI AI coding
+agents side-by-side — Claude Code, Codex, Aider, Gemini, Copilot, Ollama, or
+anything else on your `$PATH`. Each agent runs in its own card with a real
+[xterm.js](https://xtermjs.org/) terminal, so both one-shot tools and
+interactive REPL-style agents work end-to-end: type, watch ANSI output render
+natively, resize, kill, restart.
+
+Pop open a plain shell terminal alongside any session for side-channel
+commands. When a card's working directory is a GitHub repo, browse its open
+PRs and issues from the same UI — merge, close, mark drafts ready, assign
+issues to Copilot, or scaffold a brand-new repo end-to-end (create on GitHub,
+clone locally, open a session pre-pointed at it). Sessions, working
+directories, and task history persist in SQLite across restarts.
+
+Loopback only (`127.0.0.1`), no auth, no framework, no build step. Started,
+stopped, and installed as a user service Apache-style via `conciliumctl`.
 
 [Read the announcement post](https://jonathanbossenger.com/2026/05/introducing-concilium/)
 
 [Watch the video](https://youtu.be/17Ykm0AtCYI?si=ugDNgYitcqzi5wOb)
 
-Your council of agents - Concilium!
+Your council of agents — Concilium!
 
 ![Concilium dashboard screenshot](screenshots/dashboard.png)
 
