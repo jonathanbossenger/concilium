@@ -1304,6 +1304,24 @@ function buildGitCheatsheet() {
   if (gitCheatsheetBuilt) return;
   gitCheatsheetBuilt = true;
   const content = $('#git-cheatsheet-content');
+
+  // Render cmd string with <placeholder> tokens highlighted as styled <em> elements.
+  function renderCmdCode(cmd) {
+    const el = document.createElement('code');
+    const parts = cmd.split(/(<[^>]+>)/);
+    for (const part of parts) {
+      if (/^<[^>]+>$/.test(part)) {
+        const em = document.createElement('em');
+        em.className = 'git-cmd-placeholder';
+        em.textContent = part;
+        el.appendChild(em);
+      } else if (part) {
+        el.appendChild(document.createTextNode(part));
+      }
+    }
+    return el;
+  }
+
   for (const { category, commands } of GIT_COMMANDS) {
     const section = document.createElement('div');
     section.className = 'git-cmd-section';
@@ -1318,8 +1336,11 @@ function buildGitCheatsheet() {
       btn.type = 'button';
       btn.className = 'git-cmd-btn';
       btn.dataset.cmd = cmd;
-      const codeEl = document.createElement('code');
-      codeEl.textContent = cmd;
+      const hasPlaceholder = /<[^>]+>/.test(cmd);
+      if (hasPlaceholder) {
+        btn.title = 'Contains placeholder — replace <…> with actual value before running';
+      }
+      const codeEl = renderCmdCode(cmd);
       const descEl = document.createElement('span');
       descEl.textContent = desc;
       btn.appendChild(codeEl);
@@ -1957,7 +1978,7 @@ $('#close-git-cheatsheet').addEventListener('click', () => gitCheatsheetDialog.c
 gitCheatsheetDialog.addEventListener('close', () => { gitCheatsheetTargetCard = null; });
 $('#git-cheatsheet-content').addEventListener('click', (clickEvent) => {
   const btn = clickEvent.target.closest('.git-cmd-btn');
-  if (!btn || !gitCheatsheetTargetCard) return;
+  if (!btn || !gitCheatsheetTargetCard || !gitCheatsheetTargetCard.el.isConnected) return;
   gitCheatsheetTargetCard.sendRaw(btn.dataset.cmd);
   gitCheatsheetDialog.close();
 });

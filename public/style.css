@@ -883,3 +883,7 @@ dialog#git-cheatsheet-dialog::backdrop { background: var(--backdrop); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.git-cmd-placeholder {
+  font-style: italic;
+  color: var(--accent);
+}
