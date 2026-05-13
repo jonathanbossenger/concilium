@@ -40,14 +40,18 @@ Your council of agents - Concilium!
   running, click to kill), **>_** opens a pop-out terminal card (see
   below), and **⤢** expands a single card to fill the main area with a
   smooth View Transitions animation between states. When the working
-  directory resolves to a GitHub repo (via `git remote`), an octocat link
-  to the repo appears in the card header. A **⧉** clone button next to it
-  duplicates the card with the same agent and working directory, then
-  starts the new session immediately. Paths under `$HOME` display as
-  `~/...` shorthand in the cwd field; the server expands them at launch.
-  Drag a card by its header to reorder it on the grid; the new order is
-  persisted to the saved layout. Header controls (select, buttons, GitHub
-  link) stay clickable; dragging is disabled while a card is expanded.
+  directory resolves to a GitHub repo (via `git remote`), a GitHub
+  (octocat) button appears in the card header: clicking it opens a GitHub
+  browser card (see below) showing the repo's open pull requests and
+  issues. When the cwd is set but the directory is not yet linked to a
+  GitHub repo, the same button opens github.com/new to create one. A
+  **⧉** clone button duplicates the card with the same agent and working
+  directory, then starts the new session immediately. Paths under `$HOME`
+  display as `~/...` shorthand in the cwd field; the server expands them
+  at launch. Drag a card by its header to reorder it on the grid; the new
+  order is persisted to the saved layout. Header controls (select, buttons,
+  GitHub button) stay clickable; dragging is disabled while a card is
+  expanded.
 - **Pop-out terminal cards** — the **>_** button on any session card opens
   an independent shell terminal in a new card (using `$SHELL` on macOS/Linux
   and PowerShell on Windows, inserted right after the triggering card).
@@ -55,6 +59,19 @@ Your council of agents - Concilium!
   `git status`, `ls`, `tail` — in the same working directory as your agent
   without leaving the dashboard. Terminal cards expand and close like any
   other card; closing one ends the shell and drops its history.
+- **GitHub browser cards** — clicking the GitHub (octocat) button on any
+  session card (when the working directory is a GitHub repository) opens a
+  GitHub browser card next to it. The card lists the repo's open pull
+  requests and issues (up to 20 each, sorted by last update). Pull request
+  rows show the branch name with a copy button, a merge-method selector
+  (merge / squash / rebase), a merge button, and a close button; draft PRs
+  instead show a "Mark ready for review" button. Issue rows show an "Assign
+  to Copilot" button (replaced by a checkmark once assigned) and a close
+  button. A **+** button in the GitHub card header opens a **New Issue**
+  dialog where you can create an issue with an optional description and
+  optionally assign it to the Copilot coding agent. All write actions
+  (merge, close, assign, create issue) require a GitHub token configured in
+  Settings.
 - **Session restore** — the card layout (agent, working directory, last task)
   is persisted server-side in SQLite, so reloading the page or restarting
   the server brings your sessions back. Closing a card permanently removes
@@ -289,8 +306,9 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
 | `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
-| `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?}` (currently `action: "merge"`) |
+| `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |
 | `POST`   | `/api/system/github-issues/action` | trigger an issue action with `{url, issueNumber, action}` (`action: "assign_copilot"` assigns `copilot-swe-agent[bot]`, `action: "close"` closes the issue) |
+| `POST`   | `/api/system/new-issue` | create a GitHub issue `{url, title, body?, assignCopilot?}` → `{number, title, url, state, assignees, copilotAssignmentRequested, copilotAssigned}` |
 | `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
 | `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `POST`   | `/api/system/new-project/check` | check whether `{name}` can be used to create a repo with the saved GitHub token |
