@@ -825,7 +825,7 @@ dialog#git-cheatsheet-dialog {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 0;
-  width: min(760px, 92vw);
+  width: min(980px, 96vw);
   max-height: 86vh;
   box-shadow: var(--shadow-modal);
 }
