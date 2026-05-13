@@ -648,7 +648,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   font-size: 0.85em;
 }
 #new-card-btn:hover { background: var(--new-hover); }
-#open-settings, #theme-toggle, #new-project-btn {
+#open-settings, #theme-toggle, #new-project-btn, #open-shortcuts {
   background: transparent;
   color: var(--text-dim);
   font-size: 1em;
@@ -661,12 +661,13 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   align-items: center;
   justify-content: center;
 }
-#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover { background: var(--bg-hover); color: var(--text); }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover, #open-shortcuts:hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
 dialog#settings-dialog,
 dialog#new-project-dialog,
-dialog#new-issue-dialog {
+dialog#new-issue-dialog,
+dialog#shortcuts-dialog {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -678,7 +679,8 @@ dialog#new-issue-dialog {
 }
 dialog#settings-dialog::backdrop,
 dialog#new-project-dialog::backdrop,
-dialog#new-issue-dialog::backdrop { background: var(--backdrop); }
+dialog#new-issue-dialog::backdrop,
+dialog#shortcuts-dialog::backdrop { background: var(--backdrop); }
 .dialog-body { display: flex; flex-direction: column; gap: 1.2em; padding: 1em 1.2em 1.4em; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 1.05em; color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -775,3 +777,26 @@ dialog section h3 {
 #new-issue-status.ok { color: var(--status-ok); }
 #new-issue-status.warn { color: var(--status-warn); }
 #new-issue-status.err { color: var(--status-err); }
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45em;
+}
+.shortcut-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8em;
+  padding: 0.45em 0.55em;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-output);
+  font-size: 0.9em;
+}
+.shortcut-list li code {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.2em 0.35em;
+}
