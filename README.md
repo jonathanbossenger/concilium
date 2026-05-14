@@ -30,6 +30,8 @@ Your council of agents — Concilium!
 
 - [Features](#features)
 - [Requirements](#requirements)
+- [Quickstart](#quickstart)
+- [Concilium user documentation](#concilium-user-documentation)
 - [Install](#install)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -125,14 +127,38 @@ External CLIs the server invokes (must be on `$PATH`):
   On macOS the picker uses built-in `osascript`; on Windows it uses built-in
   `powershell`.
 
-## Install
+## Quickstart
+
+If you just want to get going quickly:
+
+1. Clone and install dependencies:
+   ```bash
+   git clone git@github.com:jonathanbossenger/concilium.git
+   cd concilium
+   npm install
+   ```
+2. Make `conciliumctl` available in your shell:
+   ```bash
+   npm link
+   ```
+3. Start Concilium:
+   ```bash
+   conciliumctl start
+   ```
+4. Open <http://127.0.0.1:7878>, create a session, and run your first prompt.
+
+For full install, setup, and usage details, see the documentation section below.
+
+## Concilium user documentation
+
+### Install
 
 For installation and first-run setup, see:
 
 - [docs/install-and-first-time-setup.md](docs/install-and-first-time-setup.md)
 - [docs/README.md](docs/README.md) for the full user docs index
 
-## Usage
+### Usage
 
 For day-to-day use, see:
 
