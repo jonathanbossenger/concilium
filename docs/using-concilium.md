@@ -51,7 +51,10 @@ Header controls:
   clones it into your selected target location, and opens a new session card
   with that directory pre-filled.
 - **🖥 / ☀ / ☾** — cycles theme (auto/light/dark); defaults to your OS preference.
-- **Gear (⚙)** — opens settings to manage agents and your optional GitHub token.
+- **Gear (⚙)** — opens a settings dialog where you can:
+  - Add, edit, or delete agents
+  - Scan `$PATH` for known CLI agents and add the ones found
+  - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 - **⌨** — opens the keyboard shortcuts help dialog.
 
 ![Concilium settings dialog screenshot](../screenshots/settings.png)

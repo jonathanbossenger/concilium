@@ -38,5 +38,5 @@ npm link
    conciliumctl status
    ```
 3. Open <http://127.0.0.1:7878>.
-4. In **Settings (⚙)**, configure at least one agent.
-5. If you want GitHub features (New Project, higher API limits), add a GitHub token.
+4. In **Settings (⚙)**, [configure at least one agent](configuring-agents.md).
+5. If you want GitHub features (New Project, higher API limits), [add a GitHub token](github-token.md).

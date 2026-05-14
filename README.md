@@ -30,7 +30,6 @@ Your council of agents — Concilium!
 
 - [Features](#features)
 - [Requirements](#requirements)
-- [User documentation](#user-documentation)
 - [Install](#install)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -126,19 +125,12 @@ External CLIs the server invokes (must be on `$PATH`):
   On macOS the picker uses built-in `osascript`; on Windows it uses built-in
   `powershell`.
 
-## User documentation
-
-Concilium's end-user guides now live in `/docs`:
-
-- [Install and first-time setup](docs/install-and-first-time-setup.md)
-- [Using Concilium](docs/using-concilium.md)
-- [Configuring your agents](docs/configuring-agents.md)
-- [Creating and storing your GitHub token](docs/github-token.md)
-- [Uninstalling Concilium](docs/uninstalling.md)
-
 ## Install
 
-See the full install guide: [docs/install-and-first-time-setup.md](docs/install-and-first-time-setup.md)
+For installation and first-run setup, see:
+
+- [docs/install-and-first-time-setup.md](docs/install-and-first-time-setup.md)
+- [docs/README.md](docs/README.md) for the full user docs index
 
 ## Usage
 
@@ -147,6 +139,7 @@ For day-to-day use, see:
 - [docs/using-concilium.md](docs/using-concilium.md)
 - [docs/configuring-agents.md](docs/configuring-agents.md)
 - [docs/github-token.md](docs/github-token.md)
+- [docs/uninstalling.md](docs/uninstalling.md)
 
 ## Configuration
 

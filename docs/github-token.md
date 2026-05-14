@@ -28,7 +28,9 @@ Create a classic token at <https://github.com/settings/tokens/new>.
    current Concilium features, including reading issues/PRs and creating repos.
    If you only need public repos, **`public_repo`** is enough. Optionally add
    **`delete_repo`** if you want Concilium to delete an orphaned repo when a
-   post-create `git clone` fails.
+   post-create `git clone` fails (rare — usually only flaky networks); without
+   it, the orphaned repo stays on GitHub and the UI shows its URL so you can
+   delete it manually.
 4. Click **Generate token**, copy it, then paste it into **Settings (⚙) → GitHub token**.
    Submit an empty value to clear it.
 

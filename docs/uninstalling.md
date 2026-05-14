@@ -16,11 +16,12 @@
    ```bash
    rm -rf ~/.concilium
    ```
+   This permanently deletes your saved task history, logs, and agent configuration.
 5. Optionally remove your local clone:
    ```bash
    cd ..
    rm -rf concilium
    ```
 
-On Windows, `conciliumctl uninstall` reports `not installed` because
-install/uninstall service mode is currently macOS/Linux-only.
+For platform support details (including Windows service-mode limitations), see
+[Using Concilium](using-concilium.md).
