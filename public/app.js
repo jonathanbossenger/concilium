@@ -2169,7 +2169,6 @@ window.addEventListener('keydown', handleKeyboardShortcut, true);
 (async () => {
   await loadHealth();
   await loadAgents();
-  await refreshAgentsTable();
   await restoreLayout();
   await maybeStartOnboarding();
   setInterval(loadHealth, 10000);

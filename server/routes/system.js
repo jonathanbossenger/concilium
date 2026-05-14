@@ -666,7 +666,7 @@ router.get('/onboarding', (req, res) => {
 router.post('/onboarding/complete', (req, res) => {
   const cfg = getConfig();
   if (!hasConfiguredAgent(cfg)) {
-    return res.status(400).json({ error: 'configure at least one agent before finishing onboarding' });
+    return res.status(400).json({ error: 'Configure at least one agent before finishing onboarding.' });
   }
   cfg.onboardingCompleted = true;
   saveConfig(cfg);
