@@ -149,6 +149,77 @@
     </div>
   </dialog>
 
+  <dialog id="onboarding-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Welcome to Concilium</h2>
+      </div>
+
+      <section class="onboarding-step" data-step="1">
+        <h3>Step 1 · Add your first agent</h3>
+        <p class="footnote">Need help? <a href="https://github.com/jonathanbossenger/concilium/blob/main/docs/configuring-agents.md" target="_blank" rel="noopener noreferrer">Read the agent setup guide</a>.</p>
+        <form id="onboarding-first-agent-form" class="agent-form">
+          <div class="grid">
+            <label>ID<input type="text" name="id" required pattern="[A-Za-z0-9_-]+"></label>
+            <label>Name<input type="text" name="name"></label>
+            <label>Command<input type="text" name="command" required placeholder="/usr/local/bin/foo or just foo"></label>
+            <label>Args (space-separated)<input type="text" name="args"></label>
+            <label class="check"><input type="checkbox" name="interactive"> Interactive (PTY)</label>
+          </div>
+          <div class="row">
+            <button type="submit">Add first agent</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="onboarding-step" data-step="2" hidden>
+        <h3>Step 2 · Add additional agents (optional)</h3>
+        <table id="onboarding-agents-table">
+          <thead><tr><th>ID</th><th>Name</th><th>Command</th><th>Mode</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <form id="onboarding-add-agent-form" class="agent-form">
+          <div class="grid">
+            <label>ID<input type="text" name="id" required pattern="[A-Za-z0-9_-]+"></label>
+            <label>Name<input type="text" name="name"></label>
+            <label>Command<input type="text" name="command" required placeholder="/usr/local/bin/foo or just foo"></label>
+            <label>Args (space-separated)<input type="text" name="args"></label>
+            <label class="check"><input type="checkbox" name="interactive"> Interactive (PTY)</label>
+          </div>
+          <div class="row">
+            <button type="submit">Add another agent</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="onboarding-step" data-step="3" hidden>
+        <h3>Step 3 · Add a GitHub token (optional)</h3>
+        <p class="footnote">Need help? <a href="https://github.com/jonathanbossenger/concilium/blob/main/docs/github-token.md" target="_blank" rel="noopener noreferrer">Read the GitHub token guide</a>.</p>
+        <form id="onboarding-github-token-form" class="agent-form">
+          <div class="grid">
+            <label>GitHub API token (GITHUB_TOKEN) <input type="password" id="onboarding-github-token" name="github_token" autocomplete="new-password" placeholder="ghp_..." spellcheck="false"></label>
+          </div>
+          <div class="row">
+            <button type="button" id="onboarding-github-token-clear">Clear</button>
+            <button type="submit">Save token</button>
+          </div>
+          <p class="footnote">Leave this empty and click Save token to skip.</p>
+        </form>
+      </section>
+
+      <section class="onboarding-step" data-step="4" hidden>
+        <h3>Step 4 · Save and close</h3>
+        <p class="footnote">Your onboarding settings are stored in <code>~/.concilium/config.yaml</code>.</p>
+      </section>
+
+      <div class="row onboarding-actions">
+        <button type="button" id="onboarding-back">Back</button>
+        <button type="button" id="onboarding-next">Next</button>
+        <button type="button" id="onboarding-finish" hidden>Save and close</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="new-project-dialog">
     <div class="dialog-body">
       <div class="dialog-head">

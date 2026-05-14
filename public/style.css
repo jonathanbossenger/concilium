@@ -665,6 +665,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
 
 /* --- settings dialog --- */
 dialog#settings-dialog,
+dialog#onboarding-dialog,
 dialog#new-project-dialog,
 dialog#new-issue-dialog,
 dialog#shortcuts-dialog {
@@ -678,6 +679,7 @@ dialog#shortcuts-dialog {
   box-shadow: var(--shadow-modal);
 }
 dialog#settings-dialog::backdrop,
+dialog#onboarding-dialog::backdrop,
 dialog#new-project-dialog::backdrop,
 dialog#new-issue-dialog::backdrop,
 dialog#shortcuts-dialog::backdrop { background: var(--backdrop); }
@@ -698,12 +700,12 @@ dialog section h3 {
   gap: 0.5em;
 }
 
-#agents-table, #discover-table {
+#agents-table, #discover-table, #onboarding-agents-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9em;
 }
-#agents-table th, #discover-table th {
+#agents-table th, #discover-table th, #onboarding-agents-table th {
   text-align: left;
   font-weight: 600;
   color: var(--text-muted);
@@ -711,12 +713,12 @@ dialog section h3 {
   border-bottom: 1px solid var(--border);
   font-size: 0.85em;
 }
-#agents-table td, #discover-table td {
+#agents-table td, #discover-table td, #onboarding-agents-table td {
   padding: 0.4em 0.5em;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
 }
-#agents-table .actions, #discover-table .actions { text-align: right; white-space: nowrap; }
+#agents-table .actions, #discover-table .actions, #onboarding-agents-table .actions { text-align: right; white-space: nowrap; }
 .row-btn {
   background: transparent;
   border: 1px solid var(--border-row);
@@ -771,6 +773,11 @@ dialog section h3 {
 }
 .footnote { color: var(--text-muted); font-size: 0.8em; }
 .footnote code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+.onboarding-actions {
+  justify-content: space-between;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 0.75em;
+}
 #new-project-status.ok { color: var(--status-ok); }
 #new-project-status.warn { color: var(--status-warn); }
 #new-project-status.err { color: var(--status-err); }
