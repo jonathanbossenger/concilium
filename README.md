@@ -30,14 +30,17 @@ Your council of agents — Concilium!
 
 - [Features](#features)
 - [Requirements](#requirements)
-- [Install](#install)
+- [Install and first-time setup](#install-and-first-time-setup)
 - [Usage](#usage)
+  - [Quick start](#quick-start)
   - [Standalone](#standalone)
   - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
   - [Web UI](#web-ui)
+  - [Configuring your agent(s)](#configuring-your-agents)
   - [Keyboard shortcuts](#keyboard-shortcuts)
-  - [GitHub personal access token](#github-personal-access-token)
+  - [Creating and storing your GitHub token](#creating-and-storing-your-github-token)
 - [Configuration](#configuration)
+- [Uninstalling](#uninstalling)
 - [API](#api)
 - [Project layout](#project-layout)
 - [License](#license)
@@ -130,7 +133,7 @@ External CLIs the server invokes (must be on `$PATH`):
   On macOS the picker uses built-in `osascript`; on Windows it uses built-in
   `powershell`.
 
-## Install
+## Install and first-time setup
 
 ```bash
 git clone git@github.com:jonathanbossenger/concilium.git
@@ -157,7 +160,27 @@ cross-platform command shims, including PowerShell):
 npm link
 ```
 
+First-time setup checklist:
+
+1. Start Concilium:
+   ```bash
+   conciliumctl start
+   ```
+2. Confirm it's running:
+   ```bash
+   conciliumctl status
+   ```
+3. Open the dashboard at <http://127.0.0.1:7878>.
+4. In **Settings (⚙)**, add your preferred agent(s) and (optionally) a GitHub token.
+
 ## Usage
+
+### Quick start
+
+1. Click **+ New session**.
+2. Pick an agent, then set a working directory (📂 or paste a path).
+3. Enter a prompt and click **▶** to start.
+4. Use **>_** to open a side terminal in the same directory when needed.
 
 ### Standalone
 
@@ -207,6 +230,16 @@ Header controls:
 
 ![Concilium settings dialog screenshot](screenshots/settings.png)
 
+### Configuring your agent(s)
+
+Open **Settings (⚙)** to manage agents:
+
+- **Add manually** — provide `id`, `name`, `command`, optional `args`, and whether the agent is interactive.
+- **Discover from PATH** — scan for known CLIs and add detected ones with one click.
+- **Edit/Delete** — update existing agent definitions or remove ones you no longer use.
+
+Use `interactive: false` for one-shot commands and `interactive: true` for REPL-style tools that need follow-up input.
+
 ### Keyboard shortcuts
 
 Global shortcuts use **Cmd/Ctrl + Alt + key**. They are ignored while typing in
@@ -221,7 +254,7 @@ inputs, textareas, selects, contenteditable fields, or terminal input.
 - **Cmd/Ctrl + Alt + T** — Cycle theme
 - **Cmd/Ctrl + Alt + /** — Show keyboard shortcuts
 
-### GitHub personal access token
+### Creating and storing your GitHub token
 
 Concilium can make authenticated GitHub API calls if you provide a personal
 access token. A token is **required for the New Project flow** (⧉ in the
@@ -256,6 +289,9 @@ Create a classic token at <https://github.com/settings/tokens/new>:
 4. Click **Generate token**, copy the value, then paste it into the gear
    (⚙) → GitHub token field in the Concilium UI. Submit an empty value to
    clear it.
+
+Concilium stores the token in `~/.concilium/config.yaml` as `githubToken`.
+Keep `~/.concilium/` readable only by your user account.
 
 ## Configuration
 
@@ -294,6 +330,30 @@ agents:
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
 `config.yaml` may contain a secret token — keep it readable only by your user.
+
+## Uninstalling
+
+1. Stop Concilium:
+   ```bash
+   conciliumctl stop
+   ```
+2. If you installed it as a user service (macOS/Linux), remove the service:
+   ```bash
+   conciliumctl uninstall
+   ```
+3. If you used `npm link`, remove the global shim:
+   ```bash
+   npm unlink -g concilium
+   ```
+4. Optionally remove all Concilium state (config, DB, logs):
+   ```bash
+   rm -rf ~/.concilium
+   ```
+5. Optionally remove your local clone:
+   ```bash
+   cd ..
+   rm -rf concilium
+   ```
 
 ## API
 
