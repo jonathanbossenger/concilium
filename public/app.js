@@ -1561,6 +1561,8 @@ const newIssueStatusEl = $('#new-issue-status');
 const shortcutsDialog = $('#shortcuts-dialog');
 let editingId = null;
 let onboardingStep = 1;
+let onboardingHasAgent = false;
+let onboardingHasToken = false;
 let newProjectCheckAbortCtrl = null;
 let newIssueRepoUrl = '';
 let newIssueCreatedHook = null;
@@ -1650,7 +1652,9 @@ function setOnboardingStep(step) {
   }
   onboardingBackBtn.disabled = onboardingStep === 1;
   onboardingNextBtn.hidden = onboardingStep === 4;
+  onboardingNextBtn.disabled = (onboardingStep === 1 || onboardingStep === 2) && !onboardingHasAgent;
   onboardingFinishBtn.hidden = onboardingStep !== 4;
+  onboardingFinishBtn.disabled = !onboardingHasAgent;
 }
 
 async function refreshOnboardingAgentsTable() {
@@ -1677,9 +1681,20 @@ async function refreshOnboardingAgentsTable() {
     actions.appendChild(delBtn);
     onboardingAgentsTableBody.appendChild(row);
   }
-  const hasAgent = agents.length > 0;
-  onboardingNextBtn.disabled = onboardingStep === 1 && !hasAgent;
-  onboardingFinishBtn.disabled = !hasAgent;
+  onboardingHasAgent = agents.length > 0;
+  setOnboardingStep(onboardingStep);
+}
+
+async function refreshOnboardingTokenState() {
+  const response = await fetch('/api/system/github-token');
+  if (!response.ok) {
+    onboardingHasToken = false;
+    onboardingGitHubTokenInput.placeholder = 'ghp_...';
+    return;
+  }
+  const data = await response.json().catch(() => ({}));
+  onboardingHasToken = data.hasToken === true;
+  onboardingGitHubTokenInput.placeholder = onboardingHasToken ? 'token already saved' : 'ghp_...';
 }
 
 async function maybeStartOnboarding() {
@@ -1690,10 +1705,12 @@ async function maybeStartOnboarding() {
   onboardingFirstAgentForm.reset();
   onboardingAddAgentForm.reset();
   onboardingGitHubTokenInput.value = '';
-  onboardingGitHubTokenInput.placeholder = data.hasToken ? 'token already saved' : 'ghp_...';
+  onboardingHasToken = data.hasToken === true;
+  onboardingGitHubTokenInput.placeholder = onboardingHasToken ? 'token already saved' : 'ghp_...';
   setOnboardingStep(1);
   await refreshOnboardingAgentsTable();
   onboardingDialog.showModal();
+  onboardingFirstAgentForm.elements.id.focus();
 }
 
 async function refreshDiscoverTable() {
@@ -1906,11 +1923,10 @@ $('#open-settings').addEventListener('click', async () => {
 onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
 onboardingBackBtn.addEventListener('click', () => setOnboardingStep(onboardingStep - 1));
 onboardingNextBtn.addEventListener('click', async () => {
-  if (onboardingStep === 1) {
-    const agents = await listAgents();
-    if (!agents.length) return;
+  if (onboardingStep === 1 || onboardingStep === 2) {
+    await refreshOnboardingAgentsTable();
+    if (!onboardingHasAgent) return;
   }
-  if (onboardingStep === 2) await refreshOnboardingAgentsTable();
   setOnboardingStep(onboardingStep + 1);
 });
 onboardingFinishBtn.addEventListener('click', async () => {
@@ -1945,18 +1961,29 @@ onboardingAddAgentForm.addEventListener('submit', async (submitEvent) => {
 });
 onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
+  const token = onboardingGitHubTokenInput.value.trim();
+  if (!token) {
+    if (onboardingHasToken) {
+      onboardingGitHubTokenInput.value = '';
+      onboardingGitHubTokenInput.placeholder = 'token already saved';
+      return;
+    }
+    await refreshOnboardingTokenState();
+    onboardingGitHubTokenInput.value = '';
+    return;
+  }
   const response = await fetch('/api/system/github-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ GITHUB_TOKEN: onboardingGitHubTokenInput.value }),
+    body: JSON.stringify({ GITHUB_TOKEN: token }),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     alert(err.error || 'save failed');
     return;
   }
+  await refreshOnboardingTokenState();
   onboardingGitHubTokenInput.value = '';
-  onboardingGitHubTokenInput.placeholder = 'token already saved';
 });
 onboardingGitHubTokenClearBtn.addEventListener('click', () => {
   onboardingGitHubTokenInput.value = '';
