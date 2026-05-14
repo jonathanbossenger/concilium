@@ -10,13 +10,8 @@ const LOG_DIR = path.join(STATE_DIR, 'logs');
 const DEFAULT_CONFIG = {
   port: 7878,
   githubToken: '',
-  agents: [
-    { id: 'echo', name: 'Echo (test)', command: 'cat', interactive: false },
-    { id: 'claude', name: 'Claude Code', command: 'claude', interactive: true },
-    { id: 'codex', name: 'Codex CLI', command: 'codex', interactive: true },
-    { id: 'aider', name: 'Aider', command: 'aider', interactive: true },
-    { id: 'gemini', name: 'Gemini CLI', command: 'gemini', interactive: true },
-  ],
+  agents: [],
+  onboardingCompleted: false,
 };
 
 function ensureState() {

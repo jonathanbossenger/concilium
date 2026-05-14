@@ -25,6 +25,14 @@ function getGitHubToken(cfg) {
   return '';
 }
 
+function hasConfiguredAgent(cfg) {
+  return !!(cfg && Array.isArray(cfg.agents) && cfg.agents.length > 0);
+}
+
+function isOnboardingCompleted(cfg) {
+  return cfg && cfg.onboardingCompleted === true;
+}
+
 function pickDirectoryMac() {
   return new Promise((resolve, reject) => {
     const script =
@@ -642,6 +650,27 @@ router.get('/github-token', (req, res) => {
   const cfg = getConfig();
   const token = getGitHubToken(cfg);
   res.json({ hasToken: !!token });
+});
+
+router.get('/onboarding', (req, res) => {
+  const cfg = getConfig();
+  const hasAgent = hasConfiguredAgent(cfg);
+  const hasToken = !!getGitHubToken(cfg);
+  res.json({
+    needsOnboarding: !isOnboardingCompleted(cfg) && !hasAgent,
+    hasAgent,
+    hasToken,
+  });
+});
+
+router.post('/onboarding/complete', (req, res) => {
+  const cfg = getConfig();
+  if (!hasConfiguredAgent(cfg)) {
+    return res.status(400).json({ error: 'Configure at least one agent before finishing onboarding.' });
+  }
+  cfg.onboardingCompleted = true;
+  saveConfig(cfg);
+  res.json({ ok: true });
 });
 
 router.post('/github-token', (req, res) => {

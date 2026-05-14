@@ -1528,6 +1528,16 @@ $('#cards').addEventListener('dragover', (dragEvent) => {
 // --- settings dialog -------------------------------------------------------
 
 const settingsDialog = $('#settings-dialog');
+const onboardingDialog = $('#onboarding-dialog');
+const onboardingFirstAgentForm = $('#onboarding-first-agent-form');
+const onboardingAddAgentForm = $('#onboarding-add-agent-form');
+const onboardingAgentsTableBody = $('#onboarding-agents-table tbody');
+const onboardingGitHubTokenForm = $('#onboarding-github-token-form');
+const onboardingGitHubTokenInput = $('#onboarding-github-token');
+const onboardingGitHubTokenClearBtn = $('#onboarding-github-token-clear');
+const onboardingBackBtn = $('#onboarding-back');
+const onboardingNextBtn = $('#onboarding-next');
+const onboardingFinishBtn = $('#onboarding-finish');
 const agentForm = $('#agent-form');
 const githubTokenForm = $('#github-token-form');
 const githubTokenInput = $('#github-token');
@@ -1550,6 +1560,9 @@ const newIssueCreateBtn = $('#new-issue-create');
 const newIssueStatusEl = $('#new-issue-status');
 const shortcutsDialog = $('#shortcuts-dialog');
 let editingId = null;
+let onboardingStep = 1;
+let onboardingHasAgent = false;
+let onboardingHasToken = false;
 let newProjectCheckAbortCtrl = null;
 let newIssueRepoUrl = '';
 let newIssueCreatedHook = null;
@@ -1565,6 +1578,18 @@ function setFormMode(mode, agent) {
   agentForm.command.value = agent?.command || '';
   agentForm.args.value = (agent?.args || []).join(' ');
   agentForm.interactive.checked = !!agent?.interactive;
+}
+
+function agentPayloadFromForm(form, includeId = false) {
+  const fields = form.elements;
+  const payload = {
+    name: fields.name.value.trim() || fields.id.value.trim(),
+    command: fields.command.value.trim(),
+    interactive: fields.interactive.checked,
+    args: fields.args.value.trim() ? fields.args.value.trim().split(/\s+/) : [],
+  };
+  if (includeId) payload.id = fields.id.value.trim();
+  return payload;
 }
 
 async function refreshAgentsTable() {
@@ -1601,6 +1626,92 @@ async function refreshAgentsTable() {
     actions.appendChild(delBtn);
     tbody.appendChild(row);
   }
+}
+
+async function listAgents() {
+  const response = await fetch('/api/agents');
+  return response.json();
+}
+
+async function addAgent(payload) {
+  const response = await fetch('/api/agents', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'save failed');
+  }
+}
+
+function setOnboardingStep(step) {
+  onboardingStep = Math.max(1, Math.min(4, step));
+  for (const section of onboardingDialog.querySelectorAll('.onboarding-step')) {
+    section.hidden = Number(section.dataset.step) !== onboardingStep;
+  }
+  onboardingBackBtn.disabled = onboardingStep === 1;
+  onboardingNextBtn.hidden = onboardingStep === 4;
+  onboardingNextBtn.disabled = (onboardingStep === 1 || onboardingStep === 2) && !onboardingHasAgent;
+  onboardingFinishBtn.hidden = onboardingStep !== 4;
+  onboardingFinishBtn.disabled = !onboardingHasAgent;
+}
+
+async function refreshOnboardingAgentsTable() {
+  const agents = await listAgents();
+  onboardingAgentsTableBody.replaceChildren();
+  for (const agent of agents) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${agent.id}</td>
+      <td>${agent.name || ''}</td>
+      <td><code>${agent.command}${agent.args ? ' ' + agent.args.join(' ') : ''}</code></td>
+      <td>${agent.interactive ? 'PTY' : 'piped'}</td>
+      <td class="actions"></td>`;
+    const actions = row.querySelector('.actions');
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'row-btn danger';
+    delBtn.textContent = 'delete';
+    delBtn.addEventListener('click', async () => {
+      const deleteResponse = await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' });
+      if (!deleteResponse.ok) { alert('delete failed'); return; }
+      await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
+    });
+    actions.appendChild(delBtn);
+    onboardingAgentsTableBody.appendChild(row);
+  }
+  onboardingHasAgent = agents.length > 0;
+  setOnboardingStep(onboardingStep);
+}
+
+async function refreshOnboardingTokenState() {
+  const response = await fetch('/api/system/github-token');
+  if (!response.ok) {
+    console.error('[concilium] failed to fetch onboarding token state: HTTP', response.status);
+    onboardingHasToken = false;
+    onboardingGitHubTokenInput.placeholder = 'ghp_...';
+    return;
+  }
+  const data = await response.json().catch(() => ({}));
+  onboardingHasToken = data.hasToken === true;
+  onboardingGitHubTokenInput.placeholder = onboardingHasToken ? 'token already saved' : 'ghp_...';
+}
+
+async function maybeStartOnboarding() {
+  const response = await fetch('/api/system/onboarding');
+  if (!response.ok) return;
+  const data = await response.json().catch(() => ({}));
+  if (!data.needsOnboarding) return;
+  onboardingFirstAgentForm.reset();
+  onboardingAddAgentForm.reset();
+  onboardingGitHubTokenInput.value = '';
+  onboardingHasToken = data.hasToken === true;
+  onboardingGitHubTokenInput.placeholder = onboardingHasToken ? 'token already saved' : 'ghp_...';
+  setOnboardingStep(1);
+  await refreshOnboardingAgentsTable();
+  onboardingDialog.showModal();
+  onboardingFirstAgentForm.elements.id.focus();
 }
 
 async function refreshDiscoverTable() {
@@ -1750,13 +1861,7 @@ async function browseNewProjectTarget() {
 
 agentForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
-  const args = agentForm.args.value.trim() ? agentForm.args.value.trim().split(/\s+/) : [];
-  const payload = {
-    name: agentForm.name.value.trim() || agentForm.id.value.trim(),
-    command: agentForm.command.value.trim(),
-    interactive: agentForm.interactive.checked,
-    args,
-  };
+  const payload = agentPayloadFromForm(agentForm);
   let response;
   if (editingId) {
     response = await fetch(`/api/agents/${encodeURIComponent(editingId)}`, {
@@ -1815,6 +1920,75 @@ $('#open-settings').addEventListener('click', async () => {
   $('#discover-table tbody').replaceChildren();
   await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
   settingsDialog.showModal();
+});
+onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
+onboardingBackBtn.addEventListener('click', () => setOnboardingStep(onboardingStep - 1));
+onboardingNextBtn.addEventListener('click', async () => {
+  if (onboardingStep === 1 || onboardingStep === 2) {
+    await refreshOnboardingAgentsTable();
+    if (!onboardingHasAgent) return;
+  }
+  setOnboardingStep(onboardingStep + 1);
+});
+onboardingFinishBtn.addEventListener('click', async () => {
+  const response = await fetch('/api/system/onboarding/complete', { method: 'POST' });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    alert(err.error || 'finish failed');
+    return;
+  }
+  onboardingDialog.close();
+  await Promise.all([refreshAgentsTable(), loadAgents()]);
+});
+onboardingFirstAgentForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  try {
+    const shouldAdvance = onboardingStep === 1;
+    await addAgent(agentPayloadFromForm(onboardingFirstAgentForm, true));
+    onboardingFirstAgentForm.reset();
+    await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
+    if (shouldAdvance) setOnboardingStep(2);
+  } catch (err) {
+    alert(err.message || 'add failed');
+  }
+});
+onboardingAddAgentForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  try {
+    await addAgent(agentPayloadFromForm(onboardingAddAgentForm, true));
+    onboardingAddAgentForm.reset();
+    await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
+  } catch (err) {
+    alert(err.message || 'add failed');
+  }
+});
+onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  const token = onboardingGitHubTokenInput.value.trim();
+  if (!token) {
+    if (!onboardingHasToken) {
+      await refreshOnboardingTokenState();
+    }
+    onboardingGitHubTokenInput.value = '';
+    return;
+  }
+  const response = await fetch('/api/system/github-token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ GITHUB_TOKEN: token }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    alert(err.error || 'save failed');
+    return;
+  }
+  await refreshOnboardingTokenState();
+  onboardingGitHubTokenInput.value = '';
+  if (onboardingStep === 3) setOnboardingStep(4);
+});
+onboardingGitHubTokenClearBtn.addEventListener('click', () => {
+  onboardingGitHubTokenInput.value = '';
+  onboardingGitHubTokenInput.focus();
 });
 
 $('#new-card-btn').addEventListener('click', () => addCard());
@@ -2024,5 +2198,6 @@ window.addEventListener('keydown', handleKeyboardShortcut, true);
   await loadHealth();
   await loadAgents();
   await restoreLayout();
+  await maybeStartOnboarding();
   setInterval(loadHealth, 10000);
 })();
