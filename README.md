@@ -30,17 +30,10 @@ Your council of agents — Concilium!
 
 - [Features](#features)
 - [Requirements](#requirements)
-- [Install and first-time setup](#install-and-first-time-setup)
+- [User documentation](#user-documentation)
+- [Install](#install)
 - [Usage](#usage)
-  - [Quick start](#quick-start)
-  - [Standalone](#standalone)
-  - [As a user service (auto-start on login)](#as-a-user-service-auto-start-on-login)
-  - [Web UI](#web-ui)
-  - [Configuring your agent(s)](#configuring-your-agents)
-  - [Keyboard shortcuts](#keyboard-shortcuts)
-  - [Creating and storing your GitHub token](#creating-and-storing-your-github-token)
 - [Configuration](#configuration)
-- [Uninstalling](#uninstalling)
 - [API](#api)
 - [Project layout](#project-layout)
 - [License](#license)
@@ -133,165 +126,27 @@ External CLIs the server invokes (must be on `$PATH`):
   On macOS the picker uses built-in `osascript`; on Windows it uses built-in
   `powershell`.
 
-## Install and first-time setup
+## User documentation
 
-```bash
-git clone git@github.com:jonathanbossenger/concilium.git
-cd concilium
-npm install
-```
+Concilium's end-user guides now live in `/docs`:
 
-PowerShell works too:
+- [Install and first-time setup](docs/install-and-first-time-setup.md)
+- [Using Concilium](docs/using-concilium.md)
+- [Configuring your agents](docs/configuring-agents.md)
+- [Creating and storing your GitHub token](docs/github-token.md)
+- [Uninstalling Concilium](docs/uninstalling.md)
 
-```powershell
-git clone https://github.com/jonathanbossenger/concilium.git
-Set-Location concilium
-npm install
-```
+## Install
 
-The `postinstall` step restores the executable bit on
-`node-pty`'s `spawn-helper` (npm strips it during install — without this,
-PTY spawns fail with `posix_spawnp failed.`).
-
-To get `conciliumctl` available in your terminal (`npm link` generates the
-cross-platform command shims, including PowerShell):
-
-```bash
-npm link
-```
-
-First-time setup checklist:
-
-1. Start Concilium:
-   ```bash
-   conciliumctl start
-   ```
-2. Confirm it's running:
-   ```bash
-   conciliumctl status
-   ```
-3. Open the dashboard at <http://127.0.0.1:7878>.
-4. In **Settings (⚙)**, add your preferred agent(s) and (optionally) a GitHub token.
+See the full install guide: [docs/install-and-first-time-setup.md](docs/install-and-first-time-setup.md)
 
 ## Usage
 
-### Quick start
+For day-to-day use, see:
 
-1. Click **+ New session**.
-2. Pick an agent, then set a working directory (📂 or paste a path).
-3. Enter a prompt and click **▶** to start.
-4. Use **>_** to open a side terminal in the same directory when needed.
-
-### Standalone
-
-```bash
-conciliumctl start         # daemonizes node, writes PID file
-conciliumctl status
-conciliumctl restart
-conciliumctl stop
-conciliumctl logs          # follow the server log
-```
-
-### As a user service (auto-start on login)
-
-```bash
-conciliumctl install       # writes launchd plist or systemd --user unit
-conciliumctl status        # mode: service
-conciliumctl uninstall
-```
-
-The install step bakes the absolute path to `node`, the project root, and
-your current `$PATH` into the service definition, so the dashboard can find
-agents installed via Homebrew, nvm, etc.
-
-On Windows, `conciliumctl start|stop|restart|status|logs` work in standalone
-mode from PowerShell, but `install`/`uninstall` are not supported yet.
-
-### Web UI
-
-Open <http://127.0.0.1:7878> after starting. The page boots with one empty
-session card; click **+ New session** to add more, or the **×** on a card
-to close it (kills any running task in that card and deletes its history).
-
-Header controls:
-
-- **+ New session** — adds another card.
-- **⧉** — opens a **New Project** dialog. Concilium validates the project name
-  against GitHub using your saved token, then creates a new repository (public by
-  default, with an optional private toggle) with an initialized README, clones it
-  into your selected target location, and opens a new session card with that
-  directory pre-filled.
-- **🖥 / ☀ / ☾** — cycles theme (auto/light/dark); defaults to your OS preference.
-- **Gear (⚙)** — opens a settings dialog where you can:
-  - Add, edit, or delete agents
-  - Scan `$PATH` for known CLI agents and add the ones found
-  - Set or clear an optional `githubToken` used for authenticated GitHub API calls
-- **⌨** — opens the keyboard shortcuts help dialog.
-
-![Concilium settings dialog screenshot](screenshots/settings.png)
-
-### Configuring your agent(s)
-
-Open **Settings (⚙)** to manage agents:
-
-- **Add manually** — provide `id`, `name`, `command`, optional `args`, and whether the agent is interactive.
-- **Discover from PATH** — scan for known CLIs and add detected ones with one click.
-- **Edit/Delete** — update existing agent definitions or remove ones you no longer use.
-
-Use `interactive: false` for one-shot commands and `interactive: true` for REPL-style tools that need follow-up input.
-
-### Keyboard shortcuts
-
-Global shortcuts use **Cmd/Ctrl + Alt + key**. They are ignored while typing in
-inputs, textareas, selects, contenteditable fields, or terminal input.
-
-- **Cmd/Ctrl + Alt + N** — New session
-- **Cmd/Ctrl + Alt + R** — Start/Kill active session
-- **Cmd/Ctrl + Alt + `** — Open terminal for active session
-- **Cmd/Ctrl + Alt + E** — Expand/collapse active card
-- **Cmd/Ctrl + Alt + P** — New project
-- **Cmd/Ctrl + Alt + S** — Open settings
-- **Cmd/Ctrl + Alt + T** — Cycle theme
-- **Cmd/Ctrl + Alt + /** — Show keyboard shortcuts
-
-### Creating and storing your GitHub token
-
-Concilium can make authenticated GitHub API calls if you provide a personal
-access token. A token is **required for the New Project flow** (⧉ in the
-header) — repository creation goes through the authenticated
-`POST /user/repos` endpoint and cannot fall back to unauthenticated. For
-read-only features (e.g. the active-agent indicator on PR rows) the token is
-optional; without one, requests fall back to unauthenticated and are subject
-to a much lower rate limit.
-
-Use a **classic** personal access token rather than a fine-grained one.
-Fine-grained tokens are scoped to a single resource owner, so a token tied to
-your own account returns `403 forbidden` against repositories owned by other
-users or organisations — even ones you contribute to. Classic tokens cover
-every repository you can already read.
-
-Create a classic token at <https://github.com/settings/tokens/new>:
-
-![GitHub classic PAT settings for Concilium](screenshots/GitHubToken.png)
-
-1. **Note** — anything memorable (e.g. `Concilium`).
-2. **Expiration** — GitHub recommends setting an expiration date.
-3. **Select scopes** — tick **`repo`** (Full control of private repositories).
-   That single scope covers everything Concilium does today: reading issues
-   and PRs on any public or private repository, and creating new
-   repositories (public or private) via the New Project flow. If you never
-   create private repos and don't need to read private issues/PRs,
-   **`public_repo`** alone is sufficient. Optionally add **`delete_repo`**
-   if you want Concilium to clean up the GitHub repo automatically when a
-   post-create `git clone` fails (rare — usually only flaky networks);
-   without it, the orphaned repo stays on GitHub and the UI surfaces its
-   URL so you can delete it manually.
-4. Click **Generate token**, copy the value, then paste it into the gear
-   (⚙) → GitHub token field in the Concilium UI. Submit an empty value to
-   clear it.
-
-Concilium stores the token in `~/.concilium/config.yaml` as `githubToken`.
-Keep `~/.concilium/` readable only by your user account.
+- [docs/using-concilium.md](docs/using-concilium.md)
+- [docs/configuring-agents.md](docs/configuring-agents.md)
+- [docs/github-token.md](docs/github-token.md)
 
 ## Configuration
 
@@ -330,30 +185,6 @@ agents:
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
 `config.yaml` may contain a secret token — keep it readable only by your user.
-
-## Uninstalling
-
-1. Stop Concilium:
-   ```bash
-   conciliumctl stop
-   ```
-2. If you installed it as a user service (macOS/Linux), remove the service:
-   ```bash
-   conciliumctl uninstall
-   ```
-3. If you used `npm link`, remove the global shim:
-   ```bash
-   npm unlink -g concilium
-   ```
-4. Optionally remove all Concilium state (config, DB, logs):
-   ```bash
-   rm -rf ~/.concilium
-   ```
-5. Optionally remove your local clone:
-   ```bash
-   cd ..
-   rm -rf concilium
-   ```
 
 ## API
 
