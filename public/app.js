@@ -1688,6 +1688,7 @@ async function refreshOnboardingAgentsTable() {
 async function refreshOnboardingTokenState() {
   const response = await fetch('/api/system/github-token');
   if (!response.ok) {
+    console.error('[concilium] failed to fetch onboarding token state: HTTP', response.status);
     onboardingHasToken = false;
     onboardingGitHubTokenInput.placeholder = 'ghp_...';
     return;
@@ -1963,12 +1964,9 @@ onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
   const token = onboardingGitHubTokenInput.value.trim();
   if (!token) {
-    if (onboardingHasToken) {
-      onboardingGitHubTokenInput.value = '';
-      onboardingGitHubTokenInput.placeholder = 'token already saved';
-      return;
+    if (!onboardingHasToken) {
+      await refreshOnboardingTokenState();
     }
-    await refreshOnboardingTokenState();
     onboardingGitHubTokenInput.value = '';
     return;
   }
