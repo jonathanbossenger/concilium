@@ -1943,9 +1943,11 @@ onboardingFinishBtn.addEventListener('click', async () => {
 onboardingFirstAgentForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
   try {
+    const shouldAdvance = onboardingStep === 1;
     await addAgent(agentPayloadFromForm(onboardingFirstAgentForm, true));
     onboardingFirstAgentForm.reset();
     await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
+    if (shouldAdvance) setOnboardingStep(2);
   } catch (err) {
     alert(err.message || 'add failed');
   }
@@ -1982,6 +1984,7 @@ onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
   }
   await refreshOnboardingTokenState();
   onboardingGitHubTokenInput.value = '';
+  if (onboardingStep === 3) setOnboardingStep(4);
 });
 onboardingGitHubTokenClearBtn.addEventListener('click', () => {
   onboardingGitHubTokenInput.value = '';
