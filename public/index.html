@@ -149,6 +149,63 @@
     </div>
   </dialog>
 
+  <dialog id="auth-setup-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Configure admin access</h2>
+      </div>
+      <p class="footnote">Concilium detected a public-server deployment. Create an admin account to continue.</p>
+      <form id="auth-setup-form" class="agent-form">
+        <div class="grid">
+          <label>Admin username <input type="text" id="auth-setup-username" autocomplete="username" required pattern="[A-Za-z0-9_-]{3,64}"></label>
+          <label>Admin password <input type="password" id="auth-setup-password" autocomplete="new-password" required minlength="8"></label>
+          <label>Confirm password <input type="password" id="auth-setup-password-confirm" autocomplete="new-password" required minlength="8"></label>
+        </div>
+        <p class="footnote" id="auth-setup-status"></p>
+        <div class="row">
+          <button type="submit">Save admin user</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="auth-login-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Admin sign in</h2>
+      </div>
+      <form id="auth-login-form" class="agent-form">
+        <div class="grid">
+          <label>Username <input type="text" id="auth-login-username" autocomplete="username" required></label>
+          <label>Password <input type="password" id="auth-login-password" autocomplete="current-password" required></label>
+        </div>
+        <p class="footnote" id="auth-login-status"></p>
+        <div class="row">
+          <button type="submit">Sign in</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="directory-browser-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Browse server directories</h2>
+        <button type="button" class="close-btn" id="close-directory-browser" title="Close">&times;</button>
+      </div>
+      <p class="footnote" id="directory-browser-current-path"></p>
+      <div class="directory-browser-actions">
+        <button type="button" id="directory-browser-home">Home</button>
+        <button type="button" id="directory-browser-up">Up</button>
+      </div>
+      <ul id="directory-browser-list" class="directory-browser-list"></ul>
+      <p class="footnote" id="directory-browser-status"></p>
+      <div class="row">
+        <button type="button" id="directory-browser-select">Use this folder</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="onboarding-dialog">
     <div class="dialog-body">
       <div class="dialog-head">

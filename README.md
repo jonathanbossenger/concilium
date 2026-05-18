@@ -14,8 +14,10 @@ issues to Copilot, or scaffold a brand-new repo end-to-end (create on GitHub,
 clone locally, open a session pre-pointed at it). Sessions, working
 directories, and task history persist in SQLite across restarts.
 
-Loopback only (`127.0.0.1`), no auth, no framework, no build step. Started,
-stopped, and installed as a user service Apache-style via `conciliumctl`.
+Local-first (`127.0.0.1` by default), no framework, no build step. When exposed
+publicly, Concilium auto-switches to admin-auth mode on first external access.
+Started, stopped, and installed as a user service Apache-style via
+`conciliumctl`.
 
 [Read the announcement post](https://jonathanbossenger.com/2026/05/introducing-concilium/)
 
@@ -107,7 +109,9 @@ Your council of agents — Concilium!
 - **PATH-based agent discovery** — scans `$PATH` for known CLIs and lets you
   add them with one click
 - **Vanilla web UI** — no framework, no build step, just HTML/CSS/JS
-- **Loopback only** (`127.0.0.1`) — single-user, no auth
+- **Public-server ready** — keep the default loopback-only local mode, or set
+  `host: 0.0.0.0` for server deployments. On first external access, Concilium
+  requires creating an admin username/password and then signing in.
 
 ## Requirements
 
@@ -183,7 +187,13 @@ State lives entirely under `~/.concilium/`:
 A minimal `config.yaml`:
 
 ```yaml
+host: 127.0.0.1
 port: 7878
+publicServer: false
+adminUser: ""
+adminPasswordHash: ""
+adminPasswordSalt: ""
+authSecret: ""
 githubToken: ""
 agents:
   - id: claude
@@ -207,7 +217,7 @@ a restart (`conciliumctl restart`).
 
 ## API
 
-All endpoints are JSON; loopback only.
+All endpoints are JSON.
 
 | Method | Path | Description |
 |---|---|---|
@@ -227,6 +237,11 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/tasks/:id/resize` | resize the PTY `{cols, rows}` (PTY mode only) |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
+| `GET`    | `/api/system/directories` | list directories under the server user's home directory (`{path?, entries}`) |
+| `GET`    | `/api/system/auth/state` | public-server auth mode + setup/login state |
+| `POST`   | `/api/system/auth/setup` | create first admin user `{username, password}` (public-server mode only) |
+| `POST`   | `/api/system/auth/login` | sign in `{username, password}` (public-server mode only) |
+| `POST`   | `/api/system/auth/logout` | clear current auth session |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
 | `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
 | `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |
@@ -259,7 +274,7 @@ concilium/
         ├── agents.js
         ├── tasks.js            # incl. /terminal for pop-out shell cards
         ├── stream.js
-        └── system.js           # native OS folder picker
+        └── system.js           # system + github + auth routes
 ```
 
 Runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`,

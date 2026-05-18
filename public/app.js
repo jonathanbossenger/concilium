@@ -8,6 +8,7 @@ let activeCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
+let authState = { publicServer: false, setupRequired: false, authenticated: true, adminUser: '' };
 const IS_MAC = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
@@ -58,6 +59,13 @@ async function loadHealth() {
   } catch (_) {
     $('#health').textContent = 'offline';
   }
+}
+
+async function loadAuthState() {
+  const response = await fetch('/api/system/auth/state');
+  if (!response.ok) throw new Error('failed to load auth state');
+  authState = await response.json().catch(() => ({ publicServer: false, setupRequired: false, authenticated: true, adminUser: '' }));
+  return authState;
 }
 
 function toTildePath(path) {
@@ -577,6 +585,15 @@ class Card {
   async browseCwd() {
     this.cwdBrowse.disabled = true;
     try {
+      if (authState.publicServer) {
+        const picked = await browseDirectory(this.cwd.value.trim());
+        if (picked) {
+          this.cwd.value = toTildePath(picked);
+          saveLayout();
+          this.checkGitHub();
+        }
+        return;
+      }
       const response = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
@@ -1528,6 +1545,24 @@ $('#cards').addEventListener('dragover', (dragEvent) => {
 // --- settings dialog -------------------------------------------------------
 
 const settingsDialog = $('#settings-dialog');
+const authSetupDialog = $('#auth-setup-dialog');
+const authSetupForm = $('#auth-setup-form');
+const authSetupUsernameInput = $('#auth-setup-username');
+const authSetupPasswordInput = $('#auth-setup-password');
+const authSetupPasswordConfirmInput = $('#auth-setup-password-confirm');
+const authSetupStatusEl = $('#auth-setup-status');
+const authLoginDialog = $('#auth-login-dialog');
+const authLoginForm = $('#auth-login-form');
+const authLoginUsernameInput = $('#auth-login-username');
+const authLoginPasswordInput = $('#auth-login-password');
+const authLoginStatusEl = $('#auth-login-status');
+const directoryBrowserDialog = $('#directory-browser-dialog');
+const directoryBrowserCurrentPathEl = $('#directory-browser-current-path');
+const directoryBrowserHomeBtn = $('#directory-browser-home');
+const directoryBrowserUpBtn = $('#directory-browser-up');
+const directoryBrowserListEl = $('#directory-browser-list');
+const directoryBrowserStatusEl = $('#directory-browser-status');
+const directoryBrowserSelectBtn = $('#directory-browser-select');
 const onboardingDialog = $('#onboarding-dialog');
 const onboardingFirstAgentForm = $('#onboarding-first-agent-form');
 const onboardingAddAgentForm = $('#onboarding-add-agent-form');
@@ -1566,6 +1601,10 @@ let onboardingHasToken = false;
 let newProjectCheckAbortCtrl = null;
 let newIssueRepoUrl = '';
 let newIssueCreatedHook = null;
+let directoryBrowserCurrentPath = '';
+let directoryBrowserHomePath = '';
+let directoryBrowserParentPath = '';
+let directoryBrowserResolve = null;
 
 function setFormMode(mode, agent) {
   editingId = mode === 'edit' ? agent.id : null;
@@ -1781,6 +1820,114 @@ function setNewProjectStatus(text, cls = '') {
   if (cls) newProjectStatusEl.classList.add(cls);
 }
 
+function setAuthSetupStatus(text, cls = '') {
+  authSetupStatusEl.textContent = text;
+  authSetupStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) authSetupStatusEl.classList.add(cls);
+}
+
+function setAuthLoginStatus(text, cls = '') {
+  authLoginStatusEl.textContent = text;
+  authLoginStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) authLoginStatusEl.classList.add(cls);
+}
+
+async function ensureAuthenticated() {
+  await loadAuthState();
+  if (!authState.publicServer) return;
+
+  if (authState.setupRequired) {
+    authSetupForm.reset();
+    setAuthSetupStatus('Create an admin username and password.');
+    authSetupDialog.showModal();
+    authSetupUsernameInput.focus();
+    await new Promise((resolve) => {
+      const onClose = () => {
+        authSetupDialog.removeEventListener('close', onClose);
+        resolve();
+      };
+      authSetupDialog.addEventListener('close', onClose);
+    });
+    await loadAuthState();
+  }
+
+  if (!authState.authenticated) {
+    authLoginForm.reset();
+    authLoginUsernameInput.value = authState.adminUser || '';
+    setAuthLoginStatus(`Sign in${authState.adminUser ? ` as ${authState.adminUser}` : ''} to continue.`);
+    authLoginDialog.showModal();
+    authLoginPasswordInput.focus();
+    await new Promise((resolve) => {
+      const onClose = () => {
+        authLoginDialog.removeEventListener('close', onClose);
+        resolve();
+      };
+      authLoginDialog.addEventListener('close', onClose);
+    });
+    await loadAuthState();
+  }
+}
+
+function setDirectoryBrowserStatus(text, cls = '') {
+  directoryBrowserStatusEl.textContent = text;
+  directoryBrowserStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) directoryBrowserStatusEl.classList.add(cls);
+}
+
+function closeDirectoryBrowser(selectedPath) {
+  if (directoryBrowserDialog.open) directoryBrowserDialog.close();
+  if (directoryBrowserResolve) directoryBrowserResolve(selectedPath || null);
+  directoryBrowserResolve = null;
+}
+
+async function loadDirectoryBrowserPath(pathValue) {
+  const params = new URLSearchParams();
+  if (pathValue) params.set('path', pathValue);
+  const url = `/api/system/directories${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await fetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setDirectoryBrowserStatus(data.error || 'Failed to browse directories.', 'err');
+    return;
+  }
+  directoryBrowserCurrentPath = data.path || '';
+  directoryBrowserHomePath = data.homeDir || directoryBrowserHomePath;
+  directoryBrowserParentPath = data.parent || '';
+  directoryBrowserCurrentPathEl.textContent = directoryBrowserCurrentPath;
+  directoryBrowserUpBtn.disabled = !data.parent;
+  directoryBrowserListEl.replaceChildren();
+  const entries = Array.isArray(data.entries) ? data.entries : [];
+  if (entries.length === 0) {
+    const empty = document.createElement('li');
+    empty.innerHTML = '<span class="muted">No child directories</span>';
+    directoryBrowserListEl.appendChild(empty);
+  } else {
+    for (const entry of entries) {
+      const li = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = entry.name;
+      button.addEventListener('click', () => {
+        void loadDirectoryBrowserPath(entry.path);
+      });
+      li.appendChild(button);
+      directoryBrowserListEl.appendChild(li);
+    }
+  }
+  setDirectoryBrowserStatus('Select a folder or navigate deeper.');
+}
+
+function browseDirectory(pathValue = '') {
+  return new Promise((resolve) => {
+    directoryBrowserResolve = resolve;
+    setDirectoryBrowserStatus('Loading directories…');
+    directoryBrowserDialog.showModal();
+    void loadDirectoryBrowserPath(pathValue).catch((err) => {
+      setDirectoryBrowserStatus(err && err.message ? err.message : 'Failed to browse directories.', 'err');
+    });
+  });
+}
+
 function updateNewProjectCreateState() {
   const hasName = !!newProjectNameInput.value.trim();
   const hasTarget = !!newProjectTargetInput.value.trim();
@@ -1844,6 +1991,14 @@ async function checkNewProjectName(name) {
 async function browseNewProjectTarget() {
   newProjectBrowseBtn.disabled = true;
   try {
+    if (authState.publicServer) {
+      const picked = await browseDirectory(newProjectTargetInput.value.trim());
+      if (picked) {
+        newProjectTargetInput.value = toTildePath(picked);
+        updateNewProjectCreateState();
+      }
+      return;
+    }
     const response = await fetch('/api/system/pick-directory', { method: 'POST' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -1921,6 +2076,64 @@ $('#open-settings').addEventListener('click', async () => {
   await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
   settingsDialog.showModal();
 });
+authSetupDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
+authLoginDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
+authSetupForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  const username = authSetupUsernameInput.value.trim();
+  const password = authSetupPasswordInput.value;
+  const confirm = authSetupPasswordConfirmInput.value;
+  if (password !== confirm) {
+    setAuthSetupStatus('Passwords do not match.', 'err');
+    return;
+  }
+  const response = await fetch('/api/system/auth/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setAuthSetupStatus(data.error || 'Failed to save admin user.', 'err');
+    return;
+  }
+  setAuthSetupStatus('Admin user saved.', 'ok');
+  authSetupDialog.close();
+});
+authLoginForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  const username = authLoginUsernameInput.value.trim();
+  const password = authLoginPasswordInput.value;
+  const response = await fetch('/api/system/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setAuthLoginStatus(data.error || 'Sign in failed.', 'err');
+    return;
+  }
+  setAuthLoginStatus('Signed in.', 'ok');
+  authLoginDialog.close();
+});
+directoryBrowserDialog.addEventListener('cancel', (cancelEvent) => {
+  cancelEvent.preventDefault();
+  closeDirectoryBrowser(null);
+});
+directoryBrowserDialog.addEventListener('close', () => {
+  if (directoryBrowserResolve) closeDirectoryBrowser(null);
+});
+$('#close-directory-browser').addEventListener('click', () => closeDirectoryBrowser(null));
+directoryBrowserHomeBtn.addEventListener('click', () => {
+  if (!directoryBrowserHomePath) return;
+  void loadDirectoryBrowserPath(directoryBrowserHomePath);
+});
+directoryBrowserUpBtn.addEventListener('click', () => {
+  if (!directoryBrowserParentPath) return;
+  void loadDirectoryBrowserPath(directoryBrowserParentPath);
+});
+directoryBrowserSelectBtn.addEventListener('click', () => closeDirectoryBrowser(directoryBrowserCurrentPath));
 onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
 onboardingBackBtn.addEventListener('click', () => setOnboardingStep(onboardingStep - 1));
 onboardingNextBtn.addEventListener('click', async () => {
@@ -2195,6 +2408,7 @@ window.addEventListener('keydown', handleKeyboardShortcut, true);
 // --- bootstrap -------------------------------------------------------------
 
 (async () => {
+  await ensureAuthenticated();
   await loadHealth();
   await loadAgents();
   await restoreLayout();

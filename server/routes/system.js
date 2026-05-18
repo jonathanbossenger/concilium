@@ -1,10 +1,21 @@
 const express = require('express');
 const { execFile } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const store = require('../store');
 const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
+const {
+  hasAdminCredentials,
+  hashPassword,
+  verifyPassword,
+  issueSessionToken,
+  getSessionUser,
+  buildSessionCookie,
+  buildClearSessionCookie,
+} = require('../auth');
 
 const router = express.Router();
 const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
@@ -13,6 +24,8 @@ const GIT_CLONE_TIMEOUT_MS = 120000;
 const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
+const MAX_DIRECTORY_BROWSE_ENTRIES = 500;
+const ADMIN_USER_RE = /^[A-Za-z0-9_-]{3,64}$/;
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
@@ -87,8 +100,24 @@ function pickDirectoryWindows() {
   });
 }
 
+function isWithinBaseDirectory(baseDir, targetDir) {
+  const relative = path.relative(baseDir, targetDir);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function resolveServerBrowsePath(rawPath, homeDir) {
+  if (!rawPath || typeof rawPath !== 'string') return homeDir;
+  const resolved = path.resolve(expandTilde(rawPath.trim()));
+  if (!isWithinBaseDirectory(homeDir, resolved)) return null;
+  return resolved;
+}
+
 router.post('/pick-directory', async (req, res) => {
   try {
+    const cfg = getConfig();
+    if (cfg && cfg.publicServer === true) {
+      return res.json({ path: os.homedir(), mode: 'server' });
+    }
     let picked = null;
     if (process.platform === 'darwin') picked = await pickDirectoryMac();
     else if (process.platform === 'linux') picked = await pickDirectoryLinux();
@@ -98,6 +127,44 @@ router.post('/pick-directory', async (req, res) => {
     res.json({ path: picked });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+router.get('/directories', async (req, res) => {
+  try {
+    const homeDir = os.homedir();
+    const browsePath = resolveServerBrowsePath(req.query && req.query.path, homeDir);
+    if (!browsePath) {
+      return res.status(403).json({ error: 'path must be within the server home directory' });
+    }
+    let stats;
+    try {
+      stats = await fs.promises.stat(browsePath);
+    } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+        return res.status(404).json({ error: 'directory not found' });
+      }
+      throw err;
+    }
+    if (!stats.isDirectory()) return res.status(400).json({ error: 'path must be a directory' });
+    let dirEntries = await fs.promises.readdir(browsePath, { withFileTypes: true });
+    dirEntries = dirEntries
+      .filter((entry) => entry.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, MAX_DIRECTORY_BROWSE_ENTRIES)
+      .map((entry) => ({
+        name: entry.name,
+        path: path.join(browsePath, entry.name),
+      }));
+    const parent = browsePath === homeDir ? null : path.dirname(browsePath);
+    res.json({
+      path: browsePath,
+      homeDir,
+      parent,
+      entries: dirEntries,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
   }
 });
 
@@ -643,6 +710,75 @@ router.post('/layout', (req, res) => {
   );
   if (!valid) return res.status(400).json({ error: 'invalid entry shape' });
   store.saveLayout(JSON.stringify(body));
+  res.json({ ok: true });
+});
+
+router.get('/auth/state', (req, res) => {
+  const cfg = getConfig();
+  const publicServer = cfg && cfg.publicServer === true;
+  const setupRequired = publicServer && !hasAdminCredentials(cfg);
+  const sessionUser = publicServer ? getSessionUser(req, cfg) : null;
+  const authenticated = !publicServer || (!!sessionUser && sessionUser === cfg.adminUser);
+  res.json({
+    publicServer,
+    setupRequired,
+    authenticated,
+    adminUser: publicServer && !setupRequired ? cfg.adminUser : '',
+  });
+});
+
+router.post('/auth/setup', (req, res) => {
+  const cfg = getConfig();
+  if (!(cfg && cfg.publicServer === true)) {
+    return res.status(400).json({ error: 'setup is only available in public-server mode' });
+  }
+  if (hasAdminCredentials(cfg)) {
+    return res.status(409).json({ error: 'admin user is already configured' });
+  }
+
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!ADMIN_USER_RE.test(username)) {
+    return res.status(400).json({ error: 'username must be 3-64 characters and contain only letters, numbers, underscores, or dashes' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'password must be at least 8 characters' });
+  }
+
+  cfg.adminUser = username;
+  cfg.adminPasswordSalt = crypto.randomBytes(16).toString('hex');
+  cfg.adminPasswordHash = hashPassword(password, cfg.adminPasswordSalt);
+  cfg.authSecret = crypto.randomBytes(32).toString('hex');
+  saveConfig(cfg);
+
+  const sessionToken = issueSessionToken(cfg, username);
+  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req));
+  res.json({ ok: true });
+});
+
+router.post('/auth/login', (req, res) => {
+  const cfg = getConfig();
+  if (!(cfg && cfg.publicServer === true)) {
+    return res.status(400).json({ error: 'login is only available in public-server mode' });
+  }
+  if (!hasAdminCredentials(cfg)) {
+    return res.status(400).json({ error: 'admin setup required' });
+  }
+
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
+  if (username !== cfg.adminUser || !verifyPassword(password, cfg)) {
+    return res.status(401).json({ error: 'invalid username or password' });
+  }
+
+  const sessionToken = issueSessionToken(cfg, username);
+  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req));
+  res.json({ ok: true });
+});
+
+router.post('/auth/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', buildClearSessionCookie());
   res.json({ ok: true });
 });
 
