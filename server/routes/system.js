@@ -127,6 +127,29 @@ function isWithinBaseDirectory(baseDir, targetDir) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+function sanitizeRelativeDirectoryPath(input) {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  if (!raw) return [];
+  const normalized = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  for (const part of parts) {
+    if (part === '.' || part === '..' || part.includes('\0')) return null;
+  }
+  return parts;
+}
+
+function resolvePathWithinHome(input, homeRealPath) {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  if (!raw || raw === '~') return homeRealPath;
+  let candidate = raw;
+  if (candidate.startsWith('~/')) candidate = candidate.slice(2);
+  else if (candidate === homeRealPath) candidate = '';
+  else if (candidate.startsWith(homeRealPath + path.sep)) candidate = candidate.slice(homeRealPath.length + 1);
+  const parts = sanitizeRelativeDirectoryPath(candidate);
+  if (parts === null) return null;
+  return path.join(homeRealPath, ...parts);
+}
+
 router.post('/pick-directory', async (req, res) => {
   try {
     const cfg = getConfig();
@@ -153,9 +176,10 @@ router.get('/directories', directoryBrowseRateLimiter, async (req, res) => {
     if (requestedPathRaw !== undefined && typeof requestedPathRaw !== 'string') {
       return res.status(400).json({ error: 'path must be a string' });
     }
-    const requestedPath = requestedPathRaw
-      ? path.resolve(expandTilde(requestedPathRaw.trim()))
-      : homeRealPath;
+    const requestedPath = resolvePathWithinHome(requestedPathRaw || '', homeRealPath);
+    if (!requestedPath) {
+      return res.status(403).json({ error: 'path must be within the server home directory' });
+    }
     let stats;
     try {
       stats = await fs.promises.stat(requestedPath);
@@ -175,15 +199,24 @@ router.get('/directories', directoryBrowseRateLimiter, async (req, res) => {
       .filter((entry) => entry.isDirectory())
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, MAX_DIRECTORY_BROWSE_ENTRIES)
-      .map((entry) => ({
-        name: entry.name,
-        path: path.join(browsePath, entry.name),
-      }));
+      .map((entry) => {
+        const entryPath = path.join(browsePath, entry.name);
+        const relativePath = path.relative(homeRealPath, entryPath).split(path.sep).join('/');
+        return {
+          name: entry.name,
+          path: entryPath,
+          relativePath,
+        };
+      });
     const parent = browsePath === homeRealPath ? null : path.dirname(browsePath);
+    const parentRelativePath = parent ? path.relative(homeRealPath, parent).split(path.sep).join('/') : '';
+    const relativePath = path.relative(homeRealPath, browsePath).split(path.sep).join('/');
     res.json({
       path: browsePath,
       homeDir: homeRealPath,
       parent,
+      parentRelativePath,
+      relativePath,
       entries: dirEntries,
     });
   } catch (err) {
@@ -893,7 +926,10 @@ router.post('/new-project', newProjectRateLimiter, async (req, res) => {
     const githubToken = getGitHubToken(cfg);
     if (!githubToken) return res.status(400).json({ error: 'set a GitHub token in Settings first' });
 
-    const targetPath = path.resolve(expandTilde(rawTarget.trim()));
+    const homeRealPath = await fs.promises.realpath(os.homedir());
+    const targetPath = cfg.publicServer === true
+      ? resolvePathWithinHome(rawTarget, homeRealPath)
+      : path.resolve(expandTilde(rawTarget.trim()));
     if (!targetPath) return res.status(400).json({ error: 'targetPath is required' });
 
     let stats;
@@ -907,7 +943,6 @@ router.post('/new-project', newProjectRateLimiter, async (req, res) => {
     }
     if (!stats.isDirectory()) return res.status(400).json({ error: 'target location must be a directory' });
     if (cfg.publicServer === true) {
-      const homeRealPath = await fs.promises.realpath(os.homedir());
       const targetRealPath = await fs.promises.realpath(targetPath);
       if (!isWithinBaseDirectory(homeRealPath, targetRealPath)) {
         return res.status(403).json({ error: 'target location must be within the server home directory' });

@@ -1602,8 +1602,9 @@ let newProjectCheckAbortCtrl = null;
 let newIssueRepoUrl = '';
 let newIssueCreatedHook = null;
 let directoryBrowserCurrentPath = '';
+let directoryBrowserCurrentRelativePath = '';
 let directoryBrowserHomePath = '';
-let directoryBrowserParentPath = '';
+let directoryBrowserParentRelativePath = '';
 let directoryBrowserResolve = null;
 
 function setFormMode(mode, agent) {
@@ -1891,8 +1892,9 @@ async function loadDirectoryBrowserPath(pathValue) {
     return;
   }
   directoryBrowserCurrentPath = data.path || '';
+  directoryBrowserCurrentRelativePath = data.relativePath || '';
   directoryBrowserHomePath = data.homeDir || directoryBrowserHomePath;
-  directoryBrowserParentPath = data.parent || '';
+  directoryBrowserParentRelativePath = data.parentRelativePath || '';
   directoryBrowserCurrentPathEl.textContent = directoryBrowserCurrentPath;
   directoryBrowserUpBtn.disabled = !data.parent;
   directoryBrowserListEl.replaceChildren();
@@ -1908,7 +1910,7 @@ async function loadDirectoryBrowserPath(pathValue) {
       button.type = 'button';
       button.textContent = entry.name;
       button.addEventListener('click', () => {
-        void loadDirectoryBrowserPath(entry.path);
+        void loadDirectoryBrowserPath(entry.relativePath || '');
       });
       li.appendChild(button);
       directoryBrowserListEl.appendChild(li);
@@ -1917,12 +1919,22 @@ async function loadDirectoryBrowserPath(pathValue) {
   setDirectoryBrowserStatus('Select a folder or navigate deeper.');
 }
 
+function toServerBrowseRelativePath(pathValue) {
+  const raw = (pathValue || '').trim();
+  if (!raw || raw === '~') return '';
+  if (raw.startsWith('~/')) return raw.slice(2);
+  if (homeDir && (raw === homeDir || raw.startsWith(homeDir + '/'))) {
+    return raw.slice(homeDir.length).replace(/^\/+/, '');
+  }
+  return '';
+}
+
 function browseDirectory(pathValue = '') {
   return new Promise((resolve) => {
     directoryBrowserResolve = resolve;
     setDirectoryBrowserStatus('Loading directories…');
     directoryBrowserDialog.showModal();
-    void loadDirectoryBrowserPath(pathValue).catch((err) => {
+    void loadDirectoryBrowserPath(toServerBrowseRelativePath(pathValue)).catch((err) => {
       setDirectoryBrowserStatus(err && err.message ? err.message : 'Failed to browse directories.', 'err');
     });
   });
@@ -2127,13 +2139,12 @@ directoryBrowserDialog.addEventListener('close', () => {
 $('#close-directory-browser').addEventListener('click', () => closeDirectoryBrowser(null));
 directoryBrowserHomeBtn.addEventListener('click', () => {
   if (!directoryBrowserHomePath) return;
-  void loadDirectoryBrowserPath(directoryBrowserHomePath);
+  void loadDirectoryBrowserPath('');
 });
 directoryBrowserUpBtn.addEventListener('click', () => {
-  if (!directoryBrowserParentPath) return;
-  void loadDirectoryBrowserPath(directoryBrowserParentPath);
+  void loadDirectoryBrowserPath(directoryBrowserParentRelativePath || '');
 });
-directoryBrowserSelectBtn.addEventListener('click', () => closeDirectoryBrowser(directoryBrowserCurrentPath));
+directoryBrowserSelectBtn.addEventListener('click', () => closeDirectoryBrowser(directoryBrowserCurrentPath || homeDir));
 onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
 onboardingBackBtn.addEventListener('click', () => setOnboardingStep(onboardingStep - 1));
 onboardingNextBtn.addEventListener('click', async () => {
