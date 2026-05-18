@@ -48,7 +48,11 @@ function isLocalRequest(req, cfg) {
 }
 
 function hasAdminCredentials(cfg) {
-  return !!(cfg && cfg.adminUser && cfg.adminUser.trim() && cfg.adminPasswordHash && cfg.adminPasswordSalt && cfg.authSecret);
+  return !!(cfg
+    && typeof cfg.adminUser === 'string' && cfg.adminUser.trim()
+    && typeof cfg.adminPasswordHash === 'string' && cfg.adminPasswordHash
+    && typeof cfg.adminPasswordSalt === 'string' && cfg.adminPasswordSalt
+    && typeof cfg.authSecret === 'string' && cfg.authSecret);
 }
 
 function hashPassword(password, salt) {

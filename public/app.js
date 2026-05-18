@@ -37,7 +37,7 @@ function getFetchUrl(input) {
 window.fetch = async function fetchWithAuthIntercept(input, init) {
   const response = await nativeFetch(input, init);
   const requestUrl = getFetchUrl(input);
-  const isApiRequest = requestUrl.startsWith('/api/') || requestUrl.includes('/api/');
+  const isApiRequest = requestUrl.startsWith('/api/');
   const isAuthEndpoint = requestUrl.includes('/api/system/auth/');
   if (
     isApiRequest
