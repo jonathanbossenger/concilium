@@ -25,7 +25,11 @@ const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
 const MAX_DIRECTORY_BROWSE_ENTRIES = 500;
-const ADMIN_USER_RE = /^[A-Za-z0-9_-]{3,64}$/;
+const ADMIN_USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,64}$/;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_DIRECTORY = 120;
+const RATE_LIMIT_MAX_AUTH = 10;
+const RATE_LIMIT_STATE = new Map();
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
@@ -105,11 +109,22 @@ function isWithinBaseDirectory(baseDir, targetDir) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-function resolveServerBrowsePath(rawPath, homeDir) {
-  if (!rawPath || typeof rawPath !== 'string') return homeDir;
-  const resolved = path.resolve(expandTilde(rawPath.trim()));
-  if (!isWithinBaseDirectory(homeDir, resolved)) return null;
-  return resolved;
+function rateLimitKey(req, scope) {
+  const remoteAddress = req && req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : 'unknown';
+  return `${scope}:${remoteAddress}`;
+}
+
+function isRateLimited(req, scope, max) {
+  const now = Date.now();
+  const key = rateLimitKey(req, scope);
+  const bucket = RATE_LIMIT_STATE.get(key);
+  if (!bucket || now - bucket.startedAt > RATE_LIMIT_WINDOW_MS) {
+    RATE_LIMIT_STATE.set(key, { startedAt: now, count: 1 });
+    return false;
+  }
+  bucket.count += 1;
+  RATE_LIMIT_STATE.set(key, bucket);
+  return bucket.count > max;
 }
 
 router.post('/pick-directory', async (req, res) => {
@@ -132,14 +147,21 @@ router.post('/pick-directory', async (req, res) => {
 
 router.get('/directories', async (req, res) => {
   try {
-    const homeDir = os.homedir();
-    const browsePath = resolveServerBrowsePath(req.query && req.query.path, homeDir);
-    if (!browsePath) {
-      return res.status(403).json({ error: 'path must be within the server home directory' });
+    if (isRateLimited(req, 'directories', RATE_LIMIT_MAX_DIRECTORY)) {
+      return res.status(429).json({ error: 'too many directory browse requests; please retry in a moment' });
     }
+    const homeDir = os.homedir();
+    const homeRealPath = await fs.promises.realpath(homeDir);
+    const requestedPathRaw = req.query && req.query.path;
+    if (requestedPathRaw !== undefined && typeof requestedPathRaw !== 'string') {
+      return res.status(400).json({ error: 'path must be a string' });
+    }
+    const requestedPath = requestedPathRaw
+      ? path.resolve(expandTilde(requestedPathRaw.trim()))
+      : homeRealPath;
     let stats;
     try {
-      stats = await fs.promises.stat(browsePath);
+      stats = await fs.promises.stat(requestedPath);
     } catch (err) {
       if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
         return res.status(404).json({ error: 'directory not found' });
@@ -147,6 +169,10 @@ router.get('/directories', async (req, res) => {
       throw err;
     }
     if (!stats.isDirectory()) return res.status(400).json({ error: 'path must be a directory' });
+    const browsePath = await fs.promises.realpath(requestedPath);
+    if (!isWithinBaseDirectory(homeRealPath, browsePath)) {
+      return res.status(403).json({ error: 'path must be within the server home directory' });
+    }
     let dirEntries = await fs.promises.readdir(browsePath, { withFileTypes: true });
     dirEntries = dirEntries
       .filter((entry) => entry.isDirectory())
@@ -156,10 +182,10 @@ router.get('/directories', async (req, res) => {
         name: entry.name,
         path: path.join(browsePath, entry.name),
       }));
-    const parent = browsePath === homeDir ? null : path.dirname(browsePath);
+    const parent = browsePath === homeRealPath ? null : path.dirname(browsePath);
     res.json({
       path: browsePath,
-      homeDir,
+      homeDir: homeRealPath,
       parent,
       entries: dirEntries,
     });
@@ -738,7 +764,7 @@ router.post('/auth/setup', (req, res) => {
 
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  if (!ADMIN_USER_RE.test(username)) {
+  if (!ADMIN_USERNAME_PATTERN.test(username)) {
     return res.status(400).json({ error: 'username must be 3-64 characters and contain only letters, numbers, underscores, or dashes' });
   }
   if (password.length < 8) {
@@ -757,6 +783,9 @@ router.post('/auth/setup', (req, res) => {
 });
 
 router.post('/auth/login', (req, res) => {
+  if (isRateLimited(req, 'auth-login', RATE_LIMIT_MAX_AUTH)) {
+    return res.status(429).json({ error: 'too many login attempts; please retry in a moment' });
+  }
   const cfg = getConfig();
   if (!(cfg && cfg.publicServer === true)) {
     return res.status(400).json({ error: 'login is only available in public-server mode' });
@@ -883,6 +912,13 @@ router.post('/new-project', async (req, res) => {
       throw err;
     }
     if (!stats.isDirectory()) return res.status(400).json({ error: 'target location must be a directory' });
+    if (cfg.publicServer === true) {
+      const homeRealPath = await fs.promises.realpath(os.homedir());
+      const targetRealPath = await fs.promises.realpath(targetPath);
+      if (!isWithinBaseDirectory(homeRealPath, targetRealPath)) {
+        return res.status(403).json({ error: 'target location must be within the server home directory' });
+      }
+    }
     try {
       await fs.promises.access(targetPath, fs.constants.W_OK);
     } catch (err) {
