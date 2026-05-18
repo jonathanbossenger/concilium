@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -26,10 +27,27 @@ const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
 const MAX_DIRECTORY_BROWSE_ENTRIES = 500;
 const ADMIN_USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,64}$/;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX_DIRECTORY = 120;
-const RATE_LIMIT_MAX_AUTH = 10;
-const RATE_LIMIT_STATE = new Map();
+const directoryBrowseRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { error: 'too many directory browse requests; please retry in a moment' },
+});
+const authRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { error: 'too many authentication attempts; please retry in a moment' },
+});
+const newProjectRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: { error: 'too many project creation requests; please retry in a moment' },
+});
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
@@ -109,29 +127,11 @@ function isWithinBaseDirectory(baseDir, targetDir) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-function rateLimitKey(req, scope) {
-  const remoteAddress = req && req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : 'unknown';
-  return `${scope}:${remoteAddress}`;
-}
-
-function isRateLimited(req, scope, max) {
-  const now = Date.now();
-  const key = rateLimitKey(req, scope);
-  const bucket = RATE_LIMIT_STATE.get(key);
-  if (!bucket || now - bucket.startedAt > RATE_LIMIT_WINDOW_MS) {
-    RATE_LIMIT_STATE.set(key, { startedAt: now, count: 1 });
-    return false;
-  }
-  bucket.count += 1;
-  RATE_LIMIT_STATE.set(key, bucket);
-  return bucket.count > max;
-}
-
 router.post('/pick-directory', async (req, res) => {
   try {
     const cfg = getConfig();
     if (cfg && cfg.publicServer === true) {
-      return res.json({ path: os.homedir(), mode: 'server' });
+      return res.json({ path: os.homedir() });
     }
     let picked = null;
     if (process.platform === 'darwin') picked = await pickDirectoryMac();
@@ -145,11 +145,8 @@ router.post('/pick-directory', async (req, res) => {
   }
 });
 
-router.get('/directories', async (req, res) => {
+router.get('/directories', directoryBrowseRateLimiter, async (req, res) => {
   try {
-    if (isRateLimited(req, 'directories', RATE_LIMIT_MAX_DIRECTORY)) {
-      return res.status(429).json({ error: 'too many directory browse requests; please retry in a moment' });
-    }
     const homeDir = os.homedir();
     const homeRealPath = await fs.promises.realpath(homeDir);
     const requestedPathRaw = req.query && req.query.path;
@@ -753,7 +750,7 @@ router.get('/auth/state', (req, res) => {
   });
 });
 
-router.post('/auth/setup', (req, res) => {
+router.post('/auth/setup', authRateLimiter, (req, res) => {
   const cfg = getConfig();
   if (!(cfg && cfg.publicServer === true)) {
     return res.status(400).json({ error: 'setup is only available in public-server mode' });
@@ -782,10 +779,7 @@ router.post('/auth/setup', (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/auth/login', (req, res) => {
-  if (isRateLimited(req, 'auth-login', RATE_LIMIT_MAX_AUTH)) {
-    return res.status(429).json({ error: 'too many login attempts; please retry in a moment' });
-  }
+router.post('/auth/login', authRateLimiter, (req, res) => {
   const cfg = getConfig();
   if (!(cfg && cfg.publicServer === true)) {
     return res.status(400).json({ error: 'login is only available in public-server mode' });
@@ -881,7 +875,7 @@ router.post('/new-project/check', async (req, res) => {
   }
 });
 
-router.post('/new-project', async (req, res) => {
+router.post('/new-project', newProjectRateLimiter, async (req, res) => {
   try {
     const parsed = sanitizeProjectName(req.body && req.body.name);
     if (parsed.error) return res.status(400).json({ error: parsed.error });

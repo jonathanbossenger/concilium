@@ -277,9 +277,9 @@ concilium/
         └── system.js           # system + github + auth routes
 ```
 
-Runtime dependencies: `express`, `better-sqlite3`, `js-yaml`, `node-pty`,
-`@xterm/xterm`, `@xterm/addon-fit` (the latter two are served straight from
-`node_modules` via static mounts at `/vendor/xterm` and
+Runtime dependencies: `express`, `express-rate-limit`, `better-sqlite3`,
+`js-yaml`, `node-pty`, `@xterm/xterm`, `@xterm/addon-fit` (the latter two are
+served straight from `node_modules` via static mounts at `/vendor/xterm` and
 `/vendor/xterm-addon-fit` — no bundler).
 
 ## License

@@ -16,6 +16,7 @@
     "@xterm/xterm": "^6.0.0",
     "better-sqlite3": "^12.9.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
     "js-yaml": "^4.1.0",
     "node-pty": "^1.1.0"
   },

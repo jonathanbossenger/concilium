@@ -8,7 +8,7 @@ function normalizeHost(hostHeader) {
   if (!raw) return '';
   if (raw.startsWith('[')) {
     const closing = raw.indexOf(']');
-    if (closing > 0) return raw.slice(1, closing);
+    if (closing >= 1) return raw.slice(1, closing);
   }
   const colon = raw.lastIndexOf(':');
   if (colon > 0 && raw.indexOf(':') === colon) return raw.slice(0, colon);
@@ -128,10 +128,8 @@ function buildSessionCookie(token, req) {
     'SameSite=Lax',
     `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
   ];
-  const proto = req && req.headers && typeof req.headers['x-forwarded-proto'] === 'string'
-    ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
-    : '';
-  if (proto === 'https') parts.push('Secure');
+  const isTls = !!(req && req.socket && req.socket.encrypted);
+  if (isTls) parts.push('Secure');
   return parts.join('; ');
 }
 
