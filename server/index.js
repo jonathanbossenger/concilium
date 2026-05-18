@@ -1,11 +1,32 @@
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const { ensureState, getConfig, saveConfig } = require('./config');
-const { isLocalRequest, hasAdminCredentials, getSessionUser } = require('./auth');
+const {
+  isLocalRequest,
+  isLoopbackAddress,
+  hasAdminCredentials,
+  getSessionUser,
+  generateSetupToken,
+  hashSetupToken,
+} = require('./auth');
 
 ensureState();
 const cfg = getConfig();
+const host = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim() : '127.0.0.1';
+const normalizedHost = host.toLowerCase();
+if (!cfg.publicServer && !isLoopbackAddress(normalizedHost) && normalizedHost !== 'localhost') {
+  cfg.publicServer = true;
+  saveConfig(cfg);
+}
+if (cfg.publicServer && !hasAdminCredentials(cfg) && (!cfg.setupTokenHash || typeof cfg.setupTokenHash !== 'string')) {
+  const setupToken = generateSetupToken();
+  cfg.setupTokenHash = hashSetupToken(setupToken);
+  saveConfig(cfg);
+  const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
+  console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
+}
 
 // Routes are required AFTER ensureState() so store.js can open the DB.
 const agentsRoute = require('./routes/agents');
@@ -14,26 +35,35 @@ const streamRoute = require('./routes/stream');
 const systemRoute = require('./routes/system');
 
 const app = express();
+if (cfg.trustProxy === true) app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, _res, next) => {
   const cfg = getConfig();
-  if (!cfg.publicServer && !isLocalRequest(req)) {
+  if (!cfg.publicServer && !isLocalRequest(req, cfg)) {
     cfg.publicServer = true;
+    if (!hasAdminCredentials(cfg) && (!cfg.setupTokenHash || typeof cfg.setupTokenHash !== 'string')) {
+      const setupToken = generateSetupToken();
+      cfg.setupTokenHash = hashSetupToken(setupToken);
+      const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
+      console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
+    }
     saveConfig(cfg);
   }
   next();
 });
 
+const AUTH_BOOTSTRAP_PATHS = new Set([
+  '/system/auth/state',
+  '/system/auth/setup',
+  '/system/auth/login',
+  '/system/auth/logout',
+]);
+
 app.use('/api', (req, res, next) => {
   const cfg = getConfig();
   if (!cfg.publicServer) return next();
-
-  const isSetupEndpoint = req.path === '/system/auth/state'
-    || req.path === '/system/auth/setup'
-    || req.path === '/system/auth/login'
-    || req.path === '/system/auth/logout';
-  if (isSetupEndpoint) return next();
+  if (AUTH_BOOTSTRAP_PATHS.has(req.path)) return next();
 
   if (!hasAdminCredentials(cfg)) {
     return res.status(403).json({ error: 'admin setup required' });
@@ -58,7 +88,6 @@ app.use('/vendor/xterm', express.static(path.join(__dirname, '..', 'node_modules
 app.use('/vendor/xterm-addon-fit', express.static(path.join(__dirname, '..', 'node_modules', '@xterm', 'addon-fit')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const host = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim() : '127.0.0.1';
 const server = app.listen(cfg.port, host, () => {
   const url = `http://${host}:${cfg.port}`;
   // OSC 8 hyperlink — clickable in supporting terminals (iTerm2, Terminal.app,

@@ -8,7 +8,14 @@ let activeCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
-let authState = { publicServer: false, setupRequired: false, authenticated: true, adminUser: '' };
+let authState = {
+  publicServer: false,
+  setupRequired: false,
+  setupTokenRequired: false,
+  authenticated: true,
+  adminUser: '',
+};
+let authPromptInFlight = false;
 const IS_MAC = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
@@ -20,6 +27,37 @@ const COPILOT_ASSIGNED_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 1
 const MERGE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.27a2.751 2.751 0 1 1-1.5 0V5.607a2.751 2.751 0 1 1 1.95-.453ZM4.25 13.5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM4.25 5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>';
 const READY_FOR_REVIEW_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/></svg>';
 const CLOSE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>';
+
+const nativeFetch = window.fetch.bind(window);
+function getFetchUrl(input) {
+  if (typeof input === 'string') return input;
+  if (input && typeof input.url === 'string') return input.url;
+  return '';
+}
+window.fetch = async function fetchWithAuthIntercept(input, init) {
+  const response = await nativeFetch(input, init);
+  const requestUrl = getFetchUrl(input);
+  const isApiRequest = requestUrl.startsWith('/api/') || requestUrl.includes('/api/');
+  const isAuthEndpoint = requestUrl.includes('/api/system/auth/');
+  if (
+    isApiRequest
+    && !isAuthEndpoint
+    && (response.status === 401 || response.status === 403)
+    && !authPromptInFlight
+  ) {
+    authPromptInFlight = true;
+    setTimeout(async () => {
+      try {
+        await ensureAuthenticated();
+      } catch (err) {
+        console.error('[concilium] failed to refresh authentication:', err);
+      } finally {
+        authPromptInFlight = false;
+      }
+    }, 0);
+  }
+  return response;
+};
 
 function currentTermTheme() {
   const styles = getComputedStyle(document.documentElement);
@@ -63,8 +101,14 @@ async function loadHealth() {
 
 async function loadAuthState() {
   const response = await fetch('/api/system/auth/state');
-  if (!response.ok) throw new Error('failed to load auth state');
-  authState = await response.json().catch(() => ({ publicServer: false, setupRequired: false, authenticated: true, adminUser: '' }));
+  if (!response.ok) throw new Error(`failed to load auth state: ${response.status} ${response.statusText}`);
+  authState = await response.json().catch(() => ({
+    publicServer: false,
+    setupRequired: false,
+    setupTokenRequired: false,
+    authenticated: true,
+    adminUser: '',
+  }));
   return authState;
 }
 
@@ -1547,6 +1591,7 @@ $('#cards').addEventListener('dragover', (dragEvent) => {
 const settingsDialog = $('#settings-dialog');
 const authSetupDialog = $('#auth-setup-dialog');
 const authSetupForm = $('#auth-setup-form');
+const authSetupTokenInput = $('#auth-setup-token');
 const authSetupUsernameInput = $('#auth-setup-username');
 const authSetupPasswordInput = $('#auth-setup-password');
 const authSetupPasswordConfirmInput = $('#auth-setup-password-confirm');
@@ -1833,22 +1878,27 @@ function setAuthLoginStatus(text, cls = '') {
   if (cls) authLoginStatusEl.classList.add(cls);
 }
 
+function waitForDialogClose(dialog) {
+  return new Promise((resolve) => {
+    const onClose = () => {
+      dialog.removeEventListener('close', onClose);
+      resolve();
+    };
+    dialog.addEventListener('close', onClose);
+  });
+}
+
 async function ensureAuthenticated() {
   await loadAuthState();
   if (!authState.publicServer) return;
 
   if (authState.setupRequired) {
     authSetupForm.reset();
-    setAuthSetupStatus('Create an admin username and password.');
+    authSetupTokenInput.required = authState.setupTokenRequired === true;
+    setAuthSetupStatus('Enter the setup token from the server log, then create an admin username and password.');
     authSetupDialog.showModal();
     authSetupUsernameInput.focus();
-    await new Promise((resolve) => {
-      const onClose = () => {
-        authSetupDialog.removeEventListener('close', onClose);
-        resolve();
-      };
-      authSetupDialog.addEventListener('close', onClose);
-    });
+    await waitForDialogClose(authSetupDialog);
     await loadAuthState();
   }
 
@@ -1858,13 +1908,7 @@ async function ensureAuthenticated() {
     setAuthLoginStatus(`Sign in${authState.adminUser ? ` as ${authState.adminUser}` : ''} to continue.`);
     authLoginDialog.showModal();
     authLoginPasswordInput.focus();
-    await new Promise((resolve) => {
-      const onClose = () => {
-        authLoginDialog.removeEventListener('close', onClose);
-        resolve();
-      };
-      authLoginDialog.addEventListener('close', onClose);
-    });
+    await waitForDialogClose(authLoginDialog);
     await loadAuthState();
   }
 }
@@ -1888,6 +1932,7 @@ async function loadDirectoryBrowserPath(pathValue) {
   const response = await fetch(url);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    directoryBrowserSelectBtn.disabled = true;
     setDirectoryBrowserStatus(data.error || 'Failed to browse directories.', 'err');
     return;
   }
@@ -1917,6 +1962,7 @@ async function loadDirectoryBrowserPath(pathValue) {
     }
   }
   setDirectoryBrowserStatus('Select a folder or navigate deeper.');
+  directoryBrowserSelectBtn.disabled = !directoryBrowserCurrentPath;
 }
 
 function toServerBrowseRelativePath(pathValue) {
@@ -1932,6 +1978,7 @@ function toServerBrowseRelativePath(pathValue) {
 function browseDirectory(pathValue = '') {
   return new Promise((resolve) => {
     directoryBrowserResolve = resolve;
+    directoryBrowserSelectBtn.disabled = true;
     setDirectoryBrowserStatus('Loading directories…');
     directoryBrowserDialog.showModal();
     void loadDirectoryBrowserPath(toServerBrowseRelativePath(pathValue)).catch((err) => {
@@ -2092,6 +2139,7 @@ authSetupDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventD
 authLoginDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
 authSetupForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
+  const setupToken = authSetupTokenInput.value.trim();
   const username = authSetupUsernameInput.value.trim();
   const password = authSetupPasswordInput.value;
   const confirm = authSetupPasswordConfirmInput.value;
@@ -2102,7 +2150,7 @@ authSetupForm.addEventListener('submit', async (submitEvent) => {
   const response = await fetch('/api/system/auth/setup', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ setupToken, username, password, confirmPassword: confirm }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -2144,7 +2192,10 @@ directoryBrowserHomeBtn.addEventListener('click', () => {
 directoryBrowserUpBtn.addEventListener('click', () => {
   void loadDirectoryBrowserPath(directoryBrowserParentRelativePath || '');
 });
-directoryBrowserSelectBtn.addEventListener('click', () => closeDirectoryBrowser(directoryBrowserCurrentPath || homeDir));
+directoryBrowserSelectBtn.addEventListener('click', () => {
+  if (!directoryBrowserCurrentPath) return;
+  closeDirectoryBrowser(directoryBrowserCurrentPath);
+});
 onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
 onboardingBackBtn.addEventListener('click', () => setOnboardingStep(onboardingStep - 1));
 onboardingNextBtn.addEventListener('click', async () => {

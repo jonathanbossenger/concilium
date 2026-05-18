@@ -2,6 +2,7 @@ const crypto = require('crypto');
 
 const SESSION_COOKIE_NAME = 'concilium_auth';
 const SESSION_MAX_AGE_SECONDS = 24 * 60 * 60;
+const MAX_SETUP_TOKEN_LENGTH = 256;
 
 function normalizeHost(hostHeader) {
   const raw = typeof hostHeader === 'string' ? hostHeader.trim().toLowerCase() : '';
@@ -23,20 +24,31 @@ function isLoopbackAddress(value) {
     || normalized === 'localhost';
 }
 
-function isLocalRequest(req) {
-  const host = normalizeHost(req && req.headers && req.headers.host);
-  const remoteAddress = req && req.socket && req.socket.remoteAddress
-    ? String(req.socket.remoteAddress).toLowerCase()
-    : '';
+function pickRemoteAddress(req, cfg) {
+  if (cfg && cfg.trustProxy === true && req && typeof req.ip === 'string' && req.ip) {
+    return req.ip;
+  }
+  return req && req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : '';
+}
+
+function pickRequestHost(req, cfg) {
+  if (cfg && cfg.trustProxy === true) {
+    const forwardedHost = req && req.headers && req.headers['x-forwarded-host'];
+    if (typeof forwardedHost === 'string' && forwardedHost.trim()) {
+      return forwardedHost.split(',')[0].trim();
+    }
+  }
+  return req && req.headers ? req.headers.host : '';
+}
+
+function isLocalRequest(req, cfg) {
+  const host = normalizeHost(pickRequestHost(req, cfg));
+  const remoteAddress = String(pickRemoteAddress(req, cfg) || '').toLowerCase();
   return isLoopbackAddress(host) && isLoopbackAddress(remoteAddress);
 }
 
 function hasAdminCredentials(cfg) {
-  return !!(cfg
-    && typeof cfg.adminUser === 'string' && cfg.adminUser.trim()
-    && typeof cfg.adminPasswordHash === 'string' && cfg.adminPasswordHash
-    && typeof cfg.adminPasswordSalt === 'string' && cfg.adminPasswordSalt
-    && typeof cfg.authSecret === 'string' && cfg.authSecret);
+  return !!(cfg && cfg.adminUser && cfg.adminUser.trim() && cfg.adminPasswordHash && cfg.adminPasswordSalt && cfg.authSecret);
 }
 
 function hashPassword(password, salt) {
@@ -120,7 +132,7 @@ function getSessionUser(req, cfg) {
   return session ? session.user : null;
 }
 
-function buildSessionCookie(token, req) {
+function buildSessionCookie(token, req, cfg) {
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
@@ -128,7 +140,13 @@ function buildSessionCookie(token, req) {
     'SameSite=Lax',
     `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
   ];
-  const isTls = !!(req && req.socket && req.socket.encrypted);
+  const isTlsSocket = !!(req && req.socket && req.socket.encrypted);
+  const forwardedProto = req && req.headers && typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
+    : '';
+  const isForwardedTls = !!(cfg && cfg.trustProxy === true && forwardedProto === 'https');
+  const forceSecureCookies = !!(cfg && cfg.forceSecureCookies === true);
+  const isTls = isTlsSocket || isForwardedTls || forceSecureCookies;
   if (isTls) parts.push('Secure');
   return parts.join('; ');
 }
@@ -137,8 +155,29 @@ function buildClearSessionCookie() {
   return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
+function generateSetupToken() {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
+function hashSetupToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function verifySetupToken(token, cfg) {
+  if (!cfg || typeof cfg.setupTokenHash !== 'string' || !cfg.setupTokenHash) return false;
+  if (typeof token !== 'string') return false;
+  const trimmed = token.trim();
+  if (!trimmed || trimmed.length > MAX_SETUP_TOKEN_LENGTH) return false;
+  const actual = hashSetupToken(trimmed);
+  const actualBuffer = Buffer.from(actual, 'hex');
+  const expectedBuffer = Buffer.from(cfg.setupTokenHash, 'hex');
+  if (actualBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
 module.exports = {
   isLocalRequest,
+  isLoopbackAddress,
   hasAdminCredentials,
   hashPassword,
   verifyPassword,
@@ -146,4 +185,7 @@ module.exports = {
   getSessionUser,
   buildSessionCookie,
   buildClearSessionCookie,
+  generateSetupToken,
+  hashSetupToken,
+  verifySetupToken,
 };

@@ -16,6 +16,7 @@ const {
   getSessionUser,
   buildSessionCookie,
   buildClearSessionCookie,
+  verifySetupToken,
 } = require('../auth');
 
 const router = express.Router();
@@ -27,6 +28,7 @@ const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
 const MAX_DIRECTORY_BROWSE_ENTRIES = 500;
 const ADMIN_USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,64}$/;
+const MAX_AUTH_PASSWORD_LENGTH = 256;
 const directoryBrowseRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
@@ -778,6 +780,7 @@ router.get('/auth/state', (req, res) => {
   res.json({
     publicServer,
     setupRequired,
+    setupTokenRequired: setupRequired,
     authenticated,
     adminUser: publicServer && !setupRequired ? cfg.adminUser : '',
   });
@@ -793,22 +796,34 @@ router.post('/auth/setup', authRateLimiter, (req, res) => {
   }
 
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+  const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword.trim() : '';
+  const setupToken = typeof req.body?.setupToken === 'string' ? req.body.setupToken : '';
   if (!ADMIN_USERNAME_PATTERN.test(username)) {
     return res.status(400).json({ error: 'username must be 3-64 characters and contain only letters, numbers, underscores, or dashes' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'password must be at least 8 characters' });
   }
+  if (password.length > MAX_AUTH_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `password must be ${MAX_AUTH_PASSWORD_LENGTH} characters or fewer` });
+  }
+  if (confirmPassword && confirmPassword !== password) {
+    return res.status(400).json({ error: 'password confirmation does not match' });
+  }
+  if (!verifySetupToken(setupToken, cfg)) {
+    return res.status(401).json({ error: 'invalid setup token' });
+  }
 
   cfg.adminUser = username;
   cfg.adminPasswordSalt = crypto.randomBytes(16).toString('hex');
   cfg.adminPasswordHash = hashPassword(password, cfg.adminPasswordSalt);
   cfg.authSecret = crypto.randomBytes(32).toString('hex');
+  cfg.setupTokenHash = '';
   saveConfig(cfg);
 
   const sessionToken = issueSessionToken(cfg, username);
-  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req));
+  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req, cfg));
   res.json({ ok: true });
 });
 
@@ -822,18 +837,26 @@ router.post('/auth/login', authRateLimiter, (req, res) => {
   }
 
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
+  if (password.length > MAX_AUTH_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `password must be ${MAX_AUTH_PASSWORD_LENGTH} characters or fewer` });
+  }
   if (username !== cfg.adminUser || !verifyPassword(password, cfg)) {
     return res.status(401).json({ error: 'invalid username or password' });
   }
 
   const sessionToken = issueSessionToken(cfg, username);
-  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req));
+  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req, cfg));
   res.json({ ok: true });
 });
 
 router.post('/auth/logout', (_req, res) => {
+  const cfg = getConfig();
+  if (hasAdminCredentials(cfg)) {
+    cfg.authSecret = crypto.randomBytes(32).toString('hex');
+    saveConfig(cfg);
+  }
   res.setHeader('Set-Cookie', buildClearSessionCookie());
   res.json({ ok: true });
 });

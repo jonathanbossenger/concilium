@@ -110,8 +110,9 @@ Your council of agents — Concilium!
   add them with one click
 - **Vanilla web UI** — no framework, no build step, just HTML/CSS/JS
 - **Public-server ready** — keep the default loopback-only local mode, or set
-  `host: 0.0.0.0` for server deployments. On first external access, Concilium
-  requires creating an admin username/password and then signing in.
+  `host: 0.0.0.0` for server deployments. In public-server mode, Concilium
+  requires a one-time setup token from the server log to create the first admin
+  user, then requires sign-in for API access.
 
 ## Requirements
 
@@ -189,7 +190,10 @@ A minimal `config.yaml`:
 ```yaml
 host: 127.0.0.1
 port: 7878
+trustProxy: false
+forceSecureCookies: false
 publicServer: false
+setupTokenHash: ""
 adminUser: ""
 adminPasswordHash: ""
 adminPasswordSalt: ""
@@ -215,6 +219,20 @@ Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
 `config.yaml` may contain a secret token — keep it readable only by your user.
 
+### Public-server hardening notes
+
+- When `host` is non-loopback (for example `0.0.0.0`), Concilium enables
+  `publicServer` at boot.
+- First-time admin setup requires the setup token printed in the server logs.
+  Complete setup over a trusted channel (for example SSH + loopback tunnel)
+  before exposing the port broadly.
+- Reverse proxy deployments should set `trustProxy: true` so client IP /
+  forwarded proto are honored. If TLS is terminated upstream and you still want
+  `Secure` cookies without proxy headers, set `forceSecureCookies: true`.
+- To revert to local-only mode, edit `~/.concilium/config.yaml`, set
+  `publicServer: false`, clear `adminUser`/`adminPasswordHash`/`adminPasswordSalt`/
+  `authSecret`/`setupTokenHash`, set `host: 127.0.0.1`, then restart Concilium.
+
 ## API
 
 All endpoints are JSON.
@@ -239,7 +257,7 @@ All endpoints are JSON.
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
 | `GET`    | `/api/system/directories` | list directories under the server user's home directory (`{path?, entries}`) |
 | `GET`    | `/api/system/auth/state` | public-server auth mode + setup/login state |
-| `POST`   | `/api/system/auth/setup` | create first admin user `{username, password}` (public-server mode only) |
+| `POST`   | `/api/system/auth/setup` | create first admin user `{setupToken, username, password, confirmPassword}` (public-server mode only) |
 | `POST`   | `/api/system/auth/login` | sign in `{username, password}` (public-server mode only) |
 | `POST`   | `/api/system/auth/logout` | clear current auth session |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
