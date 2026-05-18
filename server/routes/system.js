@@ -942,12 +942,6 @@ router.post('/new-project', newProjectRateLimiter, async (req, res) => {
       throw err;
     }
     if (!stats.isDirectory()) return res.status(400).json({ error: 'target location must be a directory' });
-    if (cfg.publicServer === true) {
-      const targetRealPath = await fs.promises.realpath(targetPath);
-      if (!isWithinBaseDirectory(homeRealPath, targetRealPath)) {
-        return res.status(403).json({ error: 'target location must be within the server home directory' });
-      }
-    }
     try {
       await fs.promises.access(targetPath, fs.constants.W_OK);
     } catch (err) {
