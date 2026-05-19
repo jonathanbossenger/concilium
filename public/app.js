@@ -772,6 +772,18 @@ class GitHubCard {
       link.textContent = `#${item.number} ${item.title}`;
       link.className = 'github-list-link';
       listItem.appendChild(link);
+      if (Array.isArray(item.assignees) && item.assignees.length) {
+        const assigneesWrap = document.createElement('span');
+        assigneesWrap.className = 'github-assignees';
+        for (const login of item.assignees) {
+          const assigneeEl = document.createElement('span');
+          assigneeEl.className = 'github-assignee';
+          assigneeEl.textContent = `@${login}`;
+          assigneeEl.title = `Assigned to ${login}`;
+          assigneesWrap.appendChild(assigneeEl);
+        }
+        listItem.appendChild(assigneesWrap);
+      }
       if (item.branch) {
         const branchWrap = document.createElement('span');
         branchWrap.className = 'github-branch';
