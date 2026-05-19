@@ -151,6 +151,7 @@ async function startStandalone() {
     if (await isResponding()) {
       console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone)`);
       printUrl();
+      await printSetupTokenFromLog();
       return;
     }
     await sleep(200);
@@ -159,6 +160,7 @@ async function startStandalone() {
   if (isStandaloneRunning()) {
     console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone — not yet responding; tail ${LOG_FILE})`);
     printUrl();
+    await printSetupTokenFromLog();
     return;
   }
 
@@ -200,12 +202,14 @@ async function startService() {
     if (await isResponding()) {
       console.log(`started (mode service, port ${PORT})`);
       printUrl();
+      await printSetupTokenFromLog();
       return;
     }
     await sleep(300);
   }
   console.log(`service started but not responding yet; tail ${LOG_FILE}`);
   printUrl();
+  await printSetupTokenFromLog();
 }
 
 function stopService() {
@@ -223,6 +227,34 @@ function tailText(content, lines) {
   const slice = parts.slice(-lines);
   const text = slice.join('\n');
   return text && !text.endsWith('\n') ? `${text}\n` : text;
+}
+
+function parseLatestSetupToken(logContent) {
+  if (!logContent) return null;
+  const pattern = /\[concilium\]\s+Public-server setup token:\s+([^\s]+)\s+\(fingerprint\s+([0-9a-f]+)\)/g;
+  let match = null;
+  let latest = null;
+  while ((match = pattern.exec(logContent)) !== null) {
+    latest = { token: match[1], fingerprint: match[2] };
+  }
+  return latest;
+}
+
+async function printSetupTokenFromLog() {
+  for (let i = 0; i < 10; i += 1) {
+    try {
+      const logContent = fs.readFileSync(LOG_FILE, 'utf8');
+      const setupToken = parseLatestSetupToken(logContent);
+      if (setupToken) {
+        console.log(`  setup token: ${setupToken.token} (fingerprint ${setupToken.fingerprint})`);
+        return true;
+      }
+    } catch {
+      // ignore transient log-read failures during startup
+    }
+    await sleep(100);
+  }
+  return false;
 }
 
 function createMissingLogWatcher(stop) {
