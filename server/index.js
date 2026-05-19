@@ -16,11 +16,12 @@ ensureState();
 const cfg = getConfig();
 const host = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim() : '127.0.0.1';
 const normalizedHost = host.toLowerCase();
-if (!cfg.publicServer && !isLoopbackAddress(normalizedHost) && normalizedHost !== 'localhost') {
+const hostIsNonLoopback = !isLoopbackAddress(normalizedHost) && normalizedHost !== 'localhost';
+if (!cfg.publicServer && hostIsNonLoopback) {
   cfg.publicServer = true;
   saveConfig(cfg);
 }
-if (cfg.publicServer && !hasAdminCredentials(cfg) && (!cfg.setupTokenHash || typeof cfg.setupTokenHash !== 'string')) {
+if (cfg.publicServer && hostIsNonLoopback && !hasAdminCredentials(cfg)) {
   const setupToken = generateSetupToken();
   cfg.setupTokenHash = hashSetupToken(setupToken);
   saveConfig(cfg);
