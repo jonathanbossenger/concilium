@@ -3,6 +3,8 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const yaml = require('js-yaml');
+const readline = require('readline/promises');
 const { spawn, spawnSync } = require('child_process');
 
 const SCRIPT = fs.realpathSync(process.argv[1]);
@@ -127,6 +129,43 @@ function run(file, args, options = {}) {
     process.exit(result.status || 1);
   }
   return true;
+}
+
+async function promptFirstStartHostMode() {
+  if (fs.existsSync(CONFIG_FILE)) return;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return;
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  let answer = '';
+  try {
+    answer = (await rl.question('First start: run in local loopback mode only? [Y/n] ')).trim().toLowerCase();
+  } finally {
+    rl.close();
+  }
+
+  const host = answer === 'n' || answer === 'no' ? '0.0.0.0' : '127.0.0.1';
+  const defaultConfig = {
+    host,
+    port: 7878,
+    trustProxy: false,
+    forceSecureCookies: false,
+    publicServer: false,
+    setupTokenHash: '',
+    adminUser: '',
+    adminPasswordHash: '',
+    adminPasswordSalt: '',
+    authSecret: '',
+    githubToken: '',
+    agents: [],
+    onboardingCompleted: false,
+  };
+
+  fs.writeFileSync(CONFIG_FILE, yaml.dump(defaultConfig, { sortKeys: false }));
+  console.log(`configured host: ${host}`);
 }
 
 async function startStandalone() {
@@ -274,6 +313,7 @@ function createMissingLogWatcher(stop) {
 }
 
 async function cmdStart() {
+  await promptFirstStartHostMode();
   if (await isResponding()) {
     console.log(`already running (port ${PORT})`);
     return;
