@@ -772,6 +772,27 @@ class GitHubCard {
       link.textContent = `#${item.number} ${item.title}`;
       link.className = 'github-list-link';
       listItem.appendChild(link);
+      // Show linked issue/PR numbers (e.g. "(#11)" or "(#11, #12)") after the title.
+      const linkedRefs = [
+        ...(Array.isArray(item.linkedIssues) ? item.linkedIssues.map((n) => ({ n, path: 'issues' })) : []),
+        ...(Array.isArray(item.linkedPulls)  ? item.linkedPulls.map((n) => ({ n, path: 'pull' }))   : []),
+      ];
+      if (linkedRefs.length && this.currentUrl) {
+        const refsEl = document.createElement('span');
+        refsEl.className = 'github-linked-refs';
+        refsEl.appendChild(document.createTextNode('('));
+        for (let i = 0; i < linkedRefs.length; i++) {
+          if (i > 0) refsEl.appendChild(document.createTextNode(', '));
+          const refLink = document.createElement('a');
+          refLink.href = `${this.currentUrl}/${linkedRefs[i].path}/${linkedRefs[i].n}`;
+          refLink.target = '_blank';
+          refLink.rel = 'noopener noreferrer';
+          refLink.textContent = `#${linkedRefs[i].n}`;
+          refsEl.appendChild(refLink);
+        }
+        refsEl.appendChild(document.createTextNode(')'));
+        listItem.appendChild(refsEl);
+      }
       if (Array.isArray(item.assignees) && item.assignees.length) {
         const assigneesWrap = document.createElement('span');
         assigneesWrap.className = 'github-assignees';

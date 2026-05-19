@@ -325,6 +325,20 @@ main:has(.card:only-child):not(.has-expanded) {
   color: var(--accent);
   text-decoration: underline;
 }
+.github-linked-refs {
+  font-size: 0.82em;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.github-linked-refs a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.github-linked-refs a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .github-assignees {
   display: inline-flex;
   align-items: center;

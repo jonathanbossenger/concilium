@@ -270,6 +270,19 @@ function toGitHubItem(item) {
   };
 }
 
+// Extract issue numbers from closing keywords in a PR body (e.g. "Closes #12", "Fixes #34").
+// Recognises all keyword variants GitHub uses to auto-close issues on merge.
+function parseLinkedIssues(body) {
+  if (!body || typeof body !== 'string') return [];
+  const pattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+  const found = new Set();
+  let match;
+  while ((match = pattern.exec(body)) !== null) {
+    found.add(Number(match[1]));
+  }
+  return [...found];
+}
+
 function toGitHubPull(item) {
   return {
     ...toGitHubItem(item),
@@ -341,12 +354,34 @@ router.post('/github-items', async (req, res) => {
         fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
         fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
       ]);
-      const issues = Array.isArray(rawIssues)
+      // Build PR→linked-issues and issue→linked-PRs maps from PR bodies.
+      const pullLinkedIssues = new Map(); // pullNumber → [issueNumber, ...]
+      const issueLinkedPulls = new Map(); // issueNumber → [pullNumber, ...]
+      if (Array.isArray(rawPulls)) {
+        for (const rawPull of rawPulls) {
+          const linked = parseLinkedIssues(rawPull.body);
+          if (linked.length) {
+            pullLinkedIssues.set(rawPull.number, linked);
+            for (const issueNum of linked) {
+              if (!issueLinkedPulls.has(issueNum)) issueLinkedPulls.set(issueNum, []);
+              issueLinkedPulls.get(issueNum).push(rawPull.number);
+            }
+          }
+        }
+      }
+
+      const issues = (Array.isArray(rawIssues)
         ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
-        : [];
-      const pulls = Array.isArray(rawPulls)
+        : []).map((issue) => {
+        const linked = issueLinkedPulls.get(issue.number);
+        return linked ? { ...issue, linkedPulls: linked } : issue;
+      });
+      const pulls = (Array.isArray(rawPulls)
         ? rawPulls.map(toGitHubPull)
-        : [];
+        : []).map((pull) => {
+        const linked = pullLinkedIssues.get(pull.number);
+        return linked ? { ...pull, linkedIssues: linked } : pull;
+      });
       res.json({ url, issues, pulls });
     } catch (err) {
       const detail = classifyGitHubError(err);
