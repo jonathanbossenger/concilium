@@ -393,14 +393,14 @@ router.post('/github-items', async (req, res) => {
           }
         `;
         const gqlData = await fetchGitHubGraphQL(gqlQuery, { owner: repoData.owner, repo: repoData.repo }, githubToken);
-        const rawPulls = (gqlData && gqlData.repository && gqlData.repository.pullRequests && gqlData.repository.pullRequests.nodes) || [];
-        const rawIssues = (gqlData && gqlData.repository && gqlData.repository.issues && gqlData.repository.issues.nodes) || [];
+        const rawPulls = gqlData?.repository?.pullRequests?.nodes || [];
+        const rawIssues = gqlData?.repository?.issues?.nodes || [];
 
         // Build bidirectional maps from canonical closingIssuesReferences.
         const pullLinkedIssues = new Map(); // pullNumber → [issueNumber, ...]
         const issueLinkedPulls = new Map(); // issueNumber → [pullNumber, ...]
         for (const rawPull of rawPulls) {
-          const linked = (rawPull.closingIssuesReferences && rawPull.closingIssuesReferences.nodes || []).map((n) => n.number);
+          const linked = (rawPull.closingIssuesReferences?.nodes || []).map((n) => n.number);
           if (linked.length) {
             pullLinkedIssues.set(rawPull.number, linked);
             for (const issueNum of linked) {
@@ -415,7 +415,7 @@ router.post('/github-items', async (req, res) => {
           title: item.title,
           url: item.url,
           state: item.state,
-          assignees: (item.assignees && item.assignees.nodes || []).map((a) => a.login),
+          assignees: (item.assignees?.nodes || []).map((a) => a.login),
           ...(issueLinkedPulls.has(item.number) ? { linkedPulls: issueLinkedPulls.get(item.number) } : {}),
         }));
         pulls = rawPulls.map((item) => ({
@@ -423,7 +423,7 @@ router.post('/github-items', async (req, res) => {
           title: item.title,
           url: item.url,
           state: item.state,
-          assignees: (item.assignees && item.assignees.nodes || []).map((a) => a.login),
+          assignees: (item.assignees?.nodes || []).map((a) => a.login),
           branch: typeof item.headRefName === 'string' ? item.headRefName : '',
           headSha: typeof item.headRefOid === 'string' ? item.headRefOid : '',
           draft: !!item.isDraft,
