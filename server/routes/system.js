@@ -274,7 +274,7 @@ function toGitHubItem(item) {
 // Recognises all keyword variants GitHub uses to auto-close issues on merge.
 function parseLinkedIssues(body) {
   if (!body || typeof body !== 'string') return [];
-  const pattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+  const pattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*#(\d+)/gi;
   const found = new Set();
   let match;
   while ((match = pattern.exec(body)) !== null) {
