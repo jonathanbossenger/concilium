@@ -781,10 +781,8 @@ class GitHubCard {
         const refsEl = document.createElement('span');
         refsEl.className = 'github-linked-refs';
         refsEl.appendChild(document.createTextNode('('));
-        let first = true;
-        for (const { n, path } of linkedRefs) {
-          if (!first) refsEl.appendChild(document.createTextNode(', '));
-          first = false;
+        for (const [i, { n, path }] of linkedRefs.entries()) {
+          if (i > 0) refsEl.appendChild(document.createTextNode(', '));
           const refLink = document.createElement('a');
           refLink.href = `${this.currentUrl}/${path}/${n}`;
           refLink.target = '_blank';

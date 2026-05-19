@@ -146,6 +146,34 @@ async function fetchGitHubJson(url) {
   return r.json();
 }
 
+async function fetchGitHubGraphQL(query, variables, githubToken) {
+  const r = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/vnd.github+json',
+      'user-agent': 'concilium',
+      authorization: `Bearer ${githubToken}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!r.ok) {
+    const err = new Error(`GitHub GraphQL request failed with status ${r.status}`);
+    err.status = r.status;
+    const remainingHeader = r.headers.get('x-ratelimit-remaining');
+    const remaining = remainingHeader === null ? null : Number.parseInt(remainingHeader, 10);
+    err.rateLimited = Number.isFinite(remaining) && remaining === 0;
+    throw err;
+  }
+  const data = await r.json();
+  if (Array.isArray(data.errors) && data.errors.length) {
+    const err = new Error(data.errors[0].message || 'GraphQL error');
+    err.graphqlErrors = data.errors;
+    throw err;
+  }
+  return data.data;
+}
+
 function classifyGitHubError(err) {
   if (err && err.status === 403 && err.rateLimited) {
     return { code: 'rate_limited', message: 'github rate limited (http 403)' };
@@ -270,19 +298,6 @@ function toGitHubItem(item) {
   };
 }
 
-// Extract issue numbers from closing keywords in a PR body (e.g. "Closes #12", "Fixes #34").
-// Recognises all keyword variants GitHub uses to auto-close issues on merge.
-function parseLinkedIssues(body) {
-  if (!body || typeof body !== 'string') return [];
-  const pattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*#(\d+)/gi;
-  const found = new Set();
-  let match;
-  while ((match = pattern.exec(body)) !== null) {
-    found.add(Number(match[1]));
-  }
-  return [...found];
-}
-
 function toGitHubPull(item) {
   return {
     ...toGitHubItem(item),
@@ -350,16 +365,42 @@ router.post('/github-items', async (req, res) => {
     if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
     try {
-      const [rawIssues, rawPulls] = await Promise.all([
-        fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
-        fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
-      ]);
-      // Build PR→linked-issues and issue→linked-PRs maps from PR bodies.
-      const pullLinkedIssues = new Map(); // pullNumber → [issueNumber, ...]
-      const issueLinkedPulls = new Map(); // issueNumber → [pullNumber, ...]
-      if (Array.isArray(rawPulls)) {
+      const cfg = getConfig();
+      const githubToken = getGitHubToken(cfg);
+      let issues, pulls;
+      if (githubToken) {
+        // When a token is available, use the GraphQL API to fetch issues, PRs, and their
+        // canonical closing-issue links (closingIssuesReferences) in a single round-trip.
+        // This covers both body-keyword links and links set via the GitHub UI sidebar,
+        // which REST + body parsing cannot detect.
+        const gqlQuery = `
+          query($owner: String!, $repo: String!) {
+            repository(owner: $owner, name: $repo) {
+              pullRequests(states: [OPEN], first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                nodes {
+                  number title url state isDraft headRefName headRefOid id
+                  assignees(first: 10) { nodes { login } }
+                  closingIssuesReferences(first: 10) { nodes { number } }
+                }
+              }
+              issues(states: [OPEN], first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                nodes {
+                  number title url state
+                  assignees(first: 10) { nodes { login } }
+                }
+              }
+            }
+          }
+        `;
+        const gqlData = await fetchGitHubGraphQL(gqlQuery, { owner: repoData.owner, repo: repoData.repo }, githubToken);
+        const rawPulls = (gqlData && gqlData.repository && gqlData.repository.pullRequests && gqlData.repository.pullRequests.nodes) || [];
+        const rawIssues = (gqlData && gqlData.repository && gqlData.repository.issues && gqlData.repository.issues.nodes) || [];
+
+        // Build bidirectional maps from canonical closingIssuesReferences.
+        const pullLinkedIssues = new Map(); // pullNumber → [issueNumber, ...]
+        const issueLinkedPulls = new Map(); // issueNumber → [pullNumber, ...]
         for (const rawPull of rawPulls) {
-          const linked = parseLinkedIssues(rawPull.body);
+          const linked = (rawPull.closingIssuesReferences && rawPull.closingIssuesReferences.nodes || []).map((n) => n.number);
           if (linked.length) {
             pullLinkedIssues.set(rawPull.number, linked);
             for (const issueNum of linked) {
@@ -368,20 +409,41 @@ router.post('/github-items', async (req, res) => {
             }
           }
         }
-      }
 
-      const issues = (Array.isArray(rawIssues)
-        ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
-        : []).map((issue) => {
-        const linked = issueLinkedPulls.get(issue.number);
-        return linked ? { ...issue, linkedPulls: linked } : issue;
-      });
-      const pulls = (Array.isArray(rawPulls)
-        ? rawPulls.map(toGitHubPull)
-        : []).map((pull) => {
-        const linked = pullLinkedIssues.get(pull.number);
-        return linked ? { ...pull, linkedIssues: linked } : pull;
-      });
+        issues = rawIssues.map((item) => ({
+          number: item.number,
+          title: item.title,
+          url: item.url,
+          state: item.state,
+          assignees: (item.assignees && item.assignees.nodes || []).map((a) => a.login),
+          ...(issueLinkedPulls.has(item.number) ? { linkedPulls: issueLinkedPulls.get(item.number) } : {}),
+        }));
+        pulls = rawPulls.map((item) => ({
+          number: item.number,
+          title: item.title,
+          url: item.url,
+          state: item.state,
+          assignees: (item.assignees && item.assignees.nodes || []).map((a) => a.login),
+          branch: typeof item.headRefName === 'string' ? item.headRefName : '',
+          headSha: typeof item.headRefOid === 'string' ? item.headRefOid : '',
+          draft: !!item.isDraft,
+          nodeId: typeof item.id === 'string' ? item.id : '',
+          ...(pullLinkedIssues.has(item.number) ? { linkedIssues: pullLinkedIssues.get(item.number) } : {}),
+        }));
+      } else {
+        // No token: GitHub GraphQL requires authentication, so fall back to REST.
+        // Issues and PRs are displayed without linked-ref badges in this mode.
+        const [rawIssues, rawPulls] = await Promise.all([
+          fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
+          fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
+        ]);
+        issues = Array.isArray(rawIssues)
+          ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)
+          : [];
+        pulls = Array.isArray(rawPulls)
+          ? rawPulls.map(toGitHubPull)
+          : [];
+      }
       res.json({ url, issues, pulls });
     } catch (err) {
       const detail = classifyGitHubError(err);
