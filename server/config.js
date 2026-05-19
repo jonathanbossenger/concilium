@@ -52,6 +52,7 @@ function saveConfig(newCfg) {
 }
 
 module.exports = {
+  DEFAULT_CONFIG,
   ensureState,
   getConfig,
   reloadConfig,

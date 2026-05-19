@@ -26,6 +26,7 @@ if (cfg.publicServer && hostIsNonLoopback && !hasAdminCredentials(cfg)) {
   cfg.setupTokenHash = hashSetupToken(setupToken);
   saveConfig(cfg);
   const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
+  // Format must stay in sync with bin/conciliumctl parseLatestSetupToken().
   console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
 }
 
@@ -47,6 +48,7 @@ app.use((req, _res, next) => {
       const setupToken = generateSetupToken();
       cfg.setupTokenHash = hashSetupToken(setupToken);
       const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
+      // Format must stay in sync with bin/conciliumctl parseLatestSetupToken().
       console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
     }
     saveConfig(cfg);

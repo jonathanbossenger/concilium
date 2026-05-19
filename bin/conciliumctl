@@ -6,6 +6,7 @@ const path = require('path');
 const yaml = require('js-yaml');
 const readline = require('readline/promises');
 const { spawn, spawnSync } = require('child_process');
+const { DEFAULT_CONFIG } = require('../server/config');
 
 const SCRIPT = fs.realpathSync(process.argv[1]);
 const BIN_DIR = path.dirname(SCRIPT);
@@ -40,6 +41,24 @@ function readPort() {
   } catch {
     return 7878;
   }
+}
+
+function readHost() {
+  if (!fs.existsSync(CONFIG_FILE)) return '127.0.0.1';
+  try {
+    const yaml = fs.readFileSync(CONFIG_FILE, 'utf8');
+    const match = yaml.match(/^\s*host:\s*["']?([^"'\r\n#]+)["']?\s*$/m);
+    if (!match) return '127.0.0.1';
+    const host = String(match[1] || '').trim();
+    return host || '127.0.0.1';
+  } catch {
+    return '127.0.0.1';
+  }
+}
+
+function isLoopbackHost(host) {
+  const normalized = String(host || '').trim().toLowerCase();
+  return !normalized || normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost';
 }
 
 const PORT = readPort();
@@ -149,19 +168,9 @@ async function promptFirstStartHostMode() {
 
   const host = answer === 'n' || answer === 'no' ? '0.0.0.0' : '127.0.0.1';
   const defaultConfig = {
+    ...DEFAULT_CONFIG,
     host,
-    port: 7878,
-    trustProxy: false,
-    forceSecureCookies: false,
-    publicServer: false,
-    setupTokenHash: '',
-    adminUser: '',
-    adminPasswordHash: '',
-    adminPasswordSalt: '',
-    authSecret: '',
-    githubToken: '',
-    agents: [],
-    onboardingCompleted: false,
+    agents: Array.isArray(DEFAULT_CONFIG.agents) ? [...DEFAULT_CONFIG.agents] : [],
   };
 
   fs.writeFileSync(CONFIG_FILE, yaml.dump(defaultConfig, { sortKeys: false }));
@@ -190,7 +199,7 @@ async function startStandalone() {
     if (await isResponding()) {
       console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone)`);
       printUrl();
-      await printSetupTokenFromLog();
+      await maybePrintSetupTokenFromLog();
       return;
     }
     await sleep(200);
@@ -199,7 +208,7 @@ async function startStandalone() {
   if (isStandaloneRunning()) {
     console.log(`started (pid ${child.pid}, port ${PORT}, mode standalone — not yet responding; tail ${LOG_FILE})`);
     printUrl();
-    await printSetupTokenFromLog();
+    await maybePrintSetupTokenFromLog();
     return;
   }
 
@@ -241,14 +250,14 @@ async function startService() {
     if (await isResponding()) {
       console.log(`started (mode service, port ${PORT})`);
       printUrl();
-      await printSetupTokenFromLog();
+      await maybePrintSetupTokenFromLog();
       return;
     }
     await sleep(300);
   }
   console.log(`service started but not responding yet; tail ${LOG_FILE}`);
   printUrl();
-  await printSetupTokenFromLog();
+  await maybePrintSetupTokenFromLog();
 }
 
 function stopService() {
@@ -270,6 +279,7 @@ function tailText(content, lines) {
 
 function parseLatestSetupToken(logContent) {
   if (!logContent) return null;
+  // Keep this regex aligned with the setup-token log line in server/index.js.
   const pattern = /\[concilium\]\s+Public-server setup token:\s+([^\s]+)\s+\(fingerprint\s+([0-9a-f]+)\)/g;
   let match = null;
   let latest = null;
@@ -277,6 +287,11 @@ function parseLatestSetupToken(logContent) {
     latest = { token: match[1], fingerprint: match[2] };
   }
   return latest;
+}
+
+async function maybePrintSetupTokenFromLog() {
+  if (isLoopbackHost(readHost())) return false;
+  return printSetupTokenFromLog();
 }
 
 async function printSetupTokenFromLog() {

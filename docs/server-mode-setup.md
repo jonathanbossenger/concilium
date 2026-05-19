@@ -2,15 +2,31 @@
 
 Use this guide when you want to access Concilium from another machine (for example over Tailscale or through a reverse proxy).
 
-## 1) Install and start once in local mode
+## 1) Install and start Concilium
 
-Follow [install-and-first-time-setup.md](install-and-first-time-setup.md), then stop Concilium:
+Follow [install-and-first-time-setup.md](install-and-first-time-setup.md), then run:
+
+```bash
+conciliumctl start
+```
+
+On first run (when `~/.concilium/config.yaml` does not exist), `conciliumctl` prompts:
+
+```text
+First start: run in local loopback mode only? [Y/n]
+```
+
+Answer `n` to bootstrap server mode (`host: 0.0.0.0`) immediately.
+
+If your config already exists, or if you answered the prompt differently, continue below.
+
+## 2) Update `~/.concilium/config.yaml` (fallback/manual path)
+
+If Concilium is already running, stop it before editing:
 
 ```bash
 conciliumctl stop
 ```
-
-## 2) Update `~/.concilium/config.yaml`
 
 Edit the config and set a non-loopback host:
 
@@ -37,14 +53,20 @@ If TLS is terminated upstream and you still want `Secure` cookies even without f
 forceSecureCookies: true
 ```
 
-## 3) Start Concilium and read the setup token
+## 3) Start (or restart) Concilium and read the setup token
 
 ```bash
 conciliumctl start
+```
+
+When server mode is enabled and no admin exists yet, `conciliumctl start` prints the current setup token in the terminal output.
+You can still view it in logs with:
+
+```bash
 conciliumctl logs
 ```
 
-When server mode is enabled and no admin exists yet, Concilium prints a one-time setup token in the server logs.
+Each restart issues a new setup token until admin setup is completed; always use the most recently printed token.
 
 ## 4) Open Concilium from a remote client
 
