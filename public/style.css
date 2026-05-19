@@ -325,6 +325,22 @@ main:has(.card:only-child):not(.has-expanded) {
   color: var(--accent);
   text-decoration: underline;
 }
+.github-assignees {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2em;
+  flex: 0 1 auto;
+}
+.github-assignee {
+  font-size: 0.82em;
+  color: var(--text-dim);
+  background: var(--bg-input);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 0.1em 0.45em;
+  white-space: nowrap;
+}
 .github-branch {
   flex: 0 1 auto;
   min-width: 0;
