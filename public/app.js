@@ -154,6 +154,10 @@ function activeAnyCard() {
   return cards.values().next().value || termCards.values().next().value || null;
 }
 
+function isOpenCard(card) {
+  return !!(card && card.el && card.el.isConnected);
+}
+
 function isTypingContext(node) {
   if (!(node instanceof Element)) return false;
   return !!node.closest('input, textarea, select, [contenteditable], [role="textbox"], .xterm-helper-textarea');
@@ -211,7 +215,7 @@ function handleKeyboardShortcut(keyboardEvent) {
     const card = activeSessionCard();
     if (!card) return;
     keyboardEvent.preventDefault();
-    addTerminalCard(card.cwd.value.trim(), card.el);
+    card.openTerminalCard();
     return;
   }
   if (keyCode === 'KeyE') {
@@ -299,6 +303,8 @@ class Card {
     this._checkGitHubTimer = null;
     this._githubAbortCtrl = null;
     this.githubUrl = '';
+    this.linkedTerminalCard = null;
+    this.linkedGitHubCard = null;
 
     this.refreshAgentSelect();
 
@@ -307,7 +313,7 @@ class Card {
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
-    this.openTermBtn.addEventListener('click', () => addTerminalCard(this.cwd.value.trim(), this.el));
+    this.openTermBtn.addEventListener('click', () => this.openTerminalCard());
     this.cloneBtn.addEventListener('click', () => cloneCard(this));
     this.githubBtn.addEventListener('click', () => this.openGitHubCard());
     this.agentSelect.addEventListener('change', () => saveLayout());
@@ -315,6 +321,7 @@ class Card {
     enableCardDragging(this.el, this.headerEl);
 
     cards.add(this);
+    this.syncLinkedCardButtons();
   }
 
   // Must be called AFTER the card element is attached to the DOM, so the
@@ -386,12 +393,49 @@ class Card {
   setGitHubBtnMode(mode) {
     if (mode === 'hidden') {
       this.githubBtn.hidden = true;
+      this.githubBtn.disabled = false;
       return;
     }
     const label = mode === 'browse' ? GITHUB_BTN_LABEL_BROWSE : GITHUB_BTN_LABEL_CREATE;
     this.githubBtn.title = label;
     this.githubBtn.setAttribute('aria-label', label);
     this.githubBtn.hidden = false;
+    this.syncLinkedCardButtons();
+  }
+
+  syncLinkedCardButtons() {
+    this.openTermBtn.disabled = isOpenCard(this.linkedTerminalCard);
+    this.githubBtn.disabled = !this.githubBtn.hidden && isOpenCard(this.linkedGitHubCard);
+  }
+
+  focusLinkedCard(card) {
+    if (!isOpenCard(card)) return;
+    activeCardEl = card.el;
+    card.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (typeof card.term?.focus === 'function') card.term.focus();
+  }
+
+  releaseLinkedTerminalCard(card) {
+    if (this.linkedTerminalCard !== card) return;
+    this.linkedTerminalCard = null;
+    this.syncLinkedCardButtons();
+  }
+
+  releaseLinkedGitHubCard(card) {
+    if (this.linkedGitHubCard !== card) return;
+    this.linkedGitHubCard = null;
+    this.syncLinkedCardButtons();
+  }
+
+  openTerminalCard() {
+    if (isOpenCard(this.linkedTerminalCard)) {
+      this.focusLinkedCard(this.linkedTerminalCard);
+      return this.linkedTerminalCard;
+    }
+    const card = addTerminalCard({ cwd: this.cwd.value.trim(), afterEl: this.el, parentCard: this });
+    this.linkedTerminalCard = card;
+    this.syncLinkedCardButtons();
+    return card;
   }
 
   async run() {
@@ -625,9 +669,16 @@ class Card {
   openGitHubCard() {
     if (!this.githubUrl) {
       window.open(NEW_GITHUB_REPO_URL, '_blank', 'noopener,noreferrer');
-      return;
+      return null;
     }
-    addGitHubCard({ afterEl: this.el, repoUrl: this.githubUrl });
+    if (isOpenCard(this.linkedGitHubCard)) {
+      this.focusLinkedCard(this.linkedGitHubCard);
+      return this.linkedGitHubCard;
+    }
+    const card = addGitHubCard({ afterEl: this.el, repoUrl: this.githubUrl, parentCard: this });
+    this.linkedGitHubCard = card;
+    this.syncLinkedCardButtons();
+    return card;
   }
 
   async kill() {
@@ -647,6 +698,10 @@ class Card {
   async close() {
     clearTimeout(this._checkGitHubTimer);
     if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
+    const linkedTerminalCard = this.linkedTerminalCard;
+    const linkedGitHubCard = this.linkedGitHubCard;
+    this.linkedTerminalCard = null;
+    this.linkedGitHubCard = null;
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
@@ -659,6 +714,10 @@ class Card {
     clearActiveCardIfMatch(this.el);
     this.el.remove();
     saveLayout();
+    await Promise.all([
+      isOpenCard(linkedTerminalCard) ? linkedTerminalCard.close() : Promise.resolve(),
+      isOpenCard(linkedGitHubCard) ? Promise.resolve(linkedGitHubCard.close()) : Promise.resolve(),
+    ]);
     // Fire-and-forget deletes; server will kill any still-running tasks first.
     await Promise.all(ids.map((id) =>
       fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
@@ -667,7 +726,7 @@ class Card {
 }
 
 class GitHubCard {
-  constructor() {
+  constructor(parentCard = null) {
     const template = $('#github-card-template');
     this.el = template.content.firstElementChild.cloneNode(true);
     this.titleEl = $('.card-term-label', this.el);
@@ -682,6 +741,7 @@ class GitHubCard {
     this.headerEl = $('.card-header', this.el);
     this._loadAbortCtrl = null;
     this.currentUrl = '';
+    this.parentCard = parentCard;
 
     this.closeBtn.addEventListener('click', () => this.close());
     this.newIssueBtn.addEventListener('click', () => this.openNewIssueDialog());
@@ -1067,13 +1127,14 @@ class GitHubCard {
 
   close() {
     if (this._loadAbortCtrl) this._loadAbortCtrl.abort();
+    if (this.parentCard) this.parentCard.releaseLinkedGitHubCard(this);
     clearActiveCardIfMatch(this.el);
     if (this.el.parentNode) this.el.remove();
   }
 }
 
 class TerminalCard {
-  constructor() {
+  constructor(parentCard = null) {
     const template = $('#terminal-card-template');
     this.el = template.content.firstElementChild.cloneNode(true);
     this.closeBtn = $('.card-close', this.el);
@@ -1089,6 +1150,7 @@ class TerminalCard {
     this.fitAddon = null;
     this.resizeObserver = null;
     this.lastSentSize = null;
+    this.parentCard = parentCard;
 
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
@@ -1224,6 +1286,7 @@ class TerminalCard {
 
   async close() {
     termCards.delete(this);
+    if (this.parentCard) this.parentCard.releaseLinkedTerminalCard(this);
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
@@ -1366,8 +1429,8 @@ function openGitCheatsheet(card) {
   if (!dlg.open) dlg.showModal();
 }
 
-function addTerminalCard(cwd, afterEl = null) {
-  const card = new TerminalCard();
+function addTerminalCard({ cwd = '', afterEl = null, parentCard = null } = {}) {
+  const card = new TerminalCard(parentCard);
   const main = $('#cards');
   // Insert directly after the triggering card so the new terminal lands in
   // the next grid slot (same row if there's room, next row otherwise).
@@ -1383,8 +1446,8 @@ function addTerminalCard(cwd, afterEl = null) {
   return card;
 }
 
-function addGitHubCard({ afterEl = null, repoUrl = '' } = {}) {
-  const card = new GitHubCard();
+function addGitHubCard({ afterEl = null, repoUrl = '', parentCard = null } = {}) {
+  const card = new GitHubCard(parentCard);
   const main = $('#cards');
   if (afterEl && afterEl.parentNode === main) {
     main.insertBefore(card.el, afterEl.nextSibling);
