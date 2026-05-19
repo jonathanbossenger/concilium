@@ -161,6 +161,7 @@ For full install, setup, and usage details, see the documentation section below.
 For installation and first-run setup, see:
 
 - [docs/install-and-first-time-setup.md](docs/install-and-first-time-setup.md)
+- [docs/server-mode-setup.md](docs/server-mode-setup.md) for remote/server deployments (including Tailscale)
 - [docs/README.md](docs/README.md) for the full user docs index
 
 ### Usage
