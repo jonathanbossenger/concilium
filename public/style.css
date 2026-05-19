@@ -809,6 +809,7 @@ dialog section h3 {
   border: 0;
   border-radius: 0;
   background: transparent;
+  color: var(--text);
 }
 .directory-browser-list button:hover {
   background: var(--bg-hover);
