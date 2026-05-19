@@ -578,6 +578,10 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   border: 1px solid var(--border-strong);
 }
 .card-open-term:hover { background: var(--bg-hover); }
+.card-open-term:disabled,
+.card-github:disabled {
+  opacity: 0.6;
+}
 
 .card-term-label {
   flex: 1;
