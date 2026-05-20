@@ -1144,7 +1144,7 @@ class GitHubCard {
       }
       this.renderList(this.issuesEl, issues, 'no open issues', { withIssueActions: true });
       this.renderList(this.pullsEl, pulls, 'no open pull requests', { withPullActions: true });
-      this.setStatus(data.error || 'loaded', data.error ? 'warn' : 'ok');
+      this.setStatus(data.error || data.warning || 'loaded', data.error ? 'warn' : data.warning ? 'warn' : 'ok');
     } catch (err) {
       if (err.name === 'AbortError') return;
       this.setStatus('failed', 'err');

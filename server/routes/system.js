@@ -373,6 +373,12 @@ router.post('/github-items', async (req, res) => {
         // canonical closing-issue links (closingIssuesReferences) in a single round-trip.
         // This covers both body-keyword links and links set via the GitHub UI sidebar,
         // which REST + body parsing cannot detect.
+        // Note: fetches up to 20 open PRs and issues (most-recently-updated).
+        // closingIssuesReferences returns up to 10 linked issues per PR.
+        // An issue closed by an older or already-merged PR may not appear in the
+        // top-20 PR window, so linkedPulls on that issue will be absent.
+        // closingIssuesReferences includes linked issues regardless of their state,
+        // so a PR badge may reference an already-closed issue.
         const gqlQuery = `
           query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
@@ -400,7 +406,7 @@ router.post('/github-items', async (req, res) => {
         const pullLinkedIssues = new Map(); // pullNumber → [issueNumber, ...]
         const issueLinkedPulls = new Map(); // issueNumber → [pullNumber, ...]
         for (const rawPull of rawPulls) {
-          const linked = (rawPull.closingIssuesReferences?.nodes || []).map((n) => n.number);
+          const linked = (rawPull.closingIssuesReferences?.nodes || []).filter(Boolean).map((n) => n.number);
           if (linked.length) {
             pullLinkedIssues.set(rawPull.number, linked);
             for (const issueNum of linked) {
@@ -414,16 +420,16 @@ router.post('/github-items', async (req, res) => {
           number: item.number,
           title: item.title,
           url: item.url,
-          state: item.state,
-          assignees: (item.assignees?.nodes || []).map((a) => a.login),
+          state: (item.state || '').toLowerCase(),
+          assignees: (item.assignees?.nodes || []).filter(Boolean).map((a) => a.login),
           ...(issueLinkedPulls.has(item.number) ? { linkedPulls: issueLinkedPulls.get(item.number) } : {}),
         }));
         pulls = rawPulls.map((item) => ({
           number: item.number,
           title: item.title,
           url: item.url,
-          state: item.state,
-          assignees: (item.assignees?.nodes || []).map((a) => a.login),
+          state: (item.state || '').toLowerCase(),
+          assignees: (item.assignees?.nodes || []).filter(Boolean).map((a) => a.login),
           branch: typeof item.headRefName === 'string' ? item.headRefName : '',
           headSha: typeof item.headRefOid === 'string' ? item.headRefOid : '',
           draft: !!item.isDraft,
@@ -443,6 +449,7 @@ router.post('/github-items', async (req, res) => {
         pulls = Array.isArray(rawPulls)
           ? rawPulls.map(toGitHubPull)
           : [];
+        return res.json({ url, issues, pulls, warning: 'linked refs require a github token' });
       }
       res.json({ url, issues, pulls });
     } catch (err) {
