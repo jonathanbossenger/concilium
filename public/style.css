@@ -318,10 +318,21 @@ main:has(.card:only-child):not(.has-expanded) {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.github-prs li > .github-list-link {
-  flex: 1 1 100%;
-}
 .github-list a.github-list-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.github-linked-refs {
+  font-size: 0.82em;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.github-linked-refs a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.github-linked-refs a:hover {
   color: var(--accent);
   text-decoration: underline;
 }
