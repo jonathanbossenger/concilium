@@ -205,7 +205,7 @@ main:has(.card:only-child):not(.has-expanded) {
   min-width: 0;
 }
 .card-agent {
-  flex: 1 1 180px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .card-status {
@@ -580,10 +580,20 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   align-items: center;
   gap: 0.4em;
 }
+.card-controls-row .card-agent { flex: 1 1 auto; }
 .card-cwd-browse { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
 .card-controls-row .card-run { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
-.card-controls-row .card-status { flex: 1 1 100px; }
-.card-controls-row .card-open-term { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.card-controls-row .card-status {
+  flex: 0 1 180px;
+  max-width: 180px;
+}
+.card-controls-row .card-open-term,
+.card-controls-row .card-clone,
+.card-controls-row .card-github {
+  flex: 0 0 auto;
+  padding: 0.4em 0.6em;
+  font-size: 1em;
+}
 .card-cwd-browse {
   background: var(--bg-input);
   color: var(--text);
@@ -597,7 +607,17 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   color: var(--text);
   border: 1px solid var(--border-strong);
 }
-.card-open-term:hover { background: var(--bg-hover); }
+.card-open-term:hover,
+.card-controls-row .card-clone:hover,
+.card-controls-row .card-github:not([hidden]):hover { background: var(--bg-hover); }
+.card-controls-row .card-clone,
+.card-controls-row .card-github:not([hidden]) {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  line-height: 1;
+}
 .card-open-term:disabled,
 .card-github:disabled {
   opacity: 0.6;
