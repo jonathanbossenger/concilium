@@ -288,6 +288,7 @@ class Card {
     this.termEl = $('.card-term', this.el);
     this.taskForm = $('.card-form', this.el);
     this.headerEl = $('.card-header', this.el);
+    this.dragHandleEl = $('.card-drag-handle', this.el);
 
     this.taskIds = new Set();
     this.currentTaskId = null;
@@ -318,7 +319,13 @@ class Card {
     this.githubBtn.addEventListener('click', () => this.openGitHubCard());
     this.agentSelect.addEventListener('change', () => saveLayout());
     this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
-    enableCardDragging(this.el, this.headerEl);
+    this.cwd.addEventListener('keydown', (keyboardEvent) => {
+      if (keyboardEvent.key === 'Enter' && !this.currentTaskId) {
+        keyboardEvent.preventDefault();
+        this.run();
+      }
+    });
+    enableCardDragging(this.el, this.dragHandleEl || this.headerEl);
 
     cards.add(this);
     this.syncLinkedCardButtons();
