@@ -195,15 +195,18 @@ main:has(.card:only-child):not(.has-expanded) {
   cursor: grab;
 }
 .card-header:active { cursor: grabbing; }
-.card-header select,
+.card-header input,
 .card-header button,
 .card-header a,
 .card-header .card-actions,
 .card-header .card-status { cursor: default; }
-.card-agent {
+.card-header .card-cwd {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 50%;
+}
+.card-agent {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 .card-status {
   font-size: 0.78em;
@@ -211,7 +214,7 @@ main:has(.card:only-child):not(.has-expanded) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 40%;
+  min-width: 0;
 }
 .card-status.running { color: var(--status-running); }
 .card-status.ok { color: var(--status-ok); }
@@ -572,14 +575,15 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   font-size: 0.78em;
   color: var(--text-dim);
 }
-.cwd-row {
+.card-controls-row {
   display: flex;
+  align-items: center;
   gap: 0.4em;
 }
-.cwd-row .card-cwd { flex: 1; }
-.cwd-row .card-cwd-browse { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
-.cwd-row .card-run { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
-.cwd-row .card-open-term { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.card-cwd-browse { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.card-controls-row .card-run { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
+.card-controls-row .card-status { flex: 1 1 100px; }
+.card-controls-row .card-open-term { flex: 0 0 auto; padding: 0.4em 0.6em; font-size: 1em; }
 .card-cwd-browse {
   background: var(--bg-input);
   color: var(--text);
