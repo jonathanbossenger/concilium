@@ -250,8 +250,8 @@ main:has(.card:only-child):not(.has-expanded) {
 .card-close:hover { background: var(--bg-danger-soft); color: var(--stderr); border-color: var(--border-danger); }
 .card-actions .card-github:not([hidden]),
 .card-actions .card-clone,
-.card-actions .card-new-issue:not([hidden]),
-.card-actions .card-refresh {
+.card-new-issue:not([hidden]),
+.card-refresh {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -268,15 +268,15 @@ main:has(.card:only-child):not(.has-expanded) {
 }
 .card-actions .card-clone { border: 1px solid transparent; }
 .card-actions .card-github:not([hidden]) { border: 1px solid transparent; }
-.card-actions .card-new-issue:not([hidden]) { border: 1px solid transparent; }
-.card-actions .card-refresh { border: 1px solid transparent; }
+.card-new-issue:not([hidden]) { border: 1px solid transparent; }
+.card-refresh { border: 1px solid transparent; }
 .card-actions .card-github:not([hidden]):hover,
 .card-actions .card-clone:hover,
-.card-actions .card-new-issue:not([hidden]):hover,
-.card-actions .card-refresh:hover { background: var(--bg-input); color: var(--text); }
+.card-new-issue:not([hidden]):hover,
+.card-refresh:hover { background: var(--bg-input); color: var(--text); }
 .card-actions .card-github:not([hidden]):hover,
-.card-actions .card-new-issue:not([hidden]):hover,
-.card-actions .card-refresh:hover { border-color: var(--border-soft); }
+.card-new-issue:not([hidden]):hover,
+.card-refresh:hover { border-color: var(--border-soft); }
 .card-actions .card-clone:hover { border-color: var(--border-soft); }
 .card-refresh.spinning svg { animation: card-refresh-spin 0.7s linear infinite; }
 @keyframes card-refresh-spin { to { transform: rotate(360deg); } }
