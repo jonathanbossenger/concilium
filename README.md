@@ -47,7 +47,8 @@ Your council of agents — Concilium!
   Card controls are compact icon buttons: 📂 opens the OS folder picker for
   the working directory, ▶ starts the task (turns red while a task is
   running, click to kill), **>_** opens a pop-out terminal card (see
-  below), and **⤢** expands a single card to fill the main area with a
+  below), **`</>`** opens the current working directory in your configured
+  editor on the local loopback UI, and **⤢** expands a single card to fill the main area with a
   smooth View Transitions animation between states. When the working
   directory resolves to a GitHub repo (via `git remote`), a GitHub
   (octocat) button appears in the card header: clicking it opens a GitHub
@@ -173,7 +174,7 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + optional githubToken + agent list
+├── config.yaml      # port + optional githubToken + optional preferredEditor + agent list
 ├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log
 ├── server.log       # the server's own stdout/stderr
@@ -200,6 +201,7 @@ agents:
 `interactive: false` → stdin is piped in, then closed (one-shot).
 `interactive: true` → spawned under a PTY; stays alive for follow-up input.
 `githubToken` is optional and used for authenticated GitHub API requests.
+`preferredEditor` is optional and used by the **`</>`** card button on the local loopback UI.
 
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
@@ -227,6 +229,9 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/tasks/:id/resize` | resize the PTY `{cols, rows}` (PTY mode only) |
 | `GET`    | `/api/stream/:id` | SSE: replays past events then streams live |
 | `POST`   | `/api/system/pick-directory` | open the OS folder picker, returns `{path}` |
+| `GET`    | `/api/system/preferred-editor` | get the local-loopback preferred editor setting and whether it is configured |
+| `POST`   | `/api/system/preferred-editor` | save/clear the local-loopback preferred editor `{command, args?}` |
+| `POST`   | `/api/system/open-editor` | open `{path}` in the configured preferred editor (local loopback UI only) |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
 | `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
 | `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |

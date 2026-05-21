@@ -619,6 +619,7 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   max-width: 180px;
 }
 .card-controls-row .card-open-term,
+.card-controls-row .card-open-editor,
 .card-controls-row .card-clone,
 .card-controls-row .card-github {
   flex: 0 0 auto;
@@ -638,7 +639,13 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   color: var(--text);
   border: 1px solid var(--border-strong);
 }
+.card-open-editor {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
 .card-open-term:hover,
+.card-open-editor:hover,
 .card-controls-row .card-clone:hover,
 .card-controls-row .card-github:not([hidden]):hover { background: var(--bg-hover); }
 .card-controls-row .card-clone,
@@ -650,6 +657,7 @@ main.has-expanded > .card:not(.expanded) { display: none; }
   line-height: 1;
 }
 .card-open-term:disabled,
+.card-open-editor:disabled,
 .card-github:disabled {
   opacity: 0.6;
 }
