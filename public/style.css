@@ -44,6 +44,7 @@
   --term-fg: #dddddd;
   --term-cursor: #dddddd;
   --term-selection: rgba(120,180,255,0.30);
+  --card-min-width: 440px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -166,13 +167,13 @@ main {
   margin: 0 auto;
   padding: 1em;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min-width)), 1fr));
   gap: 1em;
   align-content: start;
 }
 
 main:not(.has-expanded) {
-  max-width: calc(1320px + 4em);
+  max-width: calc((var(--card-min-width) * 3) + 4em);
 }
 
 /* Single card: reserve a second track so the lone card stays at ~50%
