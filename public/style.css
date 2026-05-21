@@ -213,6 +213,7 @@ main:has(.card:only-child):not(.has-expanded) {
   cursor: grab;
   user-select: none;
 }
+.card-drag-handle:hover { color: var(--text); }
 .card-drag-handle:active { cursor: grabbing; }
 .card-agent {
   flex: 1 1 auto;

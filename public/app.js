@@ -746,6 +746,7 @@ class GitHubCard {
     this.issuesLinkEl = $('.github-issues-link', this.el);
     this.pullsLinkEl = $('.github-prs-link', this.el);
     this.headerEl = $('.card-header', this.el);
+    this.dragHandleEl = $('.card-drag-handle', this.el);
     this._loadAbortCtrl = null;
     this.currentUrl = '';
     this.parentCard = parentCard;
@@ -753,7 +754,7 @@ class GitHubCard {
     this.closeBtn.addEventListener('click', () => this.close());
     this.newIssueBtn.addEventListener('click', () => this.openNewIssueDialog());
     this.refreshBtn.addEventListener('click', () => this.load(this.currentUrl));
-    enableCardDragging(this.el, this.headerEl);
+    enableCardDragging(this.el, this.dragHandleEl || this.headerEl);
   }
 
   setStatus(text, cls) {
@@ -1183,6 +1184,7 @@ class TerminalCard {
     this.statusEl = $('.card-status', this.el);
     this.termEl = $('.card-term', this.el);
     this.headerEl = $('.card-header', this.el);
+    this.dragHandleEl = $('.card-drag-handle', this.el);
 
     this.taskId = null;
     this.currentSource = null;
@@ -1195,7 +1197,7 @@ class TerminalCard {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.gitRefBtn.addEventListener('click', () => openGitCheatsheet(this));
-    enableCardDragging(this.el, this.headerEl);
+    enableCardDragging(this.el, this.dragHandleEl || this.headerEl);
 
     termCards.add(this);
   }
