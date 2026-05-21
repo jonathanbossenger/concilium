@@ -8,6 +8,8 @@ let activeCardEl = null;
 
 let layoutReady = false;
 let homeDir = '';
+let canUsePreferredEditor = isLoopbackOrigin();
+let preferredEditorConfigured = false;
 const IS_MAC = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
@@ -28,6 +30,11 @@ function currentTermTheme() {
     cursor: styles.getPropertyValue('--term-cursor').trim() || '#dddddd',
     selectionBackground: styles.getPropertyValue('--term-selection').trim() || 'rgba(120,180,255,0.30)',
   };
+}
+
+function isLoopbackOrigin() {
+  const host = (window.location.hostname || '').toLowerCase();
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
 }
 
 function formatUptime(seconds) {
@@ -281,6 +288,7 @@ class Card {
     this.githubBtn = $('.card-github', this.el);
     this.runBtn = $('.card-run', this.el);
     this.openTermBtn = $('.card-open-term', this.el);
+    this.openEditorBtn = $('.card-open-editor', this.el);
     this.cloneBtn = $('.card-clone', this.el);
     this.closeBtn = $('.card-close', this.el);
     this.expandBtn = $('.card-expand', this.el);
@@ -315,10 +323,15 @@ class Card {
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
     this.openTermBtn.addEventListener('click', () => this.openTerminalCard());
+    this.openEditorBtn.addEventListener('click', () => this.openEditor());
     this.cloneBtn.addEventListener('click', () => cloneCard(this));
     this.githubBtn.addEventListener('click', () => this.openGitHubCard());
     this.agentSelect.addEventListener('change', () => saveLayout());
-    this.cwd.addEventListener('input', () => { saveLayout(); this.scheduleCheckGitHub(); });
+    this.cwd.addEventListener('input', () => {
+      saveLayout();
+      this.updatePreferredEditorButton();
+      this.scheduleCheckGitHub();
+    });
     this.cwd.addEventListener('keydown', (keyboardEvent) => {
       if (keyboardEvent.key === 'Enter' && !this.currentTaskId) {
         keyboardEvent.preventDefault();
@@ -329,6 +342,7 @@ class Card {
 
     cards.add(this);
     this.syncLinkedCardButtons();
+    this.updatePreferredEditorButton();
   }
 
   // Must be called AFTER the card element is attached to the DOM, so the
@@ -443,6 +457,34 @@ class Card {
     this.linkedTerminalCard = card;
     this.syncLinkedCardButtons();
     return card;
+  }
+
+  updatePreferredEditorButton() {
+    const shouldShow = canUsePreferredEditor && preferredEditorConfigured;
+    this.openEditorBtn.hidden = !shouldShow;
+    this.openEditorBtn.disabled = !shouldShow || !this.cwd.value.trim();
+  }
+
+  async openEditor() {
+    const directoryPath = this.cwd.value.trim();
+    if (!directoryPath) return;
+    this.openEditorBtn.disabled = true;
+    try {
+      const response = await fetch('/api/system/open-editor', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: directoryPath }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        this.setStatus(data.error || 'editor failed', 'err');
+      }
+    } catch (err) {
+      console.error('[concilium] openEditor failed:', err);
+      this.setStatus('editor failed', 'err');
+    } finally {
+      this.updatePreferredEditorButton();
+    }
   }
 
   async run() {
@@ -631,7 +673,12 @@ class Card {
       const response = await fetch('/api/system/pick-directory', { method: 'POST' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) { this.cwd.value = toTildePath(data.path); saveLayout(); this.checkGitHub(); }
+      if (data.path) {
+        this.cwd.value = toTildePath(data.path);
+        this.updatePreferredEditorButton();
+        saveLayout();
+        this.checkGitHub();
+      }
     } finally {
       this.cwdBrowse.disabled = false;
     }
@@ -1644,6 +1691,11 @@ const onboardingBackBtn = $('#onboarding-back');
 const onboardingNextBtn = $('#onboarding-next');
 const onboardingFinishBtn = $('#onboarding-finish');
 const agentForm = $('#agent-form');
+const preferredEditorHeading = $('#preferred-editor-heading');
+const preferredEditorForm = $('#preferred-editor-form');
+const preferredEditorCommandInput = $('#preferred-editor-command');
+const preferredEditorArgsInput = $('#preferred-editor-args');
+const preferredEditorClearBtn = $('#preferred-editor-clear');
 const githubTokenForm = $('#github-token-form');
 const githubTokenInput = $('#github-token');
 const githubTokenClearBtn = $('#github-token-clear');
@@ -1683,6 +1735,10 @@ function setFormMode(mode, agent) {
   agentForm.command.value = agent?.command || '';
   agentForm.args.value = (agent?.args || []).join(' ');
   agentForm.interactive.checked = !!agent?.interactive;
+}
+
+function refreshPreferredEditorButtons() {
+  for (const card of cards) card.updatePreferredEditorButton();
 }
 
 function agentPayloadFromForm(form, includeId = false) {
@@ -1880,6 +1936,38 @@ async function loadGitHubToken() {
   if (data.hasToken === true) githubTokenInput.placeholder = 'token already saved';
 }
 
+async function loadPreferredEditorSettings() {
+  preferredEditorHeading.hidden = !canUsePreferredEditor;
+  preferredEditorForm.hidden = !canUsePreferredEditor;
+  preferredEditorCommandInput.value = '';
+  preferredEditorArgsInput.value = '';
+  preferredEditorConfigured = false;
+  if (!canUsePreferredEditor) {
+    refreshPreferredEditorButtons();
+    return;
+  }
+  const response = await fetch('/api/system/preferred-editor');
+  if (!response.ok) {
+    refreshPreferredEditorButtons();
+    return;
+  }
+  const data = await response.json().catch(() => ({}));
+  if (data.available !== true) {
+    preferredEditorHeading.hidden = true;
+    preferredEditorForm.hidden = true;
+    canUsePreferredEditor = false;
+    refreshPreferredEditorButtons();
+    return;
+  }
+  const editor = data.preferredEditor && typeof data.preferredEditor === 'object'
+    ? data.preferredEditor
+    : {};
+  preferredEditorCommandInput.value = typeof editor.command === 'string' ? editor.command : '';
+  preferredEditorArgsInput.value = Array.isArray(editor.args) ? editor.args.join(' ') : '';
+  preferredEditorConfigured = data.configured === true;
+  refreshPreferredEditorButtons();
+}
+
 function setNewProjectStatus(text, cls = '') {
   newProjectStatusEl.textContent = text;
   newProjectStatusEl.classList.remove('ok', 'warn', 'err');
@@ -1994,6 +2082,35 @@ agentForm.addEventListener('submit', async (submitEvent) => {
 
 $('#agent-cancel').addEventListener('click', (clickEvent) => { clickEvent.preventDefault(); setFormMode('add'); });
 $('#discover-btn').addEventListener('click', refreshDiscoverTable);
+preferredEditorForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  const submitBtn = preferredEditorForm.querySelector('button[type="submit"]');
+  const submitLabel = submitBtn ? submitBtn.dataset.label || submitBtn.textContent : '';
+  if (submitBtn && !submitBtn.dataset.label) submitBtn.dataset.label = submitLabel;
+  const response = await fetch('/api/system/preferred-editor', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      command: preferredEditorCommandInput.value,
+      args: preferredEditorArgsInput.value.trim() ? preferredEditorArgsInput.value.trim().split(/\s+/) : [],
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    alert(err.error || 'save failed');
+    return;
+  }
+  await loadPreferredEditorSettings();
+  if (submitBtn) {
+    submitBtn.textContent = 'Saved';
+    setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200);
+  }
+});
+preferredEditorClearBtn.addEventListener('click', () => {
+  preferredEditorCommandInput.value = '';
+  preferredEditorArgsInput.value = '';
+  preferredEditorCommandInput.focus();
+});
 githubTokenForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
   const submitBtn = githubTokenForm.querySelector('button[type="submit"]');
@@ -2023,7 +2140,7 @@ $('#close-settings').addEventListener('click', () => settingsDialog.close());
 $('#open-settings').addEventListener('click', async () => {
   setFormMode('add');
   $('#discover-table tbody').replaceChildren();
-  await Promise.all([refreshAgentsTable(), loadGitHubToken()]);
+  await Promise.all([refreshAgentsTable(), loadPreferredEditorSettings(), loadGitHubToken()]);
   settingsDialog.showModal();
 });
 onboardingDialog.addEventListener('cancel', (cancelEvent) => cancelEvent.preventDefault());
@@ -2302,6 +2419,7 @@ window.addEventListener('keydown', handleKeyboardShortcut, true);
 (async () => {
   await loadHealth();
   await loadAgents();
+  await loadPreferredEditorSettings();
   await restoreLayout();
   await maybeStartOnboarding();
   setInterval(loadHealth, 10000);
