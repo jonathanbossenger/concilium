@@ -577,7 +577,13 @@ async function refreshDiscoverTable() {
     const tdPath = document.createElement('td');
     const pathSpan = document.createElement('span');
     if (discovered.found) { pathSpan.className = 'found'; pathSpan.textContent = discovered.found; }
-    else { pathSpan.className = 'muted'; pathSpan.textContent = 'not found'; }
+    else {
+      pathSpan.className = 'muted';
+      pathSpan.textContent = 'not found';
+      if (typeof discovered.searchedPath === 'string' && discovered.searchedPath) {
+        pathSpan.title = `Searched PATH: ${discovered.searchedPath}`;
+      }
+    }
     tdPath.appendChild(pathSpan);
     const actions = document.createElement('td'); actions.className = 'actions';
     row.append(tdId, tdCmd, tdPath, actions);
