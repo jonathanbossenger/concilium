@@ -236,8 +236,9 @@ function kill(task_id) {
 function sendInput(task_id, data) {
   const e = live.get(task_id);
   if (!e || typeof e.runner.write !== 'function') return false;
-  // Flush any buffered stdout events before writing stdin so DB order matches
-  // the order events were actually generated.
+  // Flush any buffered stdout events before writing stdin so the DB row order
+  // reflects the true sequence of events and SSE clients that replay from the
+  // DB see a consistent picture (happens-before invariant).
   e.batcher.flush();
   const ts = Date.now();
   store.appendEvent(task_id, ts, 'stdin', data);
