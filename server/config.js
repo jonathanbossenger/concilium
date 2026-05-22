@@ -24,10 +24,21 @@ function ensureState() {
 }
 
 let cached = null;
+function cloneConfig(cfg) {
+  if (typeof globalThis.structuredClone === 'function') {
+    return globalThis.structuredClone(cfg);
+  }
+  return JSON.parse(JSON.stringify(cfg));
+}
+
 function getConfig() {
   if (cached) return cached;
   cached = yaml.load(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return cached;
+}
+
+function getConfigForUpdate() {
+  return cloneConfig(getConfig());
 }
 
 function reloadConfig() {
@@ -47,6 +58,7 @@ function saveConfig(newCfg) {
 module.exports = {
   ensureState,
   getConfig,
+  getConfigForUpdate,
   reloadConfig,
   saveConfig,
   STATE_DIR,
