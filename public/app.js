@@ -7,7 +7,8 @@ import { openGitCheatsheet, getGitCheatsheetTargetCard, clearGitCheatsheetTarget
 
 // Wire up the git cheatsheet opener slot used by TerminalCard instances.
 TerminalCard.prototype._openGitCheatsheet = function () { openGitCheatsheet(this); };
-const HISTORY_TASK_LIMIT = 1000;
+const HISTORY_TASK_FETCH_LIMIT = 1000;
+const HISTORY_EMPTY_CELL = '—';
 
 function cardInsertTarget(main, clientX, clientY) {
   const siblings = [...main.querySelectorAll('.card:not(.dragging)')];
@@ -132,9 +133,9 @@ async function loadAgents() {
 }
 
 function formatHistoryTimestamp(ts) {
-  if (!Number.isFinite(ts)) return '—';
+  if (!Number.isFinite(ts)) return HISTORY_EMPTY_CELL;
   const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return HISTORY_EMPTY_CELL;
   return date.toLocaleString();
 }
 
@@ -363,8 +364,8 @@ async function refreshTaskHistory() {
   if (!historyTableBody) return;
   if (historyRefreshBtn) historyRefreshBtn.disabled = true;
   try {
-    const response = await fetch(`/api/tasks?limit=${HISTORY_TASK_LIMIT}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const response = await fetch(`/api/tasks?limit=${HISTORY_TASK_FETCH_LIMIT}`);
+    if (!response.ok) throw new Error(`Failed to fetch task history: HTTP ${response.status}`);
     const tasks = await response.json();
     const finished = Array.isArray(tasks) ? tasks.filter(isTaskFinished) : [];
 
@@ -385,10 +386,10 @@ async function refreshTaskHistory() {
       const idCell = document.createElement('td');
       idCell.textContent = String(task.id);
       const agentCell = document.createElement('td');
-      agentCell.textContent = task.agent_id || '—';
+      agentCell.textContent = task.agent_id || HISTORY_EMPTY_CELL;
       const cwdCell = document.createElement('td');
       const cwdCode = document.createElement('code');
-      cwdCode.textContent = task.cwd || '—';
+      cwdCode.textContent = task.cwd || HISTORY_EMPTY_CELL;
       cwdCell.appendChild(cwdCode);
       const startedCell = document.createElement('td');
       startedCell.textContent = formatHistoryTimestamp(task.started_at);
