@@ -3,6 +3,7 @@ const { spawnSync } = require('child_process');
 const { getConfig } = require('../config');
 const manager = require('../manager');
 const store = require('../store');
+const { TASK_LIST_CAP } = require('../constants');
 
 const router = express.Router();
 const commandExistsCache = new Map();
@@ -58,7 +59,7 @@ function getTerminalAgent() {
 }
 
 router.get('/', (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const limit = Math.min(parseInt(req.query.limit) || 100, TASK_LIST_CAP);
   res.json(store.listTasks(limit));
 });
 

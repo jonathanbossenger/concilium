@@ -1,4 +1,4 @@
-import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, showConfirmDialog, showErrorToast } from './utils.js';
+import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
 import { agentsById, cards, termCards, appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
@@ -208,7 +208,7 @@ function saveLayout() {
     }).then((response) => {
       if (!response.ok) console.error('[concilium] failed to save layout: HTTP', response.status);
     }).catch((err) => console.error('[concilium] failed to save layout:', err));
-  }, 150);
+  }, LAYOUT_SAVE_DEBOUNCE_MS);
 }
 
 async function restoreLayout() {
@@ -672,7 +672,7 @@ preferredEditorForm.addEventListener('submit', async (submitEvent) => {
   });
   if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   await loadPreferredEditorSettings();
-  if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200); }
+  if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, SAVED_FLASH_DURATION_MS); }
 });
 preferredEditorClearBtn.addEventListener('click', () => { preferredEditorCommandInput.value = ''; preferredEditorArgsInput.value = ''; preferredEditorCommandInput.focus(); });
 githubTokenForm.addEventListener('submit', async (submitEvent) => {
@@ -685,7 +685,7 @@ githubTokenForm.addEventListener('submit', async (submitEvent) => {
   });
   if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   await loadGitHubToken();
-  if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200); }
+  if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, SAVED_FLASH_DURATION_MS); }
 });
 githubTokenClearBtn.addEventListener('click', () => { githubTokenInput.value = ''; githubTokenInput.focus(); });
 $('#close-settings').addEventListener('click', () => settingsDialog.close());
@@ -918,5 +918,5 @@ window.addEventListener('keydown', handleKeyboardShortcut, true);
   await loadPreferredEditorSettings();
   await restoreLayout();
   await maybeStartOnboarding();
-  setInterval(loadHealth, 10000);
+  setInterval(loadHealth, HEALTH_POLL_INTERVAL_MS);
 })();

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { getConfig } = require('../config');
 const { expandTilde } = require('../util/path');
+const { GITHUB_ITEMS_PER_PAGE } = require('../constants');
 
 const router = express.Router();
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
@@ -309,14 +310,14 @@ router.post('/github-items', async (req, res) => {
         const gqlQuery = `
           query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
-              pullRequests(states: [OPEN], first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+              pullRequests(states: [OPEN], first: ${GITHUB_ITEMS_PER_PAGE}, orderBy: {field: UPDATED_AT, direction: DESC}) {
                 nodes {
                   number title url state isDraft headRefName headRefOid id
                   assignees(first: 10) { nodes { login } }
                   closingIssuesReferences(first: 10) { nodes { number } }
                 }
               }
-              issues(states: [OPEN], first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+              issues(states: [OPEN], first: ${GITHUB_ITEMS_PER_PAGE}, orderBy: {field: UPDATED_AT, direction: DESC}) {
                 nodes {
                   number title url state
                   assignees(first: 10) { nodes { login } }
@@ -367,8 +368,8 @@ router.post('/github-items', async (req, res) => {
         // No token: GitHub GraphQL requires authentication, so fall back to REST.
         // Issues and PRs are displayed without linked-ref badges in this mode.
         const [rawIssues, rawPulls] = await Promise.all([
-          fetchGitHubJson(`${apiBase}/issues?state=open&per_page=20&sort=updated&direction=desc`),
-          fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=20&sort=updated&direction=desc`),
+          fetchGitHubJson(`${apiBase}/issues?state=open&per_page=${GITHUB_ITEMS_PER_PAGE}&sort=updated&direction=desc`),
+          fetchGitHubJson(`${apiBase}/pulls?state=open&per_page=${GITHUB_ITEMS_PER_PAGE}&sort=updated&direction=desc`),
         ]);
         issues = Array.isArray(rawIssues)
           ? rawIssues.filter((item) => !item.pull_request).map(toGitHubItem)

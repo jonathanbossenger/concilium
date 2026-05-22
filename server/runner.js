@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
+const { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS } = require('./constants');
 
 let pty;
 function loadPty() {
@@ -55,8 +56,8 @@ function startPty(agent, prompt, cwd, cols, rows) {
     term = ptyMod.spawn(agent.command, agent.args || [], {
       cwd,
       env: process.env,
-      cols: (Number.isFinite(cols) && cols >= 1) ? cols : 120,
-      rows: (Number.isFinite(rows) && rows >= 1) ? rows : 30,
+      cols: (Number.isFinite(cols) && cols >= 1) ? cols : DEFAULT_PTY_COLS,
+      rows: (Number.isFinite(rows) && rows >= 1) ? rows : DEFAULT_PTY_ROWS,
       name: 'xterm-256color',
     });
   } catch (err) {

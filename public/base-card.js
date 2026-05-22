@@ -4,7 +4,7 @@
 // Subclasses that need sendRaw / fitAndResize / initTerminal must expose a
 // `currentTaskId` property (own data property or getter).
 
-import { currentTermTheme } from './utils.js';
+import { currentTermTheme, TERM_SCROLLBACK_LINES } from './utils.js';
 
 export class BaseCard {
   // Must be called AFTER the card element is attached to the DOM so the
@@ -16,7 +16,7 @@ export class BaseCard {
       fontSize: 12,
       cursorBlink: true,
       convertEol: true,
-      scrollback: 5000,
+      scrollback: TERM_SCROLLBACK_LINES,
     });
     this.fitAddon = new FitAddon.FitAddon();
     this.term.loadAddon(this.fitAddon);

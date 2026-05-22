@@ -1,5 +1,6 @@
 const { getConfig } = require('./config');
 const { createApp } = require('./app');
+const { SHUTDOWN_TIMEOUT_MS } = require('./constants');
 
 const app = createApp();
 const cfg = getConfig();
@@ -15,7 +16,7 @@ const server = app.listen(cfg.port, '127.0.0.1', () => {
 function shutdown(signal) {
   console.log(`received ${signal}, shutting down`);
   server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 5000).unref();
+  setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
