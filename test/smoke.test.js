@@ -86,15 +86,23 @@ test('boot-time recovery marks running tasks as crashed', async (t) => {
   t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
 
   const firstBoot = bootstrap(homeDir);
-  const taskId = firstBoot.store.createTask('orphaned', '', os.tmpdir());
-  const before = firstBoot.store.getTask(taskId);
-  assert.equal(before.status, 'running');
-  assert.equal(before.ended_at, null);
+  const runningTaskId = firstBoot.store.createTask('orphaned', '', os.tmpdir());
+  const doneTaskId = firstBoot.store.createTask('done', '', os.tmpdir());
+  firstBoot.store.finishTask(doneTaskId, 'done', 0, null);
+
+  const runningBefore = firstBoot.store.getTask(runningTaskId);
+  const doneBefore = firstBoot.store.getTask(doneTaskId);
+  assert.equal(runningBefore.status, 'running');
+  assert.equal(runningBefore.ended_at, null);
+  assert.equal(doneBefore.status, 'done');
 
   const secondBoot = bootstrap(homeDir);
-  const afterRestart = secondBoot.store.getTask(taskId);
-  assert.equal(afterRestart.status, 'crashed');
-  assert.equal(typeof afterRestart.ended_at, 'number');
+  const runningAfterRestart = secondBoot.store.getTask(runningTaskId);
+  const doneAfterRestart = secondBoot.store.getTask(doneTaskId);
+  assert.equal(runningAfterRestart.status, 'crashed');
+  assert.equal(typeof runningAfterRestart.ended_at, 'number');
+  assert.equal(doneAfterRestart.status, 'done');
+  assert.equal(doneAfterRestart.ended_at, doneBefore.ended_at);
 });
 
 test('SSE replay while task is live has no gaps or duplicates', async (t) => {
@@ -106,7 +114,17 @@ test('SSE replay while task is live has no gaps or duplicates', async (t) => {
     id: 'streamer',
     name: 'Streamer',
     command: process.execPath,
-    args: ['-e', 'let i=0;const t=setInterval(()=>{if(i>=20){clearInterval(t);process.exit(0);}process.stdout.write(`line-${i}\\n`);i+=1;},10);'],
+    args: ['-e', [
+      'let i = 0;',
+      'const timer = setInterval(() => {',
+      '  if (i >= 20) {',
+      '    clearInterval(timer);',
+      '    process.exit(0);',
+      '  }',
+      '  process.stdout.write(`line-${i}\\n`);',
+      '  i += 1;',
+      '}, 10);',
+    ].join(' ')],
   })).expect(201);
 
   const start = await withLocalHost(api.post('/api/tasks').send({ agent_id: 'streamer' })).expect(200);
@@ -134,6 +152,9 @@ test('SSE replay while task is live has no gaps or duplicates', async (t) => {
 
   assert.deepEqual(sseEvents, dbEvents);
   assert.equal(new Set(sseEvents.map((ev) => ev.id)).size, sseEvents.length);
+  for (let i = 1; i < sseEvents.length; i += 1) {
+    assert.ok(sseEvents[i].id > sseEvents[i - 1].id);
+  }
 });
 
 test('agent CRUD survives restart', async (t) => {
