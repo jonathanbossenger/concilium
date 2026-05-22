@@ -1,4 +1,4 @@
-import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS } from './utils.js';
+import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, showConfirmDialog, showErrorToast } from './utils.js';
 import { agentsById, cards, termCards, appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
@@ -370,9 +370,15 @@ async function refreshAgentsTable() {
     const delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.className = 'row-btn danger'; delBtn.textContent = 'delete';
     delBtn.addEventListener('click', async () => {
-      if (!confirm(`Delete agent "${agent.id}"?`)) return;
+      const shouldDelete = await showConfirmDialog({
+        title: 'Delete agent',
+        message: `Delete agent "${agent.id}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!shouldDelete) return;
       const deleteResponse = await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' });
-      if (!deleteResponse.ok) { alert('delete failed'); return; }
+      if (!deleteResponse.ok) { showErrorToast('delete failed'); return; }
       await refreshAgentsTable();
       await loadAgents();
     });
@@ -427,8 +433,15 @@ async function refreshOnboardingAgentsTable() {
     const delBtn = document.createElement('button');
     delBtn.type = 'button'; delBtn.className = 'row-btn danger'; delBtn.textContent = 'delete';
     delBtn.addEventListener('click', async () => {
+      const shouldDelete = await showConfirmDialog({
+        title: 'Delete agent',
+        message: `Delete agent "${agent.id}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!shouldDelete) return;
       const deleteResponse = await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' });
-      if (!deleteResponse.ok) { alert('delete failed'); return; }
+      if (!deleteResponse.ok) { showErrorToast('delete failed'); return; }
       await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
     });
     actions.appendChild(delBtn);
@@ -496,7 +509,7 @@ async function refreshDiscoverTable() {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ id: discovered.id, name: discovered.name, command: discovered.found, interactive: discovered.interactive }),
         });
-        if (!addResponse.ok) { alert('add failed'); return; }
+        if (!addResponse.ok) { showErrorToast('add failed'); return; }
         await refreshAgentsTable();
         await refreshDiscoverTable();
         await loadAgents();
@@ -640,7 +653,7 @@ agentForm.addEventListener('submit', async (submitEvent) => {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
     });
   }
-  if (!response.ok) { const err = await response.json().catch(() => ({})); alert(err.error || 'save failed'); return; }
+  if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   setFormMode('add');
   await refreshAgentsTable();
   await loadAgents();
@@ -657,7 +670,7 @@ preferredEditorForm.addEventListener('submit', async (submitEvent) => {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ command: preferredEditorCommandInput.value, args: preferredEditorArgsInput.value.trim() ? preferredEditorArgsInput.value.trim().split(/\s+/) : [] }),
   });
-  if (!response.ok) { const err = await response.json().catch(() => ({})); alert(err.error || 'save failed'); return; }
+  if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   await loadPreferredEditorSettings();
   if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200); }
 });
@@ -670,7 +683,7 @@ githubTokenForm.addEventListener('submit', async (submitEvent) => {
   const response = await fetch('/api/system/github-token', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ GITHUB_TOKEN: githubTokenInput.value }),
   });
-  if (!response.ok) { const err = await response.json().catch(() => ({})); alert(err.error || 'save failed'); return; }
+  if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   await loadGitHubToken();
   if (submitBtn) { submitBtn.textContent = 'Saved'; setTimeout(() => { submitBtn.textContent = submitBtn.dataset.label || submitLabel; }, 1200); }
 });
@@ -690,7 +703,7 @@ onboardingNextBtn.addEventListener('click', async () => {
 });
 onboardingFinishBtn.addEventListener('click', async () => {
   const response = await fetch('/api/system/onboarding/complete', { method: 'POST' });
-  if (!response.ok) { const err = await response.json().catch(() => ({})); alert(err.error || 'finish failed'); return; }
+  if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'finish failed'); return; }
   onboardingDialog.close();
   await Promise.all([refreshAgentsTable(), loadAgents()]);
 });
@@ -702,7 +715,7 @@ onboardingFirstAgentForm.addEventListener('submit', async (submitEvent) => {
     onboardingFirstAgentForm.reset();
     await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
     if (shouldAdvance) setOnboardingStep(2);
-  } catch (err) { alert(err.message || 'add failed'); }
+  } catch (err) { showErrorToast(err.message || 'add failed'); }
 });
 onboardingAddAgentForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
@@ -710,7 +723,7 @@ onboardingAddAgentForm.addEventListener('submit', async (submitEvent) => {
     await addAgent(agentPayloadFromForm(onboardingAddAgentForm, true));
     onboardingAddAgentForm.reset();
     await Promise.all([refreshOnboardingAgentsTable(), refreshAgentsTable(), loadAgents()]);
-  } catch (err) { alert(err.message || 'add failed'); }
+  } catch (err) { showErrorToast(err.message || 'add failed'); }
 });
 onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
   submitEvent.preventDefault();
@@ -723,7 +736,7 @@ onboardingGitHubTokenForm.addEventListener('submit', async (submitEvent) => {
   const response = await fetch('/api/system/github-token', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ GITHUB_TOKEN: token }),
   });
-  if (!response.ok) { const err = await response.json().catch(() => ({})); alert(err.error || 'save failed'); return; }
+  if (!response.ok) { const err = await response.json().catch(() => ({})); showErrorToast(err.error || 'save failed'); return; }
   await refreshOnboardingTokenState();
   onboardingGitHubTokenInput.value = '';
   if (onboardingStep === 3) setOnboardingStep(4);

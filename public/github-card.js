@@ -1,4 +1,4 @@
-import { $, issueHasCopilotAssigned, isOpenCard, COPILOT_ICON_SVG, COPILOT_ASSIGNED_ICON_SVG, MERGE_ICON_SVG, READY_FOR_REVIEW_ICON_SVG, CLOSE_ICON_SVG } from './utils.js';
+import { $, issueHasCopilotAssigned, isOpenCard, COPILOT_ICON_SVG, COPILOT_ASSIGNED_ICON_SVG, MERGE_ICON_SVG, READY_FOR_REVIEW_ICON_SVG, CLOSE_ICON_SVG, showConfirmDialog } from './utils.js';
 import { appState, clearActiveCardIfMatch } from './state.js';
 import { enableCardDragging } from './drag.js';
 
@@ -242,7 +242,13 @@ export class GitHubCard {
     const confirmMessage = isMerge
       ? `Merge #${item.number} using ${mergeMethod}?`
       : `Close #${item.number}?`;
-    if (!confirm(confirmMessage)) return;
+    const shouldProceed = await showConfirmDialog({
+      title: isMerge ? 'Merge pull request' : 'Close pull request',
+      message: confirmMessage,
+      confirmLabel: isMerge ? 'Merge' : 'Close',
+      danger: true,
+    });
+    if (!shouldProceed) return;
     const actionsContainer = actionButton.parentElement;
     const controls = actionsContainer ? [...actionsContainer.querySelectorAll('.github-pr-action-control')] : [actionButton];
     for (const control of controls) control.disabled = true;
@@ -280,7 +286,12 @@ export class GitHubCard {
       this.setStatus(`cannot mark #${item.number} ready (missing GraphQL id)`, 'err');
       return;
     }
-    if (!confirm(`Mark draft #${item.number} ready for review?`)) return;
+    const shouldMarkReady = await showConfirmDialog({
+      title: 'Mark draft ready',
+      message: `Mark draft #${item.number} ready for review?`,
+      confirmLabel: 'Mark ready',
+    });
+    if (!shouldMarkReady) return;
     readyButton.disabled = true;
     this.setStatus(`marking #${item.number} ready…`, 'running');
     try {
@@ -327,7 +338,13 @@ export class GitHubCard {
     };
     const actionConfig = issueActionConfig[action];
     if (!actionConfig) return;
-    if (!confirm(actionConfig.confirm)) return;
+    const shouldProceed = await showConfirmDialog({
+      title: action === 'close' ? 'Close issue' : 'Assign issue',
+      message: actionConfig.confirm,
+      confirmLabel: action === 'close' ? 'Close' : 'Assign',
+      danger: action === 'close',
+    });
+    if (!shouldProceed) return;
     issueButton.disabled = true;
     this.setStatus(`${actionConfig.progress} #${item.number}…`, 'running');
     try {

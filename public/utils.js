@@ -74,3 +74,63 @@ export function isTypingContext(node) {
   if (!(node instanceof Element)) return false;
   return !!node.closest('input, textarea, select, [contenteditable], [role="textbox"], .xterm-helper-textarea');
 }
+
+let confirmDialogQueue = Promise.resolve();
+
+export function showConfirmDialog({
+  title = 'Confirm action',
+  message = 'Are you sure?',
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  danger = false,
+} = {}) {
+  const runDialog = () => new Promise((resolve) => {
+    const dialog = $('#confirm-dialog');
+    const titleEl = $('#confirm-dialog-title');
+    const messageEl = $('#confirm-dialog-message');
+    const confirmBtn = $('#confirm-dialog-confirm');
+    const cancelBtn = $('#confirm-dialog-cancel');
+    if (!dialog || !titleEl || !messageEl || !confirmBtn || !cancelBtn || typeof dialog.showModal !== 'function') {
+      resolve(window.confirm(String(message || 'Are you sure?')));
+      return;
+    }
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    confirmBtn.classList.toggle('danger', !!danger);
+
+    const onClose = () => {
+      dialog.removeEventListener('close', onClose);
+      resolve(dialog.returnValue === 'confirm');
+    };
+    dialog.addEventListener('close', onClose);
+    try {
+      dialog.showModal();
+      requestAnimationFrame(() => confirmBtn.focus());
+    } catch (_) {
+      dialog.removeEventListener('close', onClose);
+      resolve(window.confirm(String(message || 'Are you sure?')));
+    }
+  });
+
+  const pending = confirmDialogQueue.then(runDialog, runDialog);
+  confirmDialogQueue = pending.catch(() => {});
+  return pending;
+}
+
+export function showErrorToast(message, timeoutMs = 4200) {
+  const host = $('#toast-stack');
+  if (!host) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-error';
+  toast.setAttribute('role', 'alert');
+  toast.textContent = message || 'Something went wrong.';
+  host.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  const dismiss = () => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 180);
+  };
+  setTimeout(dismiss, timeoutMs);
+}

@@ -751,7 +751,8 @@ dialog#settings-dialog,
 dialog#onboarding-dialog,
 dialog#new-project-dialog,
 dialog#new-issue-dialog,
-dialog#shortcuts-dialog {
+dialog#shortcuts-dialog,
+dialog#confirm-dialog {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -765,7 +766,8 @@ dialog#settings-dialog::backdrop,
 dialog#onboarding-dialog::backdrop,
 dialog#new-project-dialog::backdrop,
 dialog#new-issue-dialog::backdrop,
-dialog#shortcuts-dialog::backdrop { background: var(--backdrop); }
+dialog#shortcuts-dialog::backdrop,
+dialog#confirm-dialog::backdrop { background: var(--backdrop); }
 .dialog-body { display: flex; flex-direction: column; gap: 1.2em; padding: 1em 1.2em 1.4em; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
 .dialog-head h2 { margin: 0; font-size: 1.05em; color: var(--text); text-transform: none; letter-spacing: 0; }
@@ -856,6 +858,18 @@ dialog section h3 {
 }
 .footnote { color: var(--text-muted); font-size: 0.8em; }
 .footnote code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+.confirm-dialog-actions { justify-content: flex-end; }
+#confirm-dialog-message {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+#confirm-dialog-confirm.danger {
+  background: var(--kill);
+}
+#confirm-dialog-confirm.danger:hover {
+  background: var(--kill-hover);
+}
 .onboarding-actions {
   justify-content: space-between;
   border-top: 1px solid var(--border-soft);
@@ -976,4 +990,33 @@ dialog#git-cheatsheet-dialog::backdrop { background: var(--backdrop); }
 .git-cmd-placeholder {
   font-style: italic;
   color: var(--accent);
+}
+
+/* --- toast notifications --- */
+#toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  z-index: 1000;
+  pointer-events: none;
+}
+.toast {
+  max-width: min(420px, calc(100vw - 2rem));
+  border-radius: 6px;
+  border: 1px solid var(--border-danger);
+  background: var(--bg-danger-soft);
+  color: var(--text);
+  box-shadow: var(--shadow-modal);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
 }
