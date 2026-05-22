@@ -43,7 +43,19 @@ const stmts = {
   getTask: db.prepare(`SELECT * FROM tasks WHERE id = ?`),
   listEvents: db.prepare(`SELECT * FROM events WHERE task_id = ? ORDER BY id ASC`),
   deleteEvents: db.prepare(`DELETE FROM events WHERE task_id = ?`),
+  deleteOldEvents: db.prepare(`DELETE FROM events WHERE ts < ?`),
+  deleteExcessEventsPerTask: db.prepare(`
+    DELETE FROM events
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY id DESC) AS rn
+        FROM events
+      )
+      WHERE rn > ?
+    )
+  `),
   deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
+  hasTask: db.prepare(`SELECT 1 FROM tasks WHERE id = ?`),
   getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
   saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
 };
@@ -61,6 +73,18 @@ module.exports = {
   getTask: (id) => stmts.getTask.get(id),
   listEvents: (task_id) => stmts.listEvents.all(task_id),
   deleteTask: (id) => deleteTaskTxn(id),
+  hasTask: (id) => !!stmts.hasTask.get(id),
+  pruneEvents: ({ olderThanTs, maxPerTask, vacuumThreshold = 0 }) => {
+    let deleted = 0;
+    if (Number.isFinite(olderThanTs)) deleted += stmts.deleteOldEvents.run(olderThanTs).changes;
+    if (Number.isFinite(maxPerTask) && maxPerTask > 0) deleted += stmts.deleteExcessEventsPerTask.run(maxPerTask).changes;
+    let vacuumed = false;
+    if (vacuumThreshold > 0 && deleted >= vacuumThreshold) {
+      db.exec('VACUUM');
+      vacuumed = true;
+    }
+    return { deleted, vacuumed };
+  },
   getLayout: () => { const row = stmts.getLayout.get(); return row ? row.value : null; },
   saveLayout: (value) => stmts.saveLayout.run(value),
 };

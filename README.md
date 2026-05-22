@@ -176,7 +176,7 @@ State lives entirely under `~/.concilium/`:
 ~/.concilium/
 ├── config.yaml      # port + optional githubToken + optional preferredEditor + agent list
 ├── tasks.db         # SQLite history + saved card layout
-├── logs/<id>.log    # per-task plain-text output log
+├── logs/<id>.log    # per-task plain-text output log (rotates at 5MB, keeps 3 backups)
 ├── server.log       # the server's own stdout/stderr
 └── run.pid          # standalone-mode PID file
 ```
@@ -206,6 +206,9 @@ agents:
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
 `config.yaml` may contain a secret token — keep it readable only by your user.
+Task output events are retained for up to 30 days and capped at 20,000 rows per
+task; startup/periodic maintenance prunes older rows and removes orphaned task
+log files.
 
 ## API
 
