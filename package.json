@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node server/index.js",
     "postinstall": "node scripts/fix-pty-perms.js",
-    "capture-screenshots": "node scripts/capture-screenshots.js"
+    "capture-screenshots": "node scripts/capture-screenshots.js",
+    "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -20,6 +21,7 @@
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
-    "playwright": "^1.59.1"
+    "playwright": "^1.59.1",
+    "supertest": "^7.2.2"
   }
 }
