@@ -27,7 +27,11 @@ function which(cmd) {
 }
 
 function discover() {
-  return KNOWN.map((a) => ({ ...a, found: which(a.command) }));
+  const searchedPath = process.env.PATH || '';
+  return KNOWN.map((a) => {
+    const found = which(a.command);
+    return found ? { ...a, found } : { ...a, found, searchedPath };
+  });
 }
 
 module.exports = { discover, which, KNOWN };

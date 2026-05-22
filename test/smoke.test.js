@@ -232,6 +232,33 @@ test('agent CRUD survives restart', async (t) => {
   await withLocalHost(secondBoot.api.get('/api/agents/persisted')).expect(404);
 });
 
+test('discover includes searchedPath context for missing commands', async (t) => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-test-'));
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-bin-'));
+  t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(binDir, { recursive: true, force: true }));
+
+  const originalPath = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = originalPath;
+  });
+
+  const claudePath = path.join(binDir, 'claude');
+  fs.writeFileSync(claudePath, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(claudePath, 0o755);
+  process.env.PATH = binDir;
+
+  const { api } = bootstrap(homeDir);
+  const response = await withLocalHost(api.get('/api/agents/discover')).expect(200);
+  const discoverById = new Map(response.body.map((agent) => [agent.id, agent]));
+
+  assert.equal(discoverById.get('claude').found, claudePath);
+  assert.equal('searchedPath' in discoverById.get('claude'), false);
+
+  assert.equal(discoverById.get('codex').found, null);
+  assert.equal(discoverById.get('codex').searchedPath, binDir);
+});
+
 test('github-items includes a warning field without a token', async (t) => {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-test-'));
   t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
