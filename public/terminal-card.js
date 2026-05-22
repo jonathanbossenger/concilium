@@ -41,10 +41,18 @@ export class TerminalCard extends BaseCard {
   _openGitCheatsheet() {}
 
   async launch(cwd) {
+    if (this.fitAddon && this.termEl.isConnected) {
+      try { this.fitAddon.fit(); } catch (_) {}
+    }
+    const body = { cwd };
+    if (this.term?.cols > 0 && this.term?.rows > 0) {
+      body.cols = this.term.cols;
+      body.rows = this.term.rows;
+    }
     const response = await fetch('/api/tasks/terminal', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd }),
+      body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { this.setStatus(data.error || `failed to start terminal (${response.status})`, 'err'); return; }

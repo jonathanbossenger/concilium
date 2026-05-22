@@ -63,7 +63,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { agent_id, prompt, cwd } = req.body || {};
+  const { agent_id, prompt, cwd, cols, rows } = req.body || {};
   if (!agent_id) return res.status(400).json({ error: 'agent_id required' });
 
   const cfg = getConfig();
@@ -71,7 +71,11 @@ router.post('/', (req, res) => {
   if (!agent) return res.status(404).json({ error: 'agent not found' });
 
   try {
-    const task_id = manager.launch(agent, prompt || '', cwd);
+    const parsedCols = parseInt(cols, 10);
+    const parsedRows = parseInt(rows, 10);
+    const task_id = manager.launch(agent, prompt || '', cwd,
+      parsedCols > 0 ? parsedCols : undefined,
+      parsedRows > 0 ? parsedRows : undefined);
     res.json({ task_id });
   } catch (err) {
     res.status(500).json({ error: err.message, code: err.code });
@@ -80,9 +84,13 @@ router.post('/', (req, res) => {
 
 router.post('/terminal', (req, res) => {
   try {
-    const { cwd } = req.body || {};
+    const { cwd, cols, rows } = req.body || {};
     const shellAgent = getTerminalAgent();
-    const task_id = manager.launch(shellAgent, '', cwd);
+    const parsedCols = parseInt(cols, 10);
+    const parsedRows = parseInt(rows, 10);
+    const task_id = manager.launch(shellAgent, '', cwd,
+      parsedCols > 0 ? parsedCols : undefined,
+      parsedRows > 0 ? parsedRows : undefined);
     res.json({ task_id });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message, code: err.code });
