@@ -134,13 +134,11 @@ async function loadAgents() {
 
 function formatHistoryTimestamp(ts) {
   if (!Number.isFinite(ts)) return HISTORY_EMPTY_CELL;
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return HISTORY_EMPTY_CELL;
-  return date.toLocaleString();
+  return new Date(ts).toLocaleString();
 }
 
 function isTaskFinished(task) {
-  return !!(task && task.status !== 'running' && Number.isFinite(task.ended_at));
+  return !!(task && Number.isFinite(task.ended_at));
 }
 
 // --- card factories --------------------------------------------------------
@@ -364,7 +362,8 @@ async function refreshTaskHistory() {
   if (!historyTableBody) return;
   if (historyRefreshBtn) historyRefreshBtn.disabled = true;
   try {
-    const response = await fetch(`/api/tasks?limit=${HISTORY_TASK_FETCH_LIMIT}`);
+    const params = new URLSearchParams({ limit: String(HISTORY_TASK_FETCH_LIMIT) });
+    const response = await fetch(`/api/tasks?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch task history: HTTP ${response.status}`);
     const tasks = await response.json();
     const finished = Array.isArray(tasks) ? tasks.filter(isTaskFinished) : [];
