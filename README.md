@@ -216,7 +216,7 @@ All endpoints are JSON; loopback only.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET`    | `/api/health` | server pid, uptime |
+| `GET`    | `/api/health` | server pid, uptime, live task count, total event count, log directory size |
 | `GET`    | `/api/agents` | list configured agents |
 | `POST`   | `/api/agents` | create agent `{id, name, command, args?, interactive}` |
 | `PATCH`  | `/api/agents/:id` | update fields |

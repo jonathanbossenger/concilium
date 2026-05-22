@@ -257,4 +257,4 @@ function getLive(task_id) {
   return live.get(task_id);
 }
 
-module.exports = { launch, kill, sendInput, resize, getLive, remove };
+module.exports = { launch, kill, sendInput, resize, getLive, remove, liveCount: () => live.size };

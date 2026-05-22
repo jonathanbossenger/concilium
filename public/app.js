@@ -1,4 +1,4 @@
-import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
+import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
 import { agentsById, cards, termCards, appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
@@ -117,7 +117,14 @@ async function loadHealth() {
   try {
     const response = await fetch('/api/health');
     const data = await response.json();
-    $('#health').textContent = `pid ${data.pid} \u00b7 up ${formatUptime(data.uptime)}`;
+    const parts = [
+      `pid ${data.pid}`,
+      `up ${formatUptime(data.uptime)}`,
+    ];
+    if (Number.isFinite(data.liveTasks)) parts.push(`${data.liveTasks} live`);
+    if (Number.isFinite(data.totalEvents)) parts.push(`${data.totalEvents.toLocaleString()} events`);
+    if (Number.isFinite(data.logsDirBytes)) parts.push(`${formatBytes(data.logsDirBytes)} logs`);
+    $('#health').textContent = parts.join(' \u00b7 ');
     if (data.homeDir) appState.homeDir = data.homeDir;
   } catch (_) {
     $('#health').textContent = 'offline';
