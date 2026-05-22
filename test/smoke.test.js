@@ -33,6 +33,32 @@ function withLocalHost(req) {
   return req.set('host', 'localhost');
 }
 
+function stubFetchJson(t, handler) {
+  const originalFetch = global.fetch;
+  global.fetch = async (...args) => handler(...args);
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+}
+
+function jsonResponse(body, { ok = true, status = 200, headers = {} } = {}) {
+  const normalizedHeaders = new Map(
+    Object.entries(headers).map(([key, value]) => [String(key).toLowerCase(), value])
+  );
+  return {
+    ok,
+    status,
+    headers: {
+      get(name) {
+        return normalizedHeaders.get(String(name).toLowerCase()) ?? null;
+      },
+    },
+    async json() {
+      return body;
+    },
+  };
+}
+
 function parseSseBody(raw) {
   const blocks = raw.split('\n\n').map((block) => block.trim()).filter(Boolean);
   return blocks.map((block) => {
@@ -204,4 +230,131 @@ test('agent CRUD survives restart', async (t) => {
 
   await withLocalHost(secondBoot.api.delete('/api/agents/persisted')).expect(200);
   await withLocalHost(secondBoot.api.get('/api/agents/persisted')).expect(404);
+});
+
+test('github-items includes a warning field without a token', async (t) => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-test-'));
+  t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
+  const { api } = bootstrap(homeDir);
+
+  stubFetchJson(t, async (url) => {
+    if (String(url).includes('/issues?')) {
+      return jsonResponse([
+        {
+          number: 12,
+          title: 'Issue from REST',
+          html_url: 'https://github.com/octo/demo/issues/12',
+          state: 'open',
+          assignees: [{ login: 'octocat' }],
+        },
+      ]);
+    }
+    if (String(url).includes('/pulls?')) {
+      return jsonResponse([
+        {
+          number: 34,
+          title: 'PR from REST',
+          html_url: 'https://github.com/octo/demo/pull/34',
+          state: 'open',
+          assignees: [{ login: 'hubot' }],
+          head: { ref: 'feature/rest', sha: 'abc123' },
+          draft: false,
+          node_id: 'PR_kwDO',
+        },
+      ]);
+    }
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  });
+
+  const response = await withLocalHost(api.post('/api/system/github-items').send({
+    url: 'https://github.com/octo/demo',
+  })).expect(200);
+
+  assert.equal(response.body.warning, 'linked refs require a github token');
+  assert.deepEqual(response.body.issues, [{
+    number: 12,
+    title: 'Issue from REST',
+    url: 'https://github.com/octo/demo/issues/12',
+    state: 'open',
+    assignees: ['octocat'],
+  }]);
+  assert.deepEqual(response.body.pulls, [{
+    number: 34,
+    title: 'PR from REST',
+    url: 'https://github.com/octo/demo/pull/34',
+    state: 'open',
+    assignees: ['hubot'],
+    branch: 'feature/rest',
+    headSha: 'abc123',
+    draft: false,
+    nodeId: 'PR_kwDO',
+  }]);
+});
+
+test('github-items includes warning: null with a github token', async (t) => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-test-'));
+  t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
+  const { api } = bootstrap(homeDir);
+  const config = require(path.join(serverRoot, 'config'));
+  config.saveConfig({ ...config.getConfigForUpdate(), githubToken: 'test-token' });
+
+  stubFetchJson(t, async (url, options = {}) => {
+    assert.equal(String(url), 'https://api.github.com/graphql');
+    assert.equal(options.headers.authorization, 'Bearer test-token');
+    return jsonResponse({
+      data: {
+        repository: {
+          pullRequests: {
+            nodes: [{
+              number: 34,
+              title: 'PR from GraphQL',
+              url: 'https://github.com/octo/demo/pull/34',
+              state: 'OPEN',
+              isDraft: false,
+              headRefName: 'feature/graphql',
+              headRefOid: 'def456',
+              id: 'PR_graphql',
+              assignees: { nodes: [{ login: 'hubot' }] },
+              closingIssuesReferences: { nodes: [{ number: 12 }] },
+            }],
+          },
+          issues: {
+            nodes: [{
+              number: 12,
+              title: 'Issue from GraphQL',
+              url: 'https://github.com/octo/demo/issues/12',
+              state: 'OPEN',
+              assignees: { nodes: [{ login: 'octocat' }] },
+            }],
+          },
+        },
+      },
+    });
+  });
+
+  const response = await withLocalHost(api.post('/api/system/github-items').send({
+    url: 'https://github.com/octo/demo',
+  })).expect(200);
+
+  assert.equal(response.body.warning, null);
+  assert.deepEqual(response.body.issues, [{
+    number: 12,
+    title: 'Issue from GraphQL',
+    url: 'https://github.com/octo/demo/issues/12',
+    state: 'open',
+    assignees: ['octocat'],
+    linkedPulls: [34],
+  }]);
+  assert.deepEqual(response.body.pulls, [{
+    number: 34,
+    title: 'PR from GraphQL',
+    url: 'https://github.com/octo/demo/pull/34',
+    state: 'open',
+    assignees: ['hubot'],
+    branch: 'feature/graphql',
+    headSha: 'def456',
+    draft: false,
+    nodeId: 'PR_graphql',
+    linkedIssues: [12],
+  }]);
 });

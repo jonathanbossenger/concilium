@@ -230,6 +230,10 @@ function toGitHubPull(item) {
   };
 }
 
+function githubItemsResponse(url, issues, pulls, warning = null) {
+  return { url, issues, pulls, warning };
+}
+
 function execFileWithOutput(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
@@ -282,14 +286,15 @@ router.post('/github-items', async (req, res) => {
     if (url && typeof url !== 'string') {
       return res.status(400).json({ error: 'url must be a string' });
     }
-    if (!url) return res.json({ url: null, issues: [], pulls: [] });
+    if (!url) return res.json(githubItemsResponse(null, [], []));
     const repoData = parseGitHubRepo(url);
-    if (!repoData) return res.json({ url: null, issues: [], pulls: [] });
+    if (!repoData) return res.json(githubItemsResponse(null, [], []));
     const apiBase = `https://api.github.com/repos/${encodeURIComponent(repoData.owner)}/${encodeURIComponent(repoData.repo)}`;
     try {
       const cfg = getConfig();
       const githubToken = getGitHubToken(cfg);
       let issues, pulls;
+      let warning = null;
       if (githubToken) {
         // When a token is available, use the GraphQL API to fetch issues, PRs, and their
         // canonical closing-issue links (closingIssuesReferences) in a single round-trip.
@@ -371,16 +376,14 @@ router.post('/github-items', async (req, res) => {
         pulls = Array.isArray(rawPulls)
           ? rawPulls.map(toGitHubPull)
           : [];
-        return res.json({ url, issues, pulls, warning: 'linked refs require a github token' });
+        warning = 'linked refs require a github token';
       }
-      res.json({ url, issues, pulls });
+      res.json(githubItemsResponse(url, issues, pulls, warning));
     } catch (err) {
       const detail = classifyGitHubError(err);
       console.error('[concilium] github-items fetch failed:', err.message);
       res.json({
-        url,
-        issues: [],
-        pulls: [],
+        ...githubItemsResponse(url, [], []),
         error: detail.message,
         errorCode: detail.code,
       });
