@@ -7,6 +7,7 @@ import { openGitCheatsheet, getGitCheatsheetTargetCard, clearGitCheatsheetTarget
 
 // Wire up the git cheatsheet opener slot used by TerminalCard instances.
 TerminalCard.prototype._openGitCheatsheet = function () { openGitCheatsheet(this); };
+const HISTORY_TASK_LIMIT = 1000;
 
 function cardInsertTarget(main, clientX, clientY) {
   const siblings = [...main.querySelectorAll('.card:not(.dragging)')];
@@ -131,10 +132,14 @@ async function loadAgents() {
 }
 
 function formatHistoryTimestamp(ts) {
-  if (typeof ts !== 'number' || !Number.isFinite(ts)) return '—';
+  if (!Number.isFinite(ts)) return '—';
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString();
+}
+
+function isTaskFinished(task) {
+  return !!(task && task.status !== 'running' && Number.isFinite(task.ended_at));
 }
 
 // --- card factories --------------------------------------------------------
@@ -358,12 +363,10 @@ async function refreshTaskHistory() {
   if (!historyTableBody) return;
   if (historyRefreshBtn) historyRefreshBtn.disabled = true;
   try {
-    const response = await fetch('/api/tasks?limit=1000');
+    const response = await fetch(`/api/tasks?limit=${HISTORY_TASK_LIMIT}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const tasks = await response.json();
-    const finished = Array.isArray(tasks)
-      ? tasks.filter((task) => task && task.status !== 'running' && Number.isFinite(task.ended_at))
-      : [];
+    const finished = Array.isArray(tasks) ? tasks.filter(isTaskFinished) : [];
 
     historyTableBody.replaceChildren();
     if (finished.length === 0) {
