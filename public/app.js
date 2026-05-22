@@ -1,4 +1,4 @@
-import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed } from './utils.js';
+import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS } from './utils.js';
 import { agentsById, cards, termCards, appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
@@ -7,8 +7,6 @@ import { openGitCheatsheet, getGitCheatsheetTargetCard, clearGitCheatsheetTarget
 
 // Wire up the git cheatsheet opener slot used by TerminalCard instances.
 TerminalCard.prototype._openGitCheatsheet = function () { openGitCheatsheet(this); };
-
-const RESTORE_RESUME_RETRY_DELAY_MS = 500;
 
 function cardInsertTarget(main, clientX, clientY) {
   const siblings = [...main.querySelectorAll('.card:not(.dragging)')];
