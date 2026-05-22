@@ -1760,13 +1760,23 @@ async function refreshAgentsTable() {
   tbody.replaceChildren();
   for (const agent of agents) {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${agent.id}</td>
-      <td>${agent.name || ''}</td>
-      <td><code>${agent.command}${agent.args ? ' ' + agent.args.join(' ') : ''}</code></td>
-      <td>${agent.interactive ? 'PTY' : 'piped'}</td>
-      <td class="actions"></td>`;
-    const actions = row.querySelector('.actions');
+    const tdId = document.createElement('td');
+    tdId.textContent = agent.id;
+    const tdName = document.createElement('td');
+    tdName.textContent = agent.name || '';
+    const tdCmd = document.createElement('td');
+    const cmdCode = document.createElement('code');
+    cmdCode.textContent = agent.command + (agent.args ? ' ' + agent.args.join(' ') : '');
+    tdCmd.appendChild(cmdCode);
+    const tdMode = document.createElement('td');
+    tdMode.textContent = agent.interactive ? 'PTY' : 'piped';
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+    row.appendChild(tdId);
+    row.appendChild(tdName);
+    row.appendChild(tdCmd);
+    row.appendChild(tdMode);
+    row.appendChild(actions);
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
     editBtn.className = 'row-btn';
@@ -1823,13 +1833,23 @@ async function refreshOnboardingAgentsTable() {
   onboardingAgentsTableBody.replaceChildren();
   for (const agent of agents) {
     const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${agent.id}</td>
-      <td>${agent.name || ''}</td>
-      <td><code>${agent.command}${agent.args ? ' ' + agent.args.join(' ') : ''}</code></td>
-      <td>${agent.interactive ? 'PTY' : 'piped'}</td>
-      <td class="actions"></td>`;
-    const actions = row.querySelector('.actions');
+    const tdId = document.createElement('td');
+    tdId.textContent = agent.id;
+    const tdName = document.createElement('td');
+    tdName.textContent = agent.name || '';
+    const tdCmd = document.createElement('td');
+    const cmdCode = document.createElement('code');
+    cmdCode.textContent = agent.command + (agent.args ? ' ' + agent.args.join(' ') : '');
+    tdCmd.appendChild(cmdCode);
+    const tdMode = document.createElement('td');
+    tdMode.textContent = agent.interactive ? 'PTY' : 'piped';
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+    row.appendChild(tdId);
+    row.appendChild(tdName);
+    row.appendChild(tdCmd);
+    row.appendChild(tdMode);
+    row.appendChild(actions);
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'row-btn danger';
@@ -1884,15 +1904,28 @@ async function refreshDiscoverTable() {
   tbody.replaceChildren();
   for (const discovered of discoveredAgents) {
     const row = document.createElement('tr');
-    const pathCell = discovered.found
-      ? `<span class="found">${discovered.found}</span>`
-      : `<span class="muted">not found</span>`;
-    row.innerHTML = `
-      <td>${discovered.id}</td>
-      <td><code>${discovered.command}</code></td>
-      <td>${pathCell}</td>
-      <td class="actions"></td>`;
-    const actions = row.querySelector('.actions');
+    const tdId = document.createElement('td');
+    tdId.textContent = discovered.id;
+    const tdCmd = document.createElement('td');
+    const cmdCode = document.createElement('code');
+    cmdCode.textContent = discovered.command;
+    tdCmd.appendChild(cmdCode);
+    const tdPath = document.createElement('td');
+    const pathSpan = document.createElement('span');
+    if (discovered.found) {
+      pathSpan.className = 'found';
+      pathSpan.textContent = discovered.found;
+    } else {
+      pathSpan.className = 'muted';
+      pathSpan.textContent = 'not found';
+    }
+    tdPath.appendChild(pathSpan);
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+    row.appendChild(tdId);
+    row.appendChild(tdCmd);
+    row.appendChild(tdPath);
+    row.appendChild(actions);
     if (discovered.found && !existingIds.has(discovered.id)) {
       const addBtn = document.createElement('button');
       addBtn.type = 'button';
@@ -1916,7 +1949,10 @@ async function refreshDiscoverTable() {
       });
       actions.appendChild(addBtn);
     } else if (existingIds.has(discovered.id)) {
-      actions.innerHTML = '<span class="muted">already added</span>';
+      const alreadyAdded = document.createElement('span');
+      alreadyAdded.className = 'muted';
+      alreadyAdded.textContent = 'already added';
+      actions.appendChild(alreadyAdded);
     }
     tbody.appendChild(row);
   }
