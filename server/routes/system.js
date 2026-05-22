@@ -3,6 +3,7 @@ const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const store = require('../store');
+const { isLoopbackRequest } = require('../loopback');
 const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 
@@ -13,7 +14,6 @@ const GIT_CLONE_TIMEOUT_MS = 120000;
 const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 // REST issue-assignee login used by GitHub for Copilot assignment.
 const COPILOT_ISSUE_ASSIGNEE = 'Copilot';
 const COPILOT_ISSUE_ASSIGNEE_FALLBACK = 'copilot-swe-agent[bot]';
@@ -43,29 +43,6 @@ function getPreferredEditor(cfg) {
     ? raw.args.map((arg) => String(arg).trim()).filter(Boolean)
     : [];
   return { command, args };
-}
-
-function normalizeHostHeader(value) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  const host = typeof raw === 'string' ? raw.split(',')[0].trim().toLowerCase() : '';
-  if (!host) return '';
-  if (host.startsWith('[')) {
-    const closingIndex = host.indexOf(']');
-    return closingIndex === -1 ? host.slice(1) : host.slice(1, closingIndex);
-  }
-  const firstColonIndex = host.indexOf(':');
-  const lastColonIndex = host.lastIndexOf(':');
-  if (firstColonIndex !== -1 && firstColonIndex === lastColonIndex) {
-    return host.slice(0, firstColonIndex);
-  }
-  return host;
-}
-
-function isLoopbackRequest(req) {
-  const forwardedHost = normalizeHostHeader(req.headers['x-forwarded-host']);
-  if (forwardedHost) return LOOPBACK_HOSTS.has(forwardedHost);
-  const host = normalizeHostHeader(req.headers.host || req.hostname);
-  return LOOPBACK_HOSTS.has(host);
 }
 
 function launchPreferredEditor(editor, cwd) {
