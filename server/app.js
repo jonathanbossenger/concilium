@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const { ensureState } = require('./config');
 const { requireLoopbackRequest } = require('./loopback');
+const { REQUEST_BODY_LIMIT } = require('./constants');
 
 function createApp() {
   ensureState();
@@ -18,7 +19,7 @@ function createApp() {
   const pickerRoute = require('./routes/picker');
 
   const app = express();
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use('/api', requireLoopbackRequest);
 
   app.get('/api/health', (req, res) => {
