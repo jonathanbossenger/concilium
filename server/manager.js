@@ -37,10 +37,17 @@ function createLogWriter(task_id) {
 
   function rotate() {
     if (closed) return;
-    fs.closeSync(fd);
-    rotateLogFiles(filePath);
-    fd = fs.openSync(filePath, 'w');
-    size = 0;
+    try {
+      fs.closeSync(fd);
+      rotateLogFiles(filePath);
+      fd = fs.openSync(filePath, 'w');
+      size = 0;
+      return true;
+    } catch (err) {
+      console.warn(`failed to rotate task log ${task_id}: ${err.message}`);
+      closed = true;
+      return false;
+    }
   }
 
   return {
@@ -49,12 +56,20 @@ function createLogWriter(task_id) {
       const buf = Buffer.from(data, 'utf8');
       let offset = 0;
       while (offset < buf.length) {
-        if (size >= MAX_LOG_BYTES) rotate();
+        if (size >= MAX_LOG_BYTES && !rotate()) break;
         const room = MAX_LOG_BYTES - size;
+        if (room <= 0) break;
         const bytes = Math.min(room, buf.length - offset);
-        fs.writeSync(fd, buf, offset, bytes);
-        size += bytes;
-        offset += bytes;
+        if (bytes <= 0) break;
+        try {
+          fs.writeSync(fd, buf, offset, bytes);
+          size += bytes;
+          offset += bytes;
+        } catch (err) {
+          console.warn(`failed to write task log ${task_id}: ${err.message}`);
+          closed = true;
+          break;
+        }
       }
     },
     end() {
@@ -67,13 +82,14 @@ function createLogWriter(task_id) {
 
 function cleanupOrphanLogs() {
   let removed = 0;
+  const taskIds = new Set(store.listTaskIds());
   const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const m = entry.name.match(TASK_LOG_NAME_RE);
     if (!m) continue;
     const taskId = parseInt(m[1], 10);
-    if (store.hasTask(taskId)) continue;
+    if (taskIds.has(taskId)) continue;
     try {
       fs.unlinkSync(path.join(LOG_DIR, entry.name));
       removed += 1;

@@ -56,6 +56,7 @@ const stmts = {
   `),
   deleteTaskRow: db.prepare(`DELETE FROM tasks WHERE id = ?`),
   hasTask: db.prepare(`SELECT 1 FROM tasks WHERE id = ?`),
+  listTaskIds: db.prepare(`SELECT id FROM tasks`),
   getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
   saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
 };
@@ -74,6 +75,7 @@ module.exports = {
   listEvents: (task_id) => stmts.listEvents.all(task_id),
   deleteTask: (id) => deleteTaskTxn(id),
   hasTask: (id) => !!stmts.hasTask.get(id),
+  listTaskIds: () => stmts.listTaskIds.all().map((row) => row.id),
   pruneEvents: ({ olderThanTs, maxPerTask, vacuumThreshold = 0 }) => {
     const hasAgeLimit = Number.isFinite(olderThanTs);
     const hasPerTaskLimit = Number.isFinite(maxPerTask) && maxPerTask > 0;
