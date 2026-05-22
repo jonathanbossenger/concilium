@@ -358,11 +358,11 @@ async function refreshTaskHistory() {
   if (!historyTableBody) return;
   if (historyRefreshBtn) historyRefreshBtn.disabled = true;
   try {
-    const response = await fetch('/api/tasks?limit=200');
+    const response = await fetch('/api/tasks?limit=1000');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const tasks = await response.json();
     const finished = Array.isArray(tasks)
-      ? tasks.filter((task) => task && task.status && task.status !== 'running')
+      ? tasks.filter((task) => task && task.status !== 'running' && Number.isFinite(task.ended_at))
       : [];
 
     historyTableBody.replaceChildren();
