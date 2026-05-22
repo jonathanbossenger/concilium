@@ -1,5 +1,5 @@
 const express = require('express');
-const { getConfig, saveConfig } = require('../config');
+const { getConfig, getConfigForUpdate, saveConfig } = require('../config');
 const { discover } = require('../discover');
 
 const router = express.Router();
@@ -42,7 +42,7 @@ router.post('/', (req, res) => {
   if (!ID_RE.test(body.id)) {
     return res.status(400).json({ error: 'id must match [a-z0-9_-]+' });
   }
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   if (cfg.agents.some((a) => a.id === body.id)) {
     return res.status(409).json({ error: 'id already exists' });
   }
@@ -53,7 +53,7 @@ router.post('/', (req, res) => {
 });
 
 router.patch('/:id', (req, res) => {
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   const idx = cfg.agents.findIndex((a) => a.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: 'agent not found' });
 
@@ -75,7 +75,7 @@ router.patch('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   const idx = cfg.agents.findIndex((a) => a.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: 'agent not found' });
   cfg.agents.splice(idx, 1);

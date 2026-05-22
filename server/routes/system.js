@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('../store');
 const { isLoopbackRequest } = require('../loopback');
-const { getConfig, saveConfig } = require('../config');
+const { getConfig, getConfigForUpdate, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 
 const router = express.Router();
@@ -171,7 +171,7 @@ router.post('/preferred-editor', (req, res) => {
     command: typeof command === 'string' ? command.trim() : '',
     args: Array.isArray(args) ? args.map((arg) => arg.trim()).filter(Boolean) : [],
   };
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   if (editor.command) cfg.preferredEditor = editor;
   else delete cfg.preferredEditor;
   saveConfig(cfg);
@@ -878,7 +878,7 @@ router.get('/onboarding', (req, res) => {
 });
 
 router.post('/onboarding/complete', (req, res) => {
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   if (!hasConfiguredAgent(cfg)) {
     return res.status(400).json({ error: 'Configure at least one agent before finishing onboarding.' });
   }
@@ -892,7 +892,7 @@ router.post('/github-token', (req, res) => {
   if (token !== undefined && typeof token !== 'string') {
     return res.status(400).json({ error: 'GITHUB_TOKEN must be a string' });
   }
-  const cfg = getConfig();
+  const cfg = getConfigForUpdate();
   const normalized = typeof token === 'string' ? token.trim() : '';
   if (normalized && !GITHUB_TOKEN_RE.test(normalized)) {
     return res.status(400).json({ error: 'GitHub token contains invalid characters' });
