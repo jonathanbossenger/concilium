@@ -236,7 +236,7 @@ All endpoints are JSON; loopback only.
 | `POST`   | `/api/system/preferred-editor` | save/clear the local-loopback preferred editor `{command, args?}` |
 | `POST`   | `/api/system/open-editor` | open `{path}` in the configured preferred editor (local loopback UI only) |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
-| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
+| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls, warning}` for open GitHub issues/pull requests |
 | `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |
 | `POST`   | `/api/system/github-issues/action` | trigger an issue action with `{url, issueNumber, action}` (`action: "assign_copilot"` assigns `copilot-swe-agent[bot]`, `action: "close"` closes the issue) |
 | `POST`   | `/api/system/new-issue` | create a GitHub issue `{url, title, body?, assignCopilot?}` → `{number, title, url, state, assignees, copilotAssignmentRequested, copilotAssigned}` |
