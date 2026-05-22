@@ -2,6 +2,7 @@ const os = require('os');
 const path = require('path');
 const express = require('express');
 const { ensureState, getConfig } = require('./config');
+const { requireLoopbackRequest } = require('./loopback');
 
 ensureState();
 const cfg = getConfig();
@@ -14,6 +15,7 @@ const systemRoute = require('./routes/system');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', requireLoopbackRequest);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, pid: process.pid, uptime: process.uptime(), homeDir: os.homedir() });
