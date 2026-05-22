@@ -75,9 +75,12 @@ module.exports = {
   deleteTask: (id) => deleteTaskTxn(id),
   hasTask: (id) => !!stmts.hasTask.get(id),
   pruneEvents: ({ olderThanTs, maxPerTask, vacuumThreshold = 0 }) => {
+    const hasAgeLimit = Number.isFinite(olderThanTs);
+    const hasPerTaskLimit = Number.isFinite(maxPerTask) && maxPerTask > 0;
+    if (!hasAgeLimit && !hasPerTaskLimit) return { deleted: 0, vacuumed: false };
     let deleted = 0;
-    if (Number.isFinite(olderThanTs)) deleted += stmts.deleteOldEvents.run(olderThanTs).changes;
-    if (Number.isFinite(maxPerTask) && maxPerTask > 0) deleted += stmts.deleteExcessEventsPerTask.run(maxPerTask).changes;
+    if (hasAgeLimit) deleted += stmts.deleteOldEvents.run(olderThanTs).changes;
+    if (hasPerTaskLimit) deleted += stmts.deleteExcessEventsPerTask.run(maxPerTask).changes;
     let vacuumed = false;
     if (vacuumThreshold > 0 && deleted >= vacuumThreshold) {
       db.exec('VACUUM');

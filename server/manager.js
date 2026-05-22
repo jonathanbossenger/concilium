@@ -14,6 +14,7 @@ const EVENT_RETENTION_DAYS = 30;
 const EVENT_ROWS_PER_TASK = 20000;
 const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const VACUUM_THRESHOLD_ROWS = 50000;
+const TASK_LOG_NAME_RE = new RegExp(`^(\\d+)\\.log(?:\\.([1-${LOG_ROTATIONS}]))?$`);
 
 function rotateLogFiles(basePath) {
   for (let i = LOG_ROTATIONS; i >= 1; i -= 1) {
@@ -69,7 +70,7 @@ function cleanupOrphanLogs() {
   const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const m = entry.name.match(/^(\d+)\.log(?:\.\d+)?$/);
+    const m = entry.name.match(TASK_LOG_NAME_RE);
     if (!m) continue;
     const taskId = parseInt(m[1], 10);
     if (store.hasTask(taskId)) continue;
@@ -86,7 +87,7 @@ function deleteTaskLogs(task_id) {
   const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    if (entry.name === prefix || entry.name.startsWith(`${prefix}.`)) {
+    if (entry.name.startsWith(prefix) && TASK_LOG_NAME_RE.test(entry.name)) {
       try { fs.unlinkSync(path.join(LOG_DIR, entry.name)); } catch (_) {}
     }
   }
