@@ -15,6 +15,8 @@ const EVENT_ROWS_PER_TASK = 20000;
 const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const VACUUM_THRESHOLD_ROWS = 50000;
 const TASK_LOG_NAME_REGEX = new RegExp(`^(\\d+)\\.log(?:\\.([1-${LOG_ROTATIONS}]))?$`);
+const FLUSH_INTERVAL_MS = 50;
+const FLUSH_BYTES = 4 * 1024;
 
 function rotateLogFiles(basePath) {
   for (let i = LOG_ROTATIONS; i >= 1; i -= 1) {
@@ -124,6 +126,54 @@ function runMaintenance() {
 runMaintenance();
 setInterval(runMaintenance, MAINTENANCE_INTERVAL_MS).unref();
 
+// Creates a coalescing write batcher for a single task.  Events are queued
+// and flushed to SQLite in a single transaction either when the accumulated
+// payload reaches FLUSH_BYTES or after FLUSH_INTERVAL_MS, whichever comes
+// first.  After the DB write the events are broadcast with their real row ids,
+// preserving the "DB-write happens-before broadcast" invariant that SSE replay
+// relies on.
+function createBatcher(task_id, onFlush) {
+  let pending = [];
+  let pendingBytes = 0;
+  let timer = null;
+
+  function flush() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (pending.length === 0) return;
+    const batch = pending;
+    pending = [];
+    pendingBytes = 0;
+    onFlush(batch);
+  }
+
+  function discard() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pending = [];
+    pendingBytes = 0;
+  }
+
+  function push(ev) {
+    pending.push(ev);
+    pendingBytes += Buffer.byteLength(ev.data, 'utf8');
+    if (pendingBytes >= FLUSH_BYTES) {
+      flush();
+      return;
+    }
+    if (timer === null) {
+      timer = setTimeout(flush, FLUSH_INTERVAL_MS);
+      timer.unref();
+    }
+  }
+
+  return { push, flush, discard };
+}
+
 function launch(agent, prompt, cwd) {
   const resolvedCwd = expandTilde((cwd || '').trim()) || os.homedir();
   const task_id = store.createTask(agent.id, prompt, resolvedCwd);
@@ -133,13 +183,20 @@ function launch(agent, prompt, cwd) {
 
   const runner = startTask(agent, prompt, resolvedCwd);
 
+  const batcher = createBatcher(task_id, (batch) => {
+    const ids = store.appendEvents(task_id, batch);
+    for (let i = 0; i < batch.length; i += 1) {
+      broadcast.emit('event', { ...batch[i], id: ids[i] });
+    }
+  });
+
   runner.on('event', (ev) => {
-    const result = store.appendEvent(task_id, ev.ts, ev.stream, ev.data);
     logWriter.write(ev.data);
-    broadcast.emit('event', { ...ev, id: result.lastInsertRowid });
+    batcher.push(ev);
   });
 
   runner.on('end', (info) => {
+    batcher.flush();
     const status = info.signal ? 'killed' : 'done';
     store.finishTask(task_id, status, info.exitCode, info.signal);
     try { logWriter.end(); } catch (err) {
@@ -149,7 +206,7 @@ function launch(agent, prompt, cwd) {
     live.delete(task_id);
   });
 
-  live.set(task_id, { broadcast, runner, logWriter });
+  live.set(task_id, { broadcast, runner, logWriter, batcher });
   return task_id;
 }
 
@@ -162,6 +219,7 @@ function remove(task_id) {
     try { e.logWriter.end(); } catch (err) {
       console.warn(`failed to close task log ${task_id}: ${err.message}`);
     }
+    e.batcher.discard();
     live.delete(task_id);
   }
   try { deleteTaskLogs(task_id); } catch (_) {}
@@ -178,6 +236,10 @@ function kill(task_id) {
 function sendInput(task_id, data) {
   const e = live.get(task_id);
   if (!e || typeof e.runner.write !== 'function') return false;
+  // Flush any buffered stdout events before writing stdin so the DB row order
+  // reflects the true sequence of events and SSE clients that replay from the
+  // DB see a consistent picture (happens-before invariant).
+  e.batcher.flush();
   const ts = Date.now();
   store.appendEvent(task_id, ts, 'stdin', data);
   e.runner.write(data);

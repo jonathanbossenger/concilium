@@ -66,10 +66,15 @@ const deleteTaskTxn = db.transaction((id) => {
   stmts.deleteTaskRow.run(id);
 });
 
+const insertBatch = db.transaction((task_id, evs) =>
+  evs.map((ev) => stmts.insertEvent.run(task_id, ev.ts, ev.stream, ev.data).lastInsertRowid)
+);
+
 module.exports = {
   createTask: (agent_id, prompt, cwd) => stmts.insertTask.run(agent_id, prompt, cwd, Date.now()).lastInsertRowid,
   finishTask: (id, status, exitCode, signal) => stmts.finishTask.run(status, Date.now(), exitCode, signal, id),
   appendEvent: (task_id, ts, stream, data) => stmts.insertEvent.run(task_id, ts, stream, data),
+  appendEvents: (task_id, evs) => insertBatch(task_id, evs),
   listTasks: (limit = 100) => stmts.listTasks.all(limit),
   getTask: (id) => stmts.getTask.get(id),
   listEvents: (task_id) => stmts.listEvents.all(task_id),
