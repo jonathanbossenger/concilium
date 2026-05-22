@@ -731,7 +731,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   font-size: 0.85em;
 }
 #new-card-btn:hover { background: var(--new-hover); }
-#open-settings, #theme-toggle, #new-project-btn, #open-shortcuts {
+#open-settings, #theme-toggle, #new-project-btn, #open-shortcuts, #open-history {
   background: transparent;
   color: var(--text-dim);
   font-size: 1em;
@@ -744,7 +744,7 @@ button:disabled { background: var(--button-disabled); cursor: not-allowed; }
   align-items: center;
   justify-content: center;
 }
-#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover, #open-shortcuts:hover { background: var(--bg-hover); color: var(--text); }
+#open-settings:hover, #theme-toggle:hover, #new-project-btn:hover, #open-shortcuts:hover, #open-history:hover { background: var(--bg-hover); color: var(--text); }
 
 /* --- settings dialog --- */
 dialog#settings-dialog,
@@ -752,6 +752,7 @@ dialog#onboarding-dialog,
 dialog#new-project-dialog,
 dialog#new-issue-dialog,
 dialog#shortcuts-dialog,
+dialog#history-dialog,
 dialog#confirm-dialog {
   background: var(--surface);
   color: var(--text);
@@ -767,6 +768,7 @@ dialog#onboarding-dialog::backdrop,
 dialog#new-project-dialog::backdrop,
 dialog#new-issue-dialog::backdrop,
 dialog#shortcuts-dialog::backdrop,
+dialog#history-dialog::backdrop,
 dialog#confirm-dialog::backdrop { background: var(--backdrop); }
 .dialog-body { display: flex; flex-direction: column; gap: 1.2em; padding: 1em 1.2em 1.4em; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; }
@@ -785,12 +787,12 @@ dialog section h3 {
   gap: 0.5em;
 }
 
-#agents-table, #discover-table, #onboarding-agents-table {
+#agents-table, #discover-table, #onboarding-agents-table, #history-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9em;
 }
-#agents-table th, #discover-table th, #onboarding-agents-table th {
+#agents-table th, #discover-table th, #onboarding-agents-table th, #history-table th {
   text-align: left;
   font-weight: 600;
   color: var(--text-muted);
@@ -798,12 +800,18 @@ dialog section h3 {
   border-bottom: 1px solid var(--border);
   font-size: 0.85em;
 }
-#agents-table td, #discover-table td, #onboarding-agents-table td {
+#agents-table td, #discover-table td, #onboarding-agents-table td, #history-table td {
   padding: 0.4em 0.5em;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
 }
-#agents-table .actions, #discover-table .actions, #onboarding-agents-table .actions { text-align: right; white-space: nowrap; }
+#agents-table .actions, #discover-table .actions, #onboarding-agents-table .actions, #history-table .actions { text-align: right; white-space: nowrap; }
+#history-table code {
+  font-size: 0.95em;
+  background: var(--code-bg);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
 .row-btn {
   background: transparent;
   border: 1px solid var(--border-row);
