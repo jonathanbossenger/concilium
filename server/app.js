@@ -1,3 +1,4 @@
+const os = require('os');
 const path = require('path');
 const express = require('express');
 const { ensureState } = require('./config');
@@ -19,6 +20,10 @@ function createApp() {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
   app.use('/api', requireLoopbackRequest);
+
+  app.get('/api/health', (req, res) => {
+    res.json({ ok: true, pid: process.pid, uptime: process.uptime(), homeDir: os.homedir() });
+  });
 
   app.use('/api/agents', agentsRoute);
   app.use('/api/tasks', tasksRoute);

@@ -1,13 +1,8 @@
-const os = require('os');
 const { getConfig } = require('./config');
 const { createApp } = require('./app');
 
 const app = createApp();
 const cfg = getConfig();
-
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, pid: process.pid, uptime: process.uptime(), homeDir: os.homedir() });
-});
 
 const server = app.listen(cfg.port, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${cfg.port}`;

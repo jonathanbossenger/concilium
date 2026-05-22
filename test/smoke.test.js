@@ -11,6 +11,9 @@ const repoRoot = path.resolve(__dirname, '..');
 const serverRoot = path.join(repoRoot, 'server');
 
 function clearServerModules() {
+  // Simulate a process reboot in tests: server modules hold singleton state at
+  // module scope (SQLite handle/config cache), so each bootstrap needs a clean
+  // require() graph to re-run module-load side effects deterministically.
   const prefix = `${serverRoot}${path.sep}`;
   for (const key of Object.keys(require.cache)) {
     if (key.startsWith(prefix)) delete require.cache[key];
@@ -51,6 +54,16 @@ async function waitForTaskStatus(api, taskId, expected, timeoutMs = 5000) {
     await delay(25);
   }
   throw new Error(`Timed out waiting for task ${taskId} to reach status "${expected}"`);
+}
+
+async function waitForTaskToEmit(api, taskId, timeoutMs = 5000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const response = await withLocalHost(api.get(`/api/tasks/${taskId}`));
+    if (response.body.status === 'running' && response.body.events.length > 0) return response.body;
+    await delay(25);
+  }
+  throw new Error(`Timed out waiting for task ${taskId} to emit output while running`);
 }
 
 after(() => {
@@ -110,20 +123,24 @@ test('SSE replay while task is live has no gaps or duplicates', async (t) => {
   t.after(() => fs.rmSync(homeDir, { recursive: true, force: true }));
   const { api } = bootstrap(homeDir);
 
+  const lineCount = 40;
+  const lineIntervalMs = 15;
+
   await withLocalHost(api.post('/api/agents').send({
     id: 'streamer',
     name: 'Streamer',
     command: process.execPath,
     args: ['-e', [
       'let i = 0;',
+      `const max = ${lineCount};`,
       'const timer = setInterval(() => {',
-      '  if (i >= 20) {',
+      '  if (i >= max) {',
       '    clearInterval(timer);',
       '    process.exit(0);',
       '  }',
       '  process.stdout.write(`line-${i}\\n`);',
       '  i += 1;',
-      '}, 10);',
+      `}, ${lineIntervalMs});`,
     ].join(' ')],
   })).expect(201);
 
@@ -131,11 +148,17 @@ test('SSE replay while task is live has no gaps or duplicates', async (t) => {
   const taskId = start.body.task_id;
   assert.ok(taskId);
 
-  await delay(80);
-  const streamResponse = await withLocalHost(api.get(`/api/stream/${taskId}`)).expect(200);
+  await waitForTaskToEmit(api, taskId);
+  const streamResponse = await withLocalHost(api.get(`/api/stream/${taskId}`))
+    .timeout(7000)
+    .expect(200);
   const rawBody = streamResponse.text
     || (Buffer.isBuffer(streamResponse.body) ? streamResponse.body.toString('utf8') : String(streamResponse.body || ''));
-  const streamEvents = parseSseBody(rawBody).filter((ev) => ev.event === 'output');
+  const parsedEvents = parseSseBody(rawBody);
+  const streamEvents = parsedEvents.filter((ev) => ev.event === 'output');
+  const endEvents = parsedEvents.filter((ev) => ev.event === 'end');
+  assert.equal(endEvents.length, 1);
+  assert.equal(endEvents[0].data.status, 'done');
 
   const taskResponse = await withLocalHost(api.get(`/api/tasks/${taskId}`)).expect(200);
   const dbEvents = taskResponse.body.events.map((ev) => ({
