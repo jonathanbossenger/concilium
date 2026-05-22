@@ -59,6 +59,7 @@ const stmts = {
   listTaskIds: db.prepare(`SELECT id FROM tasks`),
   getLayout: db.prepare(`SELECT value FROM layout WHERE key = 'cards'`),
   saveLayout: db.prepare(`INSERT INTO layout (key, value) VALUES ('cards', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`),
+  countEvents: db.prepare(`SELECT COUNT(*) AS count FROM events`),
 };
 
 const deleteTaskTxn = db.transaction((id) => {
@@ -97,4 +98,5 @@ module.exports = {
   },
   getLayout: () => { const row = stmts.getLayout.get(); return row ? row.value : null; },
   saveLayout: (value) => stmts.saveLayout.run(value),
+  countEvents: () => stmts.countEvents.get().count,
 };

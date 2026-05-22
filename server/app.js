@@ -1,9 +1,24 @@
 const os = require('os');
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { ensureState } = require('./config');
 const { requireLoopbackRequest } = require('./loopback');
 const { REQUEST_BODY_LIMIT } = require('./constants');
+
+function logsDirSize(logDir) {
+  try {
+    const entries = fs.readdirSync(logDir, { withFileTypes: true });
+    let total = 0;
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      try { total += fs.statSync(path.join(logDir, entry.name)).size; } catch (_) {}
+    }
+    return total;
+  } catch (_) {
+    return 0;
+  }
+}
 
 function createApp() {
   ensureState();
@@ -17,13 +32,24 @@ function createApp() {
   const onboardingRoute = require('./routes/onboarding');
   const editorRoute = require('./routes/editor');
   const pickerRoute = require('./routes/picker');
+  const manager = require('./manager');
+  const store = require('./store');
+  const { LOG_DIR } = require('./config');
 
   const app = express();
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use('/api', requireLoopbackRequest);
 
   app.get('/api/health', (req, res) => {
-    res.json({ ok: true, pid: process.pid, uptime: process.uptime(), homeDir: os.homedir() });
+    res.json({
+      ok: true,
+      pid: process.pid,
+      uptime: process.uptime(),
+      homeDir: os.homedir(),
+      liveTasks: manager.liveCount(),
+      totalEvents: store.countEvents(),
+      logsDirBytes: logsDirSize(LOG_DIR),
+    });
   });
 
   app.use('/api/agents', agentsRoute);
