@@ -22,7 +22,9 @@ function rotateLogFiles(basePath) {
     try {
       if (i === LOG_ROTATIONS && fs.existsSync(dst)) fs.unlinkSync(dst);
       if (fs.existsSync(src)) fs.renameSync(src, dst);
-    } catch (_) {}
+    } catch (err) {
+      console.warn(`failed to rotate log file ${src} -> ${dst}: ${err.message}`);
+    }
   }
 }
 
@@ -119,14 +121,18 @@ function launch(agent, prompt, cwd) {
     const result = store.appendEvent(task_id, ev.ts, ev.stream, ev.data);
     try {
       logWriter.write(ev.data);
-    } catch (_) {}
+    } catch (err) {
+      console.warn(`failed to write task log ${task_id}: ${err.message}`);
+    }
     broadcast.emit('event', { ...ev, id: result.lastInsertRowid });
   });
 
   runner.on('end', (info) => {
     const status = info.signal ? 'killed' : 'done';
     store.finishTask(task_id, status, info.exitCode, info.signal);
-    try { logWriter.end(); } catch (_) {}
+    try { logWriter.end(); } catch (err) {
+      console.warn(`failed to close task log ${task_id}: ${err.message}`);
+    }
     broadcast.emit('end', { ...info, status });
     live.delete(task_id);
   });
@@ -141,7 +147,9 @@ function remove(task_id) {
     // Detach so the end handler doesn't write to a row we're about to delete.
     e.runner.removeAllListeners();
     try { e.runner.kill(); } catch (_) {}
-    try { e.logWriter.end(); } catch (_) {}
+    try { e.logWriter.end(); } catch (err) {
+      console.warn(`failed to close task log ${task_id}: ${err.message}`);
+    }
     live.delete(task_id);
   }
   try { deleteTaskLogs(task_id); } catch (_) {}
