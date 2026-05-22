@@ -174,14 +174,14 @@ function createBatcher(task_id, onFlush) {
   return { push, flush, discard };
 }
 
-function launch(agent, prompt, cwd) {
+function launch(agent, prompt, cwd, cols, rows) {
   const resolvedCwd = expandTilde((cwd || '').trim()) || os.homedir();
   const task_id = store.createTask(agent.id, prompt, resolvedCwd);
   const broadcast = new EventEmitter();
   broadcast.setMaxListeners(0);
   const logWriter = createLogWriter(task_id);
 
-  const runner = startTask(agent, prompt, resolvedCwd);
+  const runner = startTask(agent, prompt, resolvedCwd, cols, rows);
 
   const batcher = createBatcher(task_id, (batch) => {
     const ids = store.appendEvents(task_id, batch);

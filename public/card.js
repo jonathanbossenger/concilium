@@ -183,6 +183,13 @@ export class Card extends BaseCard {
     const body = { agent_id: agentId };
     const cwd = this.cwd.value.trim();
     if (cwd) body.cwd = cwd;
+    if (this.fitAddon && this.termEl.isConnected) {
+      try { this.fitAddon.fit(); } catch (_) {}
+    }
+    if (this.term?.cols > 0 && this.term?.rows > 0) {
+      body.cols = this.term.cols;
+      body.rows = this.term.rows;
+    }
 
     const response = await fetch('/api/tasks', {
       method: 'POST',
