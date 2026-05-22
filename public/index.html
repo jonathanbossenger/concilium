@@ -308,6 +308,20 @@
     </div>
   </dialog>
 
+  <dialog id="confirm-dialog">
+    <form method="dialog" class="dialog-body">
+      <div class="dialog-head">
+        <h2 id="confirm-dialog-title">Confirm action</h2>
+        <button type="submit" class="close-btn" title="Close" value="cancel">&times;</button>
+      </div>
+      <p id="confirm-dialog-message"></p>
+      <div class="row confirm-dialog-actions">
+        <button type="submit" id="confirm-dialog-cancel" value="cancel">Cancel</button>
+        <button type="submit" id="confirm-dialog-confirm" value="confirm">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="git-cheatsheet-dialog">
     <div class="dialog-body">
       <div class="dialog-head">
@@ -318,6 +332,8 @@
       <div id="git-cheatsheet-content" class="git-cheatsheet-grid"></div>
     </div>
   </dialog>
+
+  <div id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script type="module" src="/app.js"></script>
 </body>

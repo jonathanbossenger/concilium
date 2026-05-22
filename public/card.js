@@ -1,5 +1,5 @@
 import { BaseCard } from './base-card.js';
-import { $, isOpenCard, NEW_GITHUB_REPO_URL, RESTORE_RESUME_RETRY_DELAY_MS } from './utils.js';
+import { $, isOpenCard, NEW_GITHUB_REPO_URL, RESTORE_RESUME_RETRY_DELAY_MS, showConfirmDialog } from './utils.js';
 import {
   cards, termCards, agentsById, appState,
   fillAgentSelect, toTildePath, clearActiveCardIfMatch,
@@ -396,6 +396,13 @@ export class Card extends BaseCard {
 
   async kill() {
     if (!this.currentTaskId) return;
+    const shouldKill = await showConfirmDialog({
+      title: 'Kill running task',
+      message: 'Kill the currently running task?',
+      confirmLabel: 'Kill',
+      danger: true,
+    });
+    if (!shouldKill) return;
     await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
   }
 
