@@ -47,6 +47,11 @@ function reloadConfig() {
 }
 
 function saveConfig(newCfg) {
+  // Atomic write/rename prevents partial files, but this function does not
+  // coordinate read-modify-write callers. If two callers clone cached config
+  // and then both call saveConfig, the later write wins and overwrites the
+  // earlier mutation. Keep config mutations serialized in route/service code
+  // when concurrent updates are possible.
   const tmp = CONFIG_PATH + '.tmp';
   fs.writeFileSync(tmp, yaml.dump(newCfg, { sortKeys: false }), { mode: 0o600 });
   fs.renameSync(tmp, CONFIG_PATH);
