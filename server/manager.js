@@ -14,7 +14,7 @@ const EVENT_RETENTION_DAYS = 30;
 const EVENT_ROWS_PER_TASK = 20000;
 const MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const VACUUM_THRESHOLD_ROWS = 50000;
-const TASK_LOG_NAME_RE = new RegExp(`^(\\d+)\\.log(?:\\.([1-${LOG_ROTATIONS}]))?$`);
+const TASK_LOG_NAME_REGEX = new RegExp(`^(\\d+)\\.log(?:\\.([1-${LOG_ROTATIONS}]))?$`);
 
 function rotateLogFiles(basePath) {
   for (let i = LOG_ROTATIONS; i >= 1; i -= 1) {
@@ -58,7 +58,6 @@ function createLogWriter(task_id) {
       while (offset < buf.length) {
         if (size >= MAX_LOG_BYTES && !rotate()) break;
         const room = MAX_LOG_BYTES - size;
-        if (room <= 0) break;
         const bytes = Math.min(room, buf.length - offset);
         if (bytes <= 0) break;
         try {
@@ -86,9 +85,9 @@ function cleanupOrphanLogs() {
   const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const m = entry.name.match(TASK_LOG_NAME_RE);
-    if (!m) continue;
-    const taskId = parseInt(m[1], 10);
+    const match = entry.name.match(TASK_LOG_NAME_REGEX);
+    if (!match) continue;
+    const taskId = parseInt(match[1], 10);
     if (taskIds.has(taskId)) continue;
     try {
       fs.unlinkSync(path.join(LOG_DIR, entry.name));
@@ -103,7 +102,7 @@ function deleteTaskLogs(task_id) {
   const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    if (entry.name.startsWith(prefix) && TASK_LOG_NAME_RE.test(entry.name)) {
+    if (entry.name.startsWith(prefix) && TASK_LOG_NAME_REGEX.test(entry.name)) {
       try { fs.unlinkSync(path.join(LOG_DIR, entry.name)); } catch (_) {}
     }
   }
@@ -136,11 +135,7 @@ function launch(agent, prompt, cwd) {
 
   runner.on('event', (ev) => {
     const result = store.appendEvent(task_id, ev.ts, ev.stream, ev.data);
-    try {
-      logWriter.write(ev.data);
-    } catch (err) {
-      console.warn(`failed to write task log ${task_id}: ${err.message}`);
-    }
+    logWriter.write(ev.data);
     broadcast.emit('event', { ...ev, id: result.lastInsertRowid });
   });
 
