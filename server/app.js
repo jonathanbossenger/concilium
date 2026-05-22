@@ -6,13 +6,16 @@ const { ensureState } = require('./config');
 const { requireLoopbackRequest } = require('./loopback');
 const { REQUEST_BODY_LIMIT } = require('./constants');
 
-function logsDirSize(logDir) {
+async function logsDirSize(logDir) {
   try {
-    const entries = fs.readdirSync(logDir, { withFileTypes: true });
+    const entries = await fs.promises.readdir(logDir, { withFileTypes: true });
     let total = 0;
     for (const entry of entries) {
       if (!entry.isFile()) continue;
-      try { total += fs.statSync(path.join(logDir, entry.name)).size; } catch (_) {}
+      try {
+        const stat = await fs.promises.stat(path.join(logDir, entry.name));
+        total += stat.size;
+      } catch (_) {}
     }
     return total;
   } catch (_) {
@@ -40,7 +43,7 @@ function createApp() {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use('/api', requireLoopbackRequest);
 
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', async (req, res) => {
     res.json({
       ok: true,
       pid: process.pid,
@@ -48,7 +51,7 @@ function createApp() {
       homeDir: os.homedir(),
       liveTasks: manager.liveCount(),
       totalEvents: store.countEvents(),
-      logsDirBytes: logsDirSize(LOG_DIR),
+      logsDirBytes: await logsDirSize(LOG_DIR),
     });
   });
 
