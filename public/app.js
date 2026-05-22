@@ -130,6 +130,13 @@ async function loadAgents() {
   for (const card of cards) card.refreshAgentSelect();
 }
 
+function formatHistoryTimestamp(ts) {
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return '—';
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString();
+}
+
 // --- card factories --------------------------------------------------------
 
 function addTerminalCard({ cwd = '', afterEl = null, parentCard = null } = {}) {
@@ -311,6 +318,9 @@ const newIssueAssignCopilotInput = $('#new-issue-assign-copilot');
 const newIssueCreateBtn = $('#new-issue-create');
 const newIssueStatusEl = $('#new-issue-status');
 const shortcutsDialog = $('#shortcuts-dialog');
+const historyDialog = $('#history-dialog');
+const historyTableBody = $('#history-table tbody');
+const historyRefreshBtn = $('#history-refresh');
 let editingId = null;
 let onboardingStep = 1;
 let onboardingHasAgent = false;
@@ -330,6 +340,74 @@ function setFormMode(mode, agent) {
   agentForm.command.value = agent?.command || '';
   agentForm.args.value = (agent?.args || []).join(' ');
   agentForm.interactive.checked = !!agent?.interactive;
+}
+
+function replayHistoryTask(task) {
+  const card = addCard({ cwd: task.cwd || '' });
+  if (card.term) card.term.reset();
+  card.taskIds.add(task.id);
+  card.lastTaskId = task.id;
+  card.lastEventId = null;
+  card.attach(task.id, task);
+  appState.activeCardEl = card.el;
+  card.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (historyDialog.open) historyDialog.close();
+}
+
+async function refreshTaskHistory() {
+  if (!historyTableBody) return;
+  if (historyRefreshBtn) historyRefreshBtn.disabled = true;
+  try {
+    const response = await fetch('/api/tasks?limit=200');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const tasks = await response.json();
+    const finished = Array.isArray(tasks)
+      ? tasks.filter((task) => task && task.status && task.status !== 'running')
+      : [];
+
+    historyTableBody.replaceChildren();
+    if (finished.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 6;
+      cell.textContent = 'No finished tasks available.';
+      cell.className = 'muted';
+      row.appendChild(cell);
+      historyTableBody.appendChild(row);
+      return;
+    }
+
+    for (const task of finished) {
+      const row = document.createElement('tr');
+      const idCell = document.createElement('td');
+      idCell.textContent = String(task.id);
+      const agentCell = document.createElement('td');
+      agentCell.textContent = task.agent_id || '—';
+      const cwdCell = document.createElement('td');
+      const cwdCode = document.createElement('code');
+      cwdCode.textContent = task.cwd || '—';
+      cwdCell.appendChild(cwdCode);
+      const startedCell = document.createElement('td');
+      startedCell.textContent = formatHistoryTimestamp(task.started_at);
+      const statusCell = document.createElement('td');
+      statusCell.textContent = task.status || 'unknown';
+      const actionsCell = document.createElement('td');
+      actionsCell.className = 'actions';
+      const replayBtn = document.createElement('button');
+      replayBtn.type = 'button';
+      replayBtn.className = 'row-btn';
+      replayBtn.textContent = 'replay';
+      replayBtn.addEventListener('click', () => replayHistoryTask(task));
+      actionsCell.appendChild(replayBtn);
+      row.append(idCell, agentCell, cwdCell, startedCell, statusCell, actionsCell);
+      historyTableBody.appendChild(row);
+    }
+  } catch (err) {
+    console.error('[concilium] failed to load task history:', err);
+    showErrorToast('Failed to load task history.');
+  } finally {
+    if (historyRefreshBtn) historyRefreshBtn.disabled = false;
+  }
 }
 
 function refreshPreferredEditorButtons() {
@@ -863,6 +941,13 @@ $('#theme-toggle').addEventListener('click', () => {
   applyTheme(THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length]);
 });
 updateThemeButton();
+
+$('#open-history').addEventListener('click', async () => {
+  await refreshTaskHistory();
+  historyDialog.showModal();
+});
+$('#close-history').addEventListener('click', () => historyDialog.close());
+historyRefreshBtn.addEventListener('click', () => refreshTaskHistory());
 
 const shortcutsButton = $('#open-shortcuts');
 const primaryLabel = IS_MAC ? 'Cmd' : 'Ctrl';
