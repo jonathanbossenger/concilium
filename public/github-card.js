@@ -375,9 +375,18 @@ export class GitHubCard {
 
   setTitle(url) {
     if (!url) return;
-    const short = url.replace(/^https:\/\/github\.com\//, '');
-    this.titleEl.textContent = `GitHub — ${short}`;
     const base = url.replace(/\/+$/, '');
+    const short = base.replace(/^https:\/\/github\.com\//, '');
+    this.titleEl.replaceChildren();
+    this.titleEl.appendChild(document.createTextNode('GitHub — '));
+    const repoLink = document.createElement('a');
+    repoLink.href = base;
+    repoLink.target = '_blank';
+    repoLink.rel = 'noopener noreferrer';
+    repoLink.textContent = short;
+    repoLink.className = 'github-card-title-link';
+    repoLink.title = `Open ${short} on GitHub`;
+    this.titleEl.appendChild(repoLink);
     this.currentUrl = base;
     this.newIssueBtn.hidden = false;
     this.pullsLinkEl.href = base + '/pulls';

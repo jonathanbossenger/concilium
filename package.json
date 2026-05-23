@@ -1,6 +1,6 @@
 {
   "name": "concilium",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "Local multi-agent orchestration dashboard",
   "main": "server/index.js",
   "bin": {
