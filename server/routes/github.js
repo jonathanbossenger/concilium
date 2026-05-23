@@ -8,6 +8,7 @@ const os = require('os');
 const store = require('../store');
 const { getConfig, saveConfig } = require('../config');
 const { expandTilde } = require('../util/path');
+const { GITHUB_ITEMS_PER_PAGE } = require('../constants');
 const {
   hasAdminCredentials,
   hashPassword,

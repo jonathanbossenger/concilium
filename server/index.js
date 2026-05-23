@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const { ensureState, getConfig, saveConfig } = require('./config');
+const { SHUTDOWN_TIMEOUT_MS } = require('./constants');
 const {
   isLocalRequest,
   isLoopbackAddress,
@@ -12,7 +13,7 @@ const {
   hashSetupToken,
 } = require('./auth');
 
-const app = createApp();
+ensureState();
 const cfg = getConfig();
 const host = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim() : '127.0.0.1';
 const normalizedHost = host.toLowerCase();
@@ -34,7 +35,7 @@ if (cfg.publicServer && hostIsNonLoopback && !hasAdminCredentials(cfg)) {
 const agentsRoute = require('./routes/agents');
 const tasksRoute = require('./routes/tasks');
 const streamRoute = require('./routes/stream');
-const systemRoute = require('./routes/system');
+const systemRoute = require('./routes/github');
 
 const app = express();
 if (cfg.trustProxy === true) app.set('trust proxy', true);
