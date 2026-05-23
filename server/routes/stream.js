@@ -39,10 +39,10 @@ router.get('/:id', (req, res) => {
   const entry = manager.getLive(id);
 
   if (entry) {
-    // Subscribe BEFORE reading DB. Because store.appendEvent runs synchronously
-    // before broadcast.emit in the runner handler, every event committed to the
-    // DB at this moment is exactly the set of events that have been broadcast
-    // before our subscription — no duplicates and no gaps.
+    // Subscribe BEFORE reading DB. Because store.appendEvents (the batch flush)
+    // runs synchronously before broadcast.emit for every batch, every event
+    // committed to the DB at this moment is exactly the set of events that have
+    // been broadcast before our subscription — no duplicates and no gaps.
     const onEvent = (ev) => sse('output', ev, ev.id);
     const onEnd = (info) => {
       sse('end', info);

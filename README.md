@@ -49,7 +49,8 @@ Your council of agents — Concilium!
   Card controls are compact icon buttons: 📂 opens the OS folder picker for
   the working directory, ▶ starts the task (turns red while a task is
   running, click to kill), **>_** opens a pop-out terminal card (see
-  below), and **⤢** expands a single card to fill the main area with a
+  below), **`</>`** opens the current working directory in your configured
+  editor on the local loopback UI, and **⤢** expands a single card to fill the main area with a
   smooth View Transitions animation between states. When the working
   directory resolves to a GitHub repo (via `git remote`), a GitHub
   (octocat) button appears in the card header: clicking it opens a GitHub
@@ -179,9 +180,9 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + optional githubToken + agent list
+├── config.yaml      # port + optional githubToken + optional preferredEditor + agent list
 ├── tasks.db         # SQLite history + saved card layout
-├── logs/<id>.log    # per-task plain-text output log
+├── logs/<id>.log    # per-task plain-text output log (rotates at 5MB, keeps 3 backups)
 ├── server.log       # the server's own stdout/stderr
 └── run.pid          # standalone-mode PID file
 ```
@@ -215,10 +216,14 @@ agents:
 `interactive: false` → stdin is piped in, then closed (one-shot).
 `interactive: true` → spawned under a PTY; stays alive for follow-up input.
 `githubToken` is optional and used for authenticated GitHub API requests.
+`preferredEditor` is optional and used by the **`</>`** card button on the local loopback UI.
 
 Edits via the UI take effect immediately. Editing the YAML by hand requires
 a restart (`conciliumctl restart`).
 `config.yaml` may contain a secret token — keep it readable only by your user.
+Task output events are retained for up to 30 days and capped at 20,000 rows per
+task; startup/periodic maintenance prunes older rows and removes orphaned task
+log files.
 
 ### Public-server hardening notes
 
@@ -240,7 +245,7 @@ All endpoints are JSON.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET`    | `/api/health` | server pid, uptime |
+| `GET`    | `/api/health` | server pid, uptime, live task count, total event count, log directory size |
 | `GET`    | `/api/agents` | list configured agents |
 | `POST`   | `/api/agents` | create agent `{id, name, command, args?, interactive}` |
 | `PATCH`  | `/api/agents/:id` | update fields |
@@ -262,7 +267,7 @@ All endpoints are JSON.
 | `POST`   | `/api/system/auth/login` | sign in `{username, password}` (public-server mode only) |
 | `POST`   | `/api/system/auth/logout` | clear current auth session |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
-| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls}` for open GitHub issues/pull requests |
+| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls, warning}` for open GitHub issues/pull requests |
 | `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |
 | `POST`   | `/api/system/github-issues/action` | trigger an issue action with `{url, issueNumber, action}` (`action: "assign_copilot"` assigns `copilot-swe-agent[bot]`, `action: "close"` closes the issue) |
 | `POST`   | `/api/system/new-issue` | create a GitHub issue `{url, title, body?, assignCopilot?}` → `{number, title, url, state, assignees, copilotAssignmentRequested, copilotAssigned}` |

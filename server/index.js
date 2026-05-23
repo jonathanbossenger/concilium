@@ -12,7 +12,7 @@ const {
   hashSetupToken,
 } = require('./auth');
 
-ensureState();
+const app = createApp();
 const cfg = getConfig();
 const host = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim() : '127.0.0.1';
 const normalizedHost = host.toLowerCase();
@@ -102,7 +102,7 @@ const server = app.listen(cfg.port, host, () => {
 function shutdown(signal) {
   console.log(`received ${signal}, shutting down`);
   server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 5000).unref();
+  setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

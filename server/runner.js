@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
+const { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS } = require('./constants');
 
 let pty;
 function loadPty() {
@@ -7,8 +8,8 @@ function loadPty() {
   return pty;
 }
 
-function startTask(agent, prompt, cwd) {
-  return agent.interactive ? startPty(agent, prompt, cwd) : startPiped(agent, prompt, cwd);
+function startTask(agent, prompt, cwd, cols, rows) {
+  return agent.interactive ? startPty(agent, prompt, cwd, cols, rows) : startPiped(agent, prompt, cwd);
 }
 
 function startPiped(agent, prompt, cwd) {
@@ -46,7 +47,7 @@ function startPiped(agent, prompt, cwd) {
   return emitter;
 }
 
-function startPty(agent, prompt, cwd) {
+function startPty(agent, prompt, cwd, cols, rows) {
   const ptyMod = loadPty();
   const emitter = new EventEmitter();
 
@@ -55,8 +56,8 @@ function startPty(agent, prompt, cwd) {
     term = ptyMod.spawn(agent.command, agent.args || [], {
       cwd,
       env: process.env,
-      cols: 120,
-      rows: 30,
+      cols: (Number.isFinite(cols) && cols >= 1) ? cols : DEFAULT_PTY_COLS,
+      rows: (Number.isFinite(rows) && rows >= 1) ? rows : DEFAULT_PTY_ROWS,
       name: 'xterm-256color',
     });
   } catch (err) {

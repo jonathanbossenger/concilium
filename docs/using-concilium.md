@@ -7,7 +7,9 @@
 3. Set the working directory (📂 or type/paste a path).
 4. Enter your prompt and click **▶** to start.
 
-Use **>_** to open a side terminal in the same working directory.
+Use **>_** to open a side terminal in the same working directory. If you save a
+preferred editor in Settings, use **`</>`** to open that directory in your editor
+from the local loopback UI.
 
 ## Running Concilium
 
@@ -54,6 +56,7 @@ Header controls:
 - **Gear (⚙)** — opens a settings dialog where you can:
   - Add, edit, or delete agents
   - Scan `$PATH` for known CLI agents and add the ones found
+  - Configure a preferred code editor command for the **`</>`** card button on the local loopback UI
   - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 - **⌨** — opens the keyboard shortcuts help dialog.
 

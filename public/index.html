@@ -22,6 +22,7 @@
     <div class="header-right">
       <span id="health"></span>
       <button type="button" id="new-card-btn" title="New session">+ New session</button>
+      <button type="button" id="open-history" aria-label="Task history" title="Task history"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 8a6.5 6.5 0 1 1 2.052 4.736l-.997.998a.75.75 0 0 1-1.06-1.06l2.3-2.3a.75.75 0 0 1 1.06 0l2.3 2.3a.75.75 0 0 1-1.06 1.06l-.865-.865A5 5 0 1 0 3 8a.75.75 0 0 1-1.5 0Zm6.5-3a.75.75 0 0 1 .75.75v2.02l1.53.918a.75.75 0 1 1-.772 1.286l-1.894-1.136A.75.75 0 0 1 7.25 8.2V5.75A.75.75 0 0 1 8 5Z"/></svg></button>
       <button type="button" id="new-project-btn" aria-label="New project" title="New project"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.75 2.5A1.25 1.25 0 0 1 3 1.25h4a1.25 1.25 0 0 1 1.25 1.25V3h4.25A1.25 1.25 0 0 1 13.75 4.25v8A1.25 1.25 0 0 1 12.5 13.5h-8A1.25 1.25 0 0 1 3.25 12.25V11.5H3A1.25 1.25 0 0 1 1.75 10.25v-7.75Zm1.5.25v7.5c0 .14.11.25.25.25h6.75a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25H3.5a.25.25 0 0 0-.25.25Zm1.5 1.75v7.75c0 .14.11.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25H11.5v5.5A1.25 1.25 0 0 1 10.25 11.5h-5.5Z"/></svg></button>
       <button type="button" id="theme-toggle" aria-label="Theme: Auto (click to cycle)" title="Theme"></button>
       <button type="button" id="open-settings" title="Settings" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.405 1.5a.6.6 0 0 1 .59.484l.222 1.108a5.5 5.5 0 0 1 1.16.673l1.07-.366a.6.6 0 0 1 .714.27l1.205 2.087a.6.6 0 0 1-.124.747l-.846.74a5.55 5.55 0 0 1 0 1.34l.846.74a.6.6 0 0 1 .124.747l-1.205 2.087a.6.6 0 0 1-.714.27l-1.07-.366a5.5 5.5 0 0 1-1.16.673l-.222 1.108a.6.6 0 0 1-.59.484H6.995a.6.6 0 0 1-.589-.484L6.184 12.7a5.5 5.5 0 0 1-1.16-.673l-1.07.366a.6.6 0 0 1-.714-.27L2.035 10.036a.6.6 0 0 1 .124-.747l.846-.74a5.55 5.55 0 0 1 0-1.34l-.846-.74a.6.6 0 0 1-.124-.747L3.24 3.635a.6.6 0 0 1 .714-.27l1.07.366a5.5 5.5 0 0 1 1.16-.673l.222-1.108A.6.6 0 0 1 6.995 1.5h2.41ZM8 5.7A2.3 2.3 0 1 0 8 10.3 2.3 2.3 0 0 0 8 5.7Z"/></svg></button>
@@ -33,21 +34,23 @@
   <template id="card-template">
     <article class="card">
       <header class="card-header">
-        <select class="card-agent" required></select>
-        <span class="card-status"></span>
+        <span class="card-drag-handle" aria-hidden="true">⋮⋮</span>
+        <input type="text" class="card-cwd" placeholder="working directory (default: $HOME)">
+        <button type="button" class="card-cwd-browse" aria-label="Browse" title="Browse"><span aria-hidden="true">📂</span></button>
         <div class="card-actions">
           <button type="button" class="card-expand" title="Expand">&#x2922;</button>
-          <button type="button" class="card-clone" aria-label="Clone session" title="Clone session"><svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/></svg></button>
-          <button type="button" class="card-github" aria-label="Create GitHub repository" title="Create GitHub repository" hidden><svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></button>
           <button type="button" class="card-close" title="Close session">&times;</button>
         </div>
       </header>
       <form class="card-form">
-        <div class="cwd-row">
-          <input type="text" class="card-cwd" placeholder="working directory (default: $HOME)">
-          <button type="button" class="card-cwd-browse" aria-label="Browse" title="Browse"><span aria-hidden="true">📂</span></button>
+        <div class="card-controls-row">
+          <select class="card-agent" required></select>
           <button type="submit" class="card-run" aria-label="Start" title="Start"><span aria-hidden="true">▶</span></button>
+          <span class="card-status"></span>
+          <button type="button" class="card-github" aria-label="Create GitHub repository" title="Create GitHub repository" hidden><svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></button>
           <button type="button" class="card-open-term" aria-label="Open terminal" title="Open terminal"><span aria-hidden="true">&gt;_</span></button>
+          <button type="button" class="card-open-editor" aria-label="Open in preferred editor" title="Open in preferred editor" hidden><span aria-hidden="true">&lt;/&gt;</span></button>
+          <button type="button" class="card-clone" aria-label="Clone session" title="Clone session"><svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/></svg></button>
         </div>
       </form>
       <div class="card-term"></div>
@@ -57,6 +60,7 @@
   <template id="github-card-template">
     <article class="card card-github-list">
       <header class="card-header">
+        <span class="card-drag-handle" aria-hidden="true">⋮⋮</span>
         <span class="card-term-label">GitHub</span>
         <span class="card-status"></span>
         <button type="button" class="card-new-issue" aria-label="Create new issue" title="New issue" hidden><svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8.75 4.75a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z"/></svg></button>
@@ -79,6 +83,7 @@
   <template id="terminal-card-template">
     <article class="card card-terminal">
       <header class="card-header">
+        <span class="card-drag-handle" aria-hidden="true">⋮⋮</span>
         <span class="card-term-label">Terminal</span>
         <span class="card-status"></span>
         <button type="button" class="card-git-ref" aria-label="Git commands reference" title="Git commands reference"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm0 2.122a2.25 2.25 0 1 0-1.5 0v.878A2.25 2.25 0 0 0 5.75 8.5h1.5v2.128a2.251 2.251 0 1 0 1.5 0V8.5h1.5a2.25 2.25 0 0 0 2.25-2.25v-.878a2.25 2.25 0 1 0-1.5 0v.878a.75.75 0 0 1-.75.75h-4.5A.75.75 0 0 1 5 6.25v-.878zm3.75 7.378a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0zm3-8.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z"/></svg></button>
@@ -127,6 +132,21 @@
           <thead><tr><th>ID</th><th>Command</th><th>Path</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
+      </section>
+
+      <section>
+        <h3 id="preferred-editor-heading" hidden>Preferred code editor</h3>
+        <form id="preferred-editor-form" class="agent-form" hidden>
+          <div class="grid">
+            <label>Command<input type="text" id="preferred-editor-command" autocomplete="off" placeholder="code" spellcheck="false"></label>
+            <label>Args (space-separated, optional)<input type="text" id="preferred-editor-args" autocomplete="off" placeholder="--reuse-window" spellcheck="false"></label>
+          </div>
+          <div class="row">
+            <button type="button" id="preferred-editor-clear">Clear</button>
+            <button type="submit">Save editor</button>
+          </div>
+          <p class="footnote">Shows the <code>&lt;/&gt;</code> card button on the local loopback UI only. Concilium always appends the current working directory as the final argument.</p>
+        </form>
       </section>
 
       <section>
@@ -347,6 +367,36 @@
     </div>
   </dialog>
 
+  <dialog id="history-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Task history</h2>
+        <button type="button" class="close-btn" id="close-history" title="Close">&times;</button>
+      </div>
+      <section>
+        <h3>Finished tasks <button type="button" id="history-refresh">Refresh</button></h3>
+        <table id="history-table">
+          <thead><tr><th>ID</th><th>Agent</th><th>Directory</th><th>Started</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog" class="dialog-body">
+      <div class="dialog-head">
+        <h2 id="confirm-dialog-title">Confirm action</h2>
+        <button type="submit" class="close-btn" title="Close" value="cancel">&times;</button>
+      </div>
+      <p id="confirm-dialog-message"></p>
+      <div class="row confirm-dialog-actions">
+        <button type="submit" id="confirm-dialog-cancel" value="cancel">Cancel</button>
+        <button type="submit" id="confirm-dialog-confirm" value="confirm">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="git-cheatsheet-dialog">
     <div class="dialog-body">
       <div class="dialog-head">
@@ -358,6 +408,8 @@
     </div>
   </dialog>
 
-  <script src="/app.js"></script>
+  <div id="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
