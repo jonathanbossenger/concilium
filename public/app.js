@@ -185,7 +185,7 @@ function addCard({ afterEl = null, agentId = '', cwd = '', autoRun = false } = {
   }
   card.initTerminal();
   if (agentId) card.agentSelect.value = agentId;
-  if (cwd) { card.cwd.value = cwd; card.checkGitHub(); }
+  if (cwd) { card.cwd.value = cwd; card.updatePreferredEditorButton(); card.checkGitHub(); }
   saveLayout();
   if (autoRun && agentId) card.run();
   return card;

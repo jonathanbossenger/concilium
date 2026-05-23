@@ -1,5 +1,8 @@
 import { BaseCard } from './base-card.js';
-import { $, isOpenCard, NEW_GITHUB_REPO_URL, RESTORE_RESUME_RETRY_DELAY_MS, showConfirmDialog } from './utils.js';
+import {
+  $, isOpenCard, GITHUB_BTN_LABEL_BROWSE, GITHUB_BTN_LABEL_CREATE,
+  NEW_GITHUB_REPO_URL, RESTORE_RESUME_RETRY_DELAY_MS, showConfirmDialog,
+} from './utils.js';
 import {
   cards, termCards, agentsById, appState,
   fillAgentSelect, toTildePath, clearActiveCardIfMatch,
