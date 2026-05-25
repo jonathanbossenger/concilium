@@ -163,6 +163,9 @@ main {
   min-height: 0;
   overflow-y: auto;
   padding: 1em;
+  width: 100%;
+  max-width: calc((3 * 440px) + (4 * 1em));
+  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: 1em;
