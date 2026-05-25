@@ -417,7 +417,7 @@ export class Card extends BaseCard {
     this._killRequestedTaskId = taskId;
     this.kill({ confirm: false }).catch((err) => {
       if (this._killRequestedTaskId === taskId) this._killRequestedTaskId = null;
-      console.error('[concilium] auto-kill after cwd change failed:', err);
+      console.error(`[concilium] auto-kill after cwd change failed for task ${taskId}:`, err);
     });
   }
 
