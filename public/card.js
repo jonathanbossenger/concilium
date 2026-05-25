@@ -43,6 +43,7 @@ export class Card extends BaseCard {
     this.lastSentSize = null;
     this._checkGitHubTimer = null;
     this._githubAbortCtrl = null;
+    this._killRequestedTaskId = null;
     this.githubUrl = '';
     this.linkedTerminalCard = null;
     this.linkedGitHubCard = null;
@@ -63,6 +64,7 @@ export class Card extends BaseCard {
       appState.saveLayout();
       this.updatePreferredEditorButton();
       this.scheduleCheckGitHub();
+      this.killForCwdChange();
     });
     this.cwd.addEventListener('keydown', (keyboardEvent) => {
       if (keyboardEvent.key === 'Enter' && !this.currentTaskId) {
@@ -267,6 +269,7 @@ export class Card extends BaseCard {
       eventSource.close();
       if (this.currentSource === eventSource) this.currentSource = null;
       this.currentTaskId = null;
+      this._killRequestedTaskId = null;
     });
     eventSource.onerror = () => {
       const capturedTaskId = this.currentTaskId;
@@ -290,6 +293,7 @@ export class Card extends BaseCard {
           if (this.currentSource === eventSource) this.currentSource = null;
           this.setStatus('task lost connection', 'err');
           this.currentTaskId = null;
+          this._killRequestedTaskId = null;
           this.setRunning(false);
         }
         // Task still alive — EventSource will reconnect on its own.
@@ -321,6 +325,7 @@ export class Card extends BaseCard {
       if (!response.ok) {
         this.setStatus('task lost connection', 'err');
         this.currentTaskId = null;
+        this._killRequestedTaskId = null;
         this.setRunning(false);
         return;
       }
@@ -347,6 +352,7 @@ export class Card extends BaseCard {
         this.updatePreferredEditorButton();
         appState.saveLayout();
         this.checkGitHub();
+        this.killForCwdChange();
       }
     } finally {
       this.cwdBrowse.disabled = false;
@@ -404,15 +410,27 @@ export class Card extends BaseCard {
     return card;
   }
 
-  async kill() {
+  killForCwdChange() {
     if (!this.currentTaskId) return;
-    const shouldKill = await showConfirmDialog({
-      title: 'Kill running task',
-      message: 'Kill the currently running task?',
-      confirmLabel: 'Kill',
-      danger: true,
+    if (this._killRequestedTaskId === this.currentTaskId) return;
+    const taskId = this.currentTaskId;
+    this._killRequestedTaskId = taskId;
+    this.kill({ confirm: false }).catch(() => {
+      if (this._killRequestedTaskId === taskId) this._killRequestedTaskId = null;
     });
-    if (!shouldKill) return;
+  }
+
+  async kill({ confirm = true } = {}) {
+    if (!this.currentTaskId) return;
+    if (confirm) {
+      const shouldKill = await showConfirmDialog({
+        title: 'Kill running task',
+        message: 'Kill the currently running task?',
+        confirmLabel: 'Kill',
+        danger: true,
+      });
+      if (!shouldKill) return;
+    }
     await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
   }
 
