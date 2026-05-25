@@ -163,9 +163,6 @@ main {
   min-height: 0;
   overflow-y: auto;
   padding: 1em;
-  width: 100%;
-  max-width: calc((3 * 440px) + (4 * 1em));
-  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: 1em;
@@ -176,6 +173,12 @@ main {
    instead of stretching to fill the row. */
 main:has(.card:only-child):not(.has-expanded) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 1384px) {
+  main:has(> .card:nth-child(3)):not(.has-expanded) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* --- card ------------------------------------------------------------ */
