@@ -371,7 +371,7 @@ export class Card extends BaseCard {
         appState.saveLayout();
         this.checkGitHub();
         // Programmatic .value updates do not fire input events.
-        this.killForCwdChange();
+        this.scheduleKillForCwdChange();
       }
     } finally {
       this.cwdBrowse.disabled = false;
