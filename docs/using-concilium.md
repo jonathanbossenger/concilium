@@ -47,6 +47,10 @@ it (kills any running task in that card and deletes its history).
 Header controls:
 
 - **+ New session** — adds another card.
+- **🕐 (clock)** — opens the **Task history** dialog listing finished tasks
+  (id, agent, working directory, started timestamp, status). Each row has a
+  **replay** button that opens a new card pre-pointed at that task's working
+  directory.
 - **⧉** — opens a **New Project** dialog. Concilium validates the project name
   against GitHub using your saved token, then creates a new repository (public
   by default, with an optional private toggle) with an initialized README,
@@ -59,6 +63,15 @@ Header controls:
   - Configure a preferred code editor command for the **`</>`** card button on the local loopback UI
   - Set or clear an optional `githubToken` used for authenticated GitHub API calls
 - **⌨** — opens the keyboard shortcuts help dialog.
+
+On a fresh install (no agents configured, onboarding not yet marked complete)
+the dashboard opens an onboarding wizard instead of the main UI. The wizard
+walks through adding a first agent, optionally adding more, and optionally
+saving a GitHub token, then drops you into the dashboard.
+
+Terminal cards (opened with **>_** from a session card) include a small git
+icon in the header that opens a **Git commands reference** dialog. Clicking
+any command in the reference pastes it into the terminal.
 
 ![Concilium settings dialog screenshot](../screenshots/settings.png)
 

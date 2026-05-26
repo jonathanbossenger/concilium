@@ -89,6 +89,15 @@ Your council of agents — Concilium!
   the server brings your sessions back and automatically starts each saved
   session with its configured agent and working directory. Closing a card
   permanently removes it (and the tasks it launched) from the saved layout.
+- **First-run onboarding wizard** — on a fresh install the dashboard walks
+  you through adding your first agent, optionally registering more agents,
+  and (optionally) saving a GitHub token before dropping you into the main
+  UI. The wizard skips itself once at least one agent is configured and the
+  flow has been marked complete.
+- **Task history** — the clock button in the header opens a history dialog
+  listing finished tasks (id, agent, working directory, started timestamp,
+  status). Each row has a **replay** action that opens a new card pre-pointed
+  at that task's working directory.
 - **Two execution modes** — piped stdin for one-shot tools, PTY (via `node-pty`)
   for interactive REPL-style agents
 - **Real terminal in the browser** — each card embeds an
@@ -180,7 +189,7 @@ State lives entirely under `~/.concilium/`:
 
 ```
 ~/.concilium/
-├── config.yaml      # port + optional githubToken + optional preferredEditor + agent list
+├── config.yaml      # port + agent list + optional githubToken + optional preferredEditor + onboardingCompleted flag
 ├── tasks.db         # SQLite history + saved card layout
 ├── logs/<id>.log    # per-task plain-text output log (rotates at 5MB, keeps 3 backups)
 ├── server.log       # the server's own stdout/stderr
@@ -247,13 +256,14 @@ All endpoints are JSON.
 |---|---|---|
 | `GET`    | `/api/health` | server pid, uptime, live task count, total event count, log directory size |
 | `GET`    | `/api/agents` | list configured agents |
+| `GET`    | `/api/agents/:id` | get a single agent |
 | `POST`   | `/api/agents` | create agent `{id, name, command, args?, interactive}` |
 | `PATCH`  | `/api/agents/:id` | update fields |
 | `DELETE` | `/api/agents/:id` | remove |
 | `GET`    | `/api/agents/discover` | scan `$PATH` for known CLIs |
-| `GET`    | `/api/tasks` | task history (newest first) |
-| `POST`   | `/api/tasks` | start task `{agent_id, prompt?, cwd?}` → `{task_id}` |
-| `POST`   | `/api/tasks/terminal` | start the default interactive shell PTY task (`$SHELL` on macOS/Linux, PowerShell on Windows) `{cwd?}` → `{task_id}` |
+| `GET`    | `/api/tasks` | task history (newest first; `?limit=` capped at 500) |
+| `POST`   | `/api/tasks` | start task `{agent_id, prompt?, cwd?, cols?, rows?}` → `{task_id}` (`cols`/`rows` size the PTY at spawn for interactive agents) |
+| `POST`   | `/api/tasks/terminal` | start the default interactive shell PTY task (`$SHELL` on macOS/Linux, PowerShell/`ComSpec` on Windows) `{cwd?, cols?, rows?}` → `{task_id}` |
 | `GET`    | `/api/tasks/:id` | task + all events |
 | `DELETE` | `/api/tasks/:id` | remove task (kills first if live), drops events + log file |
 | `POST`   | `/api/tasks/:id/kill` | SIGTERM the running task |
@@ -267,14 +277,16 @@ All endpoints are JSON.
 | `POST`   | `/api/system/auth/login` | sign in `{username, password}` (public-server mode only) |
 | `POST`   | `/api/system/auth/logout` | clear current auth session |
 | `POST`   | `/api/system/github-url` | `{path}` → `{url}` if the directory's `origin`/`upstream` remote points at GitHub |
-| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls, warning}` for open GitHub issues/pull requests |
+| `POST`   | `/api/system/github-items` | `{url}` → `{issues, pulls, warning?}` for open GitHub issues/pull requests (up to 20 of each, sorted by last update). With a token, items also carry `linkedIssues` / `linkedPulls` cross-references derived from GraphQL `closingIssuesReferences`; without a token the response includes `warning: "linked refs require a github token"` |
 | `POST`   | `/api/system/github-pulls/action` | trigger a pull request action with `{url, pullNumber, action, sha?, mergeMethod?, nodeId?}`; `action` is `"merge"`, `"close"`, or `"mark_ready"` |
-| `POST`   | `/api/system/github-issues/action` | trigger an issue action with `{url, issueNumber, action}` (`action: "assign_copilot"` assigns `copilot-swe-agent[bot]`, `action: "close"` closes the issue) |
+| `POST`   | `/api/system/github-issues/action` | trigger an issue action with `{url, issueNumber, action}` (`action: "assign_copilot"` assigns GitHub Copilot — tries the `Copilot` issue-assignee login first and falls back to `copilot-swe-agent[bot]`; `action: "close"` closes the issue) |
 | `POST`   | `/api/system/new-issue` | create a GitHub issue `{url, title, body?, assignCopilot?}` → `{number, title, url, state, assignees, copilotAssignmentRequested, copilotAssigned}` |
 | `GET`    | `/api/system/github-token` | returns whether `githubToken` is configured |
 | `POST`   | `/api/system/github-token` | save/clear configured `githubToken` (submit empty to clear) |
 | `POST`   | `/api/system/new-project/check` | check whether `{name}` can be used to create a repo with the saved GitHub token |
 | `POST`   | `/api/system/new-project` | create repo + clone from `{name, targetPath, private?}` (defaults to public) → `{ok, cwd, repoUrl, private}` |
+| `GET`    | `/api/system/onboarding` | onboarding state `{needsOnboarding, hasAgent, hasToken}` |
+| `POST`   | `/api/system/onboarding/complete` | mark the onboarding wizard finished (requires at least one configured agent) |
 | `GET`    | `/api/system/layout` | the saved card layout (array of `{agentId, cwd, lastTaskId}`) |
 | `POST`   | `/api/system/layout` | replace the saved card layout |
 
@@ -282,23 +294,33 @@ All endpoints are JSON.
 
 ```
 concilium/
-├── bin/conciliumctl                # lifecycle CLI
-├── install/                    # launchd & systemd templates
-├── public/                     # vanilla HTML/CSS/JS UI
-├── scripts/fix-pty-perms.js    # postinstall fixup
+├── bin/conciliumctl                       # lifecycle CLI
+├── install/                               # launchd & systemd templates
+├── public/                                # vanilla HTML/CSS/JS UI (no framework, no bundler)
+├── scripts/
+│   ├── fix-pty-perms.js                   # postinstall fixup for node-pty's spawn-helper bit
+│   └── capture-screenshots.js             # Playwright-driven screenshot helper
+├── test/smoke.test.js                     # node:test smoke suite
 └── server/
-    ├── index.js                # Express entry
-    ├── config.js               # YAML load/save (atomic)
-    ├── discover.js             # PATH scan
-    ├── runner.js               # spawn vs. PTY
-    ├── manager.js              # live task registry, broadcast
-    ├── store.js                # SQLite (tasks + events)
-    ├── util/path.js            # tilde expansion (~/foo → /home/me/foo)
+    ├── index.js                           # entry: listen + signal handlers
+    ├── app.js                             # Express app factory + /api/health
+    ├── config.js                          # YAML load/save (atomic), state dir
+    ├── constants.js                       # shared numeric/string constants
+    ├── discover.js                        # PATH scan for known agents
+    ├── loopback.js                        # loopback-only request middleware
+    ├── runner.js                          # spawn vs. PTY runner
+    ├── manager.js                         # live task registry, log writer, batched events
+    ├── store.js                           # SQLite (tasks + events + layout)
+    ├── util/path.js                       # tilde expansion (~/foo → /home/me/foo)
     └── routes/
-        ├── agents.js
-        ├── tasks.js            # incl. /terminal for pop-out shell cards
-        ├── stream.js
-        └── system.js           # system + github + auth routes
+        ├── agents.js                      # CRUD + discover
+        ├── tasks.js                       # task lifecycle, incl. /terminal pop-out shell
+        ├── stream.js                      # SSE stream + reconnect resumption
+        ├── github.js                      # GitHub URL detection, items, actions, new-project
+        ├── editor.js                      # preferred-editor config + open-editor
+        ├── layout.js                      # saved card layout
+        ├── onboarding.js                  # onboarding state + github-token storage
+        └── picker.js                      # native OS folder picker
 ```
 
 Runtime dependencies: `express`, `express-rate-limit`, `better-sqlite3`,
