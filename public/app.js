@@ -1,5 +1,5 @@
-import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
-import { agentsById, cards, termCards, appState } from './state.js';
+import { $, formatBytes, isTypingContext, isPrimaryModifierPressed, showConfirmDialog, showErrorToast } from './utils.js';
+import { appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
 import { TerminalCard } from './terminal-card.js';
