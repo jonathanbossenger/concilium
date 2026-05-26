@@ -42,7 +42,10 @@ export class Card extends BaseCard {
     this.resizeObserver = null;
     this.lastSentSize = null;
     this._checkGitHubTimer = null;
+    this._killForCwdTimer = null;
     this._githubAbortCtrl = null;
+    this._killRequestedTaskId = null;
+    this._runningTaskCwd = '';
     this.githubUrl = '';
     this.linkedTerminalCard = null;
     this.linkedGitHubCard = null;
@@ -50,7 +53,14 @@ export class Card extends BaseCard {
     this.refreshAgentSelect();
 
     this.taskForm.addEventListener('submit', (submitEvent) => { submitEvent.preventDefault(); if (!this.currentTaskId) this.run(); });
-    this.runBtn.addEventListener('click', (clickEvent) => { if (this.currentTaskId) { clickEvent.preventDefault(); this.kill(); } });
+    this.runBtn.addEventListener('click', (clickEvent) => {
+      if (!this.currentTaskId) return;
+      clickEvent.preventDefault();
+      this.kill().catch((err) => {
+        this.setStatus(err.message || 'kill failed', 'err');
+        console.error('[concilium] kill failed:', err);
+      });
+    });
     this.cwdBrowse.addEventListener('click', () => this.browseCwd());
     this.closeBtn.addEventListener('click', () => this.close());
     this.expandBtn.addEventListener('click', () => this.toggleExpand());
@@ -63,6 +73,7 @@ export class Card extends BaseCard {
       appState.saveLayout();
       this.updatePreferredEditorButton();
       this.scheduleCheckGitHub();
+      this.scheduleKillForCwdChange();
     });
     this.cwd.addEventListener('keydown', (keyboardEvent) => {
       if (keyboardEvent.key === 'Enter' && !this.currentTaskId) {
@@ -182,6 +193,10 @@ export class Card extends BaseCard {
     this._reconnecting = false;
     this._errorCheckPending = false;
     this.lastSentSize = null;
+    this._killRequestedTaskId = null;
+    clearTimeout(this._killForCwdTimer);
+    this._killForCwdTimer = null;
+    this._runningTaskCwd = '';
 
     const body = { agent_id: agentId };
     const cwd = this.cwd.value.trim();
@@ -208,6 +223,7 @@ export class Card extends BaseCard {
 
     this.taskIds.add(data.task_id);
     this.lastTaskId = data.task_id;
+    this._runningTaskCwd = cwd;
     appState.saveLayout();
     this.attach(data.task_id);
     // Push our current dimensions to the freshly spawned PTY.
@@ -217,6 +233,7 @@ export class Card extends BaseCard {
 
   attach(taskId, taskHint = null) {
     this.currentTaskId = taskId;
+    if (taskHint && typeof taskHint.cwd === 'string') this._runningTaskCwd = taskHint.cwd.trim();
     // A new source supersedes any previous recovery state — onopen for the new
     // source must not overwrite the status that attach() is about to set.
     this._reconnecting = false;
@@ -267,6 +284,8 @@ export class Card extends BaseCard {
       eventSource.close();
       if (this.currentSource === eventSource) this.currentSource = null;
       this.currentTaskId = null;
+      this._killRequestedTaskId = null;
+      this._runningTaskCwd = '';
     });
     eventSource.onerror = () => {
       const capturedTaskId = this.currentTaskId;
@@ -290,6 +309,8 @@ export class Card extends BaseCard {
           if (this.currentSource === eventSource) this.currentSource = null;
           this.setStatus('task lost connection', 'err');
           this.currentTaskId = null;
+          this._killRequestedTaskId = null;
+          this._runningTaskCwd = '';
           this.setRunning(false);
         }
         // Task still alive — EventSource will reconnect on its own.
@@ -321,6 +342,8 @@ export class Card extends BaseCard {
       if (!response.ok) {
         this.setStatus('task lost connection', 'err');
         this.currentTaskId = null;
+        this._killRequestedTaskId = null;
+        this._runningTaskCwd = '';
         this.setRunning(false);
         return;
       }
@@ -347,6 +370,8 @@ export class Card extends BaseCard {
         this.updatePreferredEditorButton();
         appState.saveLayout();
         this.checkGitHub();
+        // Programmatic .value updates do not fire input events.
+        this.scheduleKillForCwdChange();
       }
     } finally {
       this.cwdBrowse.disabled = false;
@@ -356,6 +381,11 @@ export class Card extends BaseCard {
   scheduleCheckGitHub() {
     clearTimeout(this._checkGitHubTimer);
     this._checkGitHubTimer = setTimeout(() => this.checkGitHub(), 150);
+  }
+
+  scheduleKillForCwdChange() {
+    clearTimeout(this._killForCwdTimer);
+    this._killForCwdTimer = setTimeout(() => this.killForCwdChange(), 150);
   }
 
   async checkGitHub() {
@@ -404,25 +434,49 @@ export class Card extends BaseCard {
     return card;
   }
 
-  async kill() {
+  killForCwdChange() {
     if (!this.currentTaskId) return;
-    const shouldKill = await showConfirmDialog({
-      title: 'Kill running task',
-      message: 'Kill the currently running task?',
-      confirmLabel: 'Kill',
-      danger: true,
+    const nextCwd = this.cwd.value.trim();
+    if (nextCwd === this._runningTaskCwd) return;
+    if (this._killRequestedTaskId === this.currentTaskId) return;
+    const taskId = this.currentTaskId;
+    this._killRequestedTaskId = taskId;
+    this.setStatus('killing: cwd changed…', 'warn');
+    this.kill({ confirm: false }).catch((err) => {
+      if (this._killRequestedTaskId !== taskId) return;
+      this._killRequestedTaskId = null;
+      this.setStatus('auto-kill failed', 'err');
+      console.error(`[concilium] auto-kill after cwd change failed for task ${taskId}:`, err);
     });
-    if (!shouldKill) return;
-    await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
+  }
+
+  async kill({ confirm = true } = {}) {
+    if (!this.currentTaskId) return;
+    if (confirm) {
+      const shouldKill = await showConfirmDialog({
+        title: 'Kill running task',
+        message: 'Kill the currently running task?',
+        confirmLabel: 'Kill',
+        danger: true,
+      });
+      if (!shouldKill) return;
+    }
+    const response = await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `kill failed (${response.status})`);
+    }
   }
 
   async close() {
     clearTimeout(this._checkGitHubTimer);
+    clearTimeout(this._killForCwdTimer);
     if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
     const linkedTerminalCard = this.linkedTerminalCard;
     const linkedGitHubCard = this.linkedGitHubCard;
     this.linkedTerminalCard = null;
     this.linkedGitHubCard = null;
+    this._runningTaskCwd = '';
     if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
