@@ -1,49 +1,19 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { execFile } = require('child_process');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const store = require('../store');
-const { getConfig, saveConfig } = require('../config');
+const { getConfig } = require('../config');
 const { expandTilde } = require('../util/path');
 const { GITHUB_ITEMS_PER_PAGE } = require('../constants');
-const {
-  hasAdminCredentials,
-  hashPassword,
-  verifyPassword,
-  issueSessionToken,
-  getSessionUser,
-  buildSessionCookie,
-  buildClearSessionCookie,
-  verifySetupToken,
-} = require('../auth');
 
 const router = express.Router();
 const GITHUB_REPO_NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
-const GITHUB_TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 const GIT_CLONE_TIMEOUT_MS = 120000;
 const MAX_GITHUB_URL_LENGTH = 2048;
 const MAX_ISSUE_TITLE_LENGTH = 256;
 const MAX_ISSUE_BODY_BYTES = 65536;
-const MAX_DIRECTORY_BROWSE_ENTRIES = 500;
-const ADMIN_USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,64}$/;
-const MAX_AUTH_PASSWORD_LENGTH = 256;
-const directoryBrowseRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 120,
-  standardHeaders: false,
-  legacyHeaders: false,
-  message: { error: 'too many directory browse requests; please retry in a moment' },
-});
-const authRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 10,
-  standardHeaders: false,
-  legacyHeaders: false,
-  message: { error: 'too many authentication attempts; please retry in a moment' },
-});
 const newProjectRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
@@ -61,68 +31,6 @@ function getGitHubToken(cfg) {
   if (cfg && typeof cfg.githubToken === 'string') return cfg.githubToken.trim();
   if (cfg && typeof cfg.GITHUB_TOKEN === 'string') return cfg.GITHUB_TOKEN.trim();
   return '';
-}
-
-function hasConfiguredAgent(cfg) {
-  return !!(cfg && Array.isArray(cfg.agents) && cfg.agents.length > 0);
-}
-
-function isOnboardingCompleted(cfg) {
-  return cfg && cfg.onboardingCompleted === true;
-}
-
-function pickDirectoryMac() {
-  return new Promise((resolve, reject) => {
-    const script =
-      'try\n' +
-      '  set f to choose folder with prompt "Select working directory"\n' +
-      '  POSIX path of f\n' +
-      'on error number -128\n' +
-      '  return ""\n' +
-      'end try';
-    execFile('osascript', ['-e', script], (err, stdout) => {
-      if (err) return reject(err);
-      const picked = stdout.toString().trim();
-      resolve(picked || null);
-    });
-  });
-}
-
-function pickDirectoryLinux() {
-  return new Promise((resolve, reject) => {
-    execFile(
-      'zenity',
-      ['--file-selection', '--directory', '--title=Select working directory'],
-      (err, stdout) => {
-        if (err) {
-          // zenity exits 1 on cancel — treat as "no selection".
-          if (err.code === 1) return resolve(null);
-          return reject(err);
-        }
-        const picked = stdout.toString().trim();
-        resolve(picked || null);
-      },
-    );
-  });
-}
-
-function pickDirectoryWindows() {
-  return new Promise((resolve, reject) => {
-    const script =
-      'Add-Type -AssemblyName System.Windows.Forms | Out-Null;' +
-      '$d = New-Object System.Windows.Forms.FolderBrowserDialog;' +
-      '$d.Description = "Select working directory";' +
-      'if ($d.ShowDialog() -eq "OK") { Write-Output $d.SelectedPath }';
-    execFile(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      (err, stdout) => {
-        if (err) return reject(err);
-        const picked = stdout.toString().trim();
-        resolve(picked || null);
-      },
-    );
-  });
 }
 
 function isWithinBaseDirectory(baseDir, targetDir) {
@@ -152,80 +60,6 @@ function resolvePathWithinHome(input, homeRealPath) {
   if (parts === null) return null;
   return path.join(homeRealPath, ...parts);
 }
-
-router.post('/pick-directory', async (req, res) => {
-  try {
-    const cfg = getConfig();
-    if (cfg && cfg.publicServer === true) {
-      return res.json({ path: os.homedir() });
-    }
-    let picked = null;
-    if (process.platform === 'darwin') picked = await pickDirectoryMac();
-    else if (process.platform === 'linux') picked = await pickDirectoryLinux();
-    else if (process.platform === 'win32') picked = await pickDirectoryWindows();
-    else return res.status(501).json({ error: `picker not supported on ${process.platform}` });
-
-    res.json({ path: picked });
-  } catch (err) {
-    res.status(500).json({ error: err.message || String(err) });
-  }
-});
-
-router.get('/directories', directoryBrowseRateLimiter, async (req, res) => {
-  try {
-    const homeDir = os.homedir();
-    const homeRealPath = await fs.promises.realpath(homeDir);
-    const requestedPathRaw = req.query && req.query.path;
-    if (requestedPathRaw !== undefined && typeof requestedPathRaw !== 'string') {
-      return res.status(400).json({ error: 'path must be a string' });
-    }
-    const requestedPath = resolvePathWithinHome(requestedPathRaw || '', homeRealPath);
-    if (!requestedPath) {
-      return res.status(403).json({ error: 'path must be within the server home directory' });
-    }
-    let stats;
-    try {
-      stats = await fs.promises.stat(requestedPath);
-    } catch (err) {
-      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
-        return res.status(404).json({ error: 'directory not found' });
-      }
-      throw err;
-    }
-    if (!stats.isDirectory()) return res.status(400).json({ error: 'path must be a directory' });
-    const browsePath = await fs.promises.realpath(requestedPath);
-    if (!isWithinBaseDirectory(homeRealPath, browsePath)) {
-      return res.status(403).json({ error: 'path must be within the server home directory' });
-    }
-    let dirEntries = await fs.promises.readdir(browsePath, { withFileTypes: true });
-    dirEntries = dirEntries
-      .filter((entry) => entry.isDirectory())
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, MAX_DIRECTORY_BROWSE_ENTRIES)
-      .map((entry) => {
-        const entryPath = path.join(browsePath, entry.name);
-        const relativePath = path.relative(homeRealPath, entryPath).split(path.sep).join('/');
-        return {
-          name: entry.name,
-          path: entryPath,
-          relativePath,
-        };
-      });
-    const parent = browsePath === homeRealPath ? null : path.dirname(browsePath);
-    const parentRelativePath = parent ? path.relative(homeRealPath, parent).split(path.sep).join('/') : '';
-    const relativePath = path.relative(homeRealPath, browsePath).split(path.sep).join('/');
-    res.json({
-      path: browsePath,
-      homeDir: homeRealPath,
-      parent,
-      parentRelativePath,
-      relativePath,
-      entries: dirEntries,
-    });
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message || String(err) });
-  }
-});
 
 function parseGitHubUrl(remoteUrl) {
   // SSH scp-style: git@github.com:owner/repo.git
@@ -852,165 +686,6 @@ router.post('/new-issue', async (req, res) => {
     const detail = classifyGitHubError(err);
     res.status(err.status || 500).json({ error: detail.message });
   }
-});
-
-router.get('/layout', (req, res) => {
-  const raw = store.getLayout();
-  if (!raw) return res.json([]);
-  try {
-    res.json(JSON.parse(raw));
-  } catch (err) {
-    console.error('[concilium] failed to parse stored layout:', err);
-    res.json([]);
-  }
-});
-
-router.post('/layout', (req, res) => {
-  const body = req.body;
-  if (!Array.isArray(body)) return res.status(400).json({ error: 'array expected' });
-  const valid = body.every(
-    (e) => e !== null && typeof e === 'object' && !Array.isArray(e) &&
-      (e.agentId === undefined || typeof e.agentId === 'string') &&
-      (e.cwd === undefined || typeof e.cwd === 'string') &&
-      (e.lastTaskId === undefined || e.lastTaskId === null || typeof e.lastTaskId === 'number'),
-  );
-  if (!valid) return res.status(400).json({ error: 'invalid entry shape' });
-  store.saveLayout(JSON.stringify(body));
-  res.json({ ok: true });
-});
-
-router.get('/auth/state', (req, res) => {
-  const cfg = getConfig();
-  const publicServer = cfg && cfg.publicServer === true;
-  const setupRequired = publicServer && !hasAdminCredentials(cfg);
-  const sessionUser = publicServer ? getSessionUser(req, cfg) : null;
-  const authenticated = !publicServer || (!!sessionUser && sessionUser === cfg.adminUser);
-  res.json({
-    publicServer,
-    setupRequired,
-    setupTokenRequired: setupRequired,
-    authenticated,
-    adminUser: publicServer && !setupRequired ? cfg.adminUser : '',
-  });
-});
-
-router.post('/auth/setup', authRateLimiter, (req, res) => {
-  const cfg = getConfig();
-  if (!(cfg && cfg.publicServer === true)) {
-    return res.status(400).json({ error: 'setup is only available in public-server mode' });
-  }
-  if (hasAdminCredentials(cfg)) {
-    return res.status(409).json({ error: 'admin user is already configured' });
-  }
-
-  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
-  const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword.trim() : '';
-  const setupToken = typeof req.body?.setupToken === 'string' ? req.body.setupToken : '';
-  if (!ADMIN_USERNAME_PATTERN.test(username)) {
-    return res.status(400).json({ error: 'username must be 3-64 characters and contain only letters, numbers, underscores, or dashes' });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'password must be at least 8 characters' });
-  }
-  if (password.length > MAX_AUTH_PASSWORD_LENGTH) {
-    return res.status(400).json({ error: `password must be ${MAX_AUTH_PASSWORD_LENGTH} characters or fewer` });
-  }
-  if (confirmPassword && confirmPassword !== password) {
-    return res.status(400).json({ error: 'password confirmation does not match' });
-  }
-  if (!verifySetupToken(setupToken, cfg)) {
-    return res.status(401).json({ error: 'invalid setup token' });
-  }
-
-  cfg.adminUser = username;
-  cfg.adminPasswordSalt = crypto.randomBytes(16).toString('hex');
-  cfg.adminPasswordHash = hashPassword(password, cfg.adminPasswordSalt);
-  cfg.authSecret = crypto.randomBytes(32).toString('hex');
-  cfg.setupTokenHash = '';
-  saveConfig(cfg);
-
-  const sessionToken = issueSessionToken(cfg, username);
-  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req, cfg));
-  res.json({ ok: true });
-});
-
-router.post('/auth/login', authRateLimiter, (req, res) => {
-  const cfg = getConfig();
-  if (!(cfg && cfg.publicServer === true)) {
-    return res.status(400).json({ error: 'login is only available in public-server mode' });
-  }
-  if (!hasAdminCredentials(cfg)) {
-    return res.status(400).json({ error: 'admin setup required' });
-  }
-
-  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
-  if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
-  if (password.length > MAX_AUTH_PASSWORD_LENGTH) {
-    return res.status(400).json({ error: `password must be ${MAX_AUTH_PASSWORD_LENGTH} characters or fewer` });
-  }
-  if (username !== cfg.adminUser || !verifyPassword(password, cfg)) {
-    return res.status(401).json({ error: 'invalid username or password' });
-  }
-
-  const sessionToken = issueSessionToken(cfg, username);
-  res.setHeader('Set-Cookie', buildSessionCookie(sessionToken, req, cfg));
-  res.json({ ok: true });
-});
-
-router.post('/auth/logout', (_req, res) => {
-  const cfg = getConfig();
-  if (hasAdminCredentials(cfg)) {
-    cfg.authSecret = crypto.randomBytes(32).toString('hex');
-    saveConfig(cfg);
-  }
-  res.setHeader('Set-Cookie', buildClearSessionCookie());
-  res.json({ ok: true });
-});
-
-router.get('/github-token', (req, res) => {
-  const cfg = getConfig();
-  const token = getGitHubToken(cfg);
-  res.json({ hasToken: !!token });
-});
-
-router.get('/onboarding', (req, res) => {
-  const cfg = getConfig();
-  const hasAgent = hasConfiguredAgent(cfg);
-  const hasToken = !!getGitHubToken(cfg);
-  res.json({
-    needsOnboarding: !isOnboardingCompleted(cfg) && !hasAgent,
-    hasAgent,
-    hasToken,
-  });
-});
-
-router.post('/onboarding/complete', (req, res) => {
-  const cfg = getConfig();
-  if (!hasConfiguredAgent(cfg)) {
-    return res.status(400).json({ error: 'Configure at least one agent before finishing onboarding.' });
-  }
-  cfg.onboardingCompleted = true;
-  saveConfig(cfg);
-  res.json({ ok: true });
-});
-
-router.post('/github-token', (req, res) => {
-  const token = req.body && req.body.GITHUB_TOKEN;
-  if (token !== undefined && typeof token !== 'string') {
-    return res.status(400).json({ error: 'GITHUB_TOKEN must be a string' });
-  }
-  const cfg = getConfig();
-  const normalized = typeof token === 'string' ? token.trim() : '';
-  if (normalized && !GITHUB_TOKEN_RE.test(normalized)) {
-    return res.status(400).json({ error: 'GitHub token contains invalid characters' });
-  }
-  if (normalized) cfg.githubToken = normalized;
-  else delete cfg.githubToken;
-  delete cfg.GITHUB_TOKEN;
-  saveConfig(cfg);
-  res.json({ ok: true });
 });
 
 router.post('/new-project/check', async (req, res) => {

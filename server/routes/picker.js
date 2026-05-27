@@ -1,5 +1,7 @@
 const express = require('express');
 const { execFile } = require('child_process');
+const os = require('os');
+const { getConfig } = require('../config');
 
 const router = express.Router();
 
@@ -59,6 +61,10 @@ function pickDirectoryWindows() {
 
 router.post('/pick-directory', async (req, res) => {
   try {
+    const cfg = getConfig();
+    if (cfg && cfg.publicServer === true) {
+      return res.json({ path: os.homedir() });
+    }
     let picked = null;
     if (process.platform === 'darwin') picked = await pickDirectoryMac();
     else if (process.platform === 'linux') picked = await pickDirectoryLinux();
