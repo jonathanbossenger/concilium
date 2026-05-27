@@ -22,14 +22,21 @@ const AUTH_BOOTSTRAP_PATHS = new Set([
   '/system/auth/logout',
 ]);
 
-function maybeRotateSetupToken(cfg) {
-  if (!(cfg && cfg.publicServer === true) || hasAdminCredentials(cfg)) return;
+function isConfiguredHostNonLoopback(cfg) {
+  const configuredHost = typeof cfg?.host === 'string' && cfg.host.trim() ? cfg.host.trim().toLowerCase() : '127.0.0.1';
+  return !isLoopbackAddress(configuredHost) && configuredHost !== 'localhost';
+}
+
+function maybeIssueSetupToken(cfg, { rotateExisting = false } = {}) {
+  if (!(cfg && cfg.publicServer === true) || hasAdminCredentials(cfg)) return false;
+  if (!rotateExisting && typeof cfg.setupTokenHash === 'string' && cfg.setupTokenHash) return false;
   const setupToken = generateSetupToken();
   cfg.setupTokenHash = hashSetupToken(setupToken);
   saveConfig(cfg);
   const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
   // Format must stay in sync with bin/conciliumctl parseLatestSetupToken().
   console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
+  return true;
 }
 
 async function logsDirSize(logDir) {
@@ -52,14 +59,12 @@ async function logsDirSize(logDir) {
 function createApp() {
   ensureState();
   const initialCfg = getConfig();
-  const host = typeof initialCfg.host === 'string' && initialCfg.host.trim() ? initialCfg.host.trim() : '127.0.0.1';
-  const normalizedHost = host.toLowerCase();
-  const hostIsNonLoopback = !isLoopbackAddress(normalizedHost) && normalizedHost !== 'localhost';
+  const hostIsNonLoopback = isConfiguredHostNonLoopback(initialCfg);
   if (!initialCfg.publicServer && hostIsNonLoopback) {
     initialCfg.publicServer = true;
     saveConfig(initialCfg);
   }
-  maybeRotateSetupToken(initialCfg);
+  maybeIssueSetupToken(initialCfg, { rotateExisting: true });
 
   // Routes are required AFTER ensureState() so store.js can open the DB.
   const agentsRoute = require('./routes/agents');
@@ -80,18 +85,11 @@ function createApp() {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use((req, _res, next) => {
     const cfg = getConfig();
-    const configuredHost = typeof cfg.host === 'string' && cfg.host.trim() ? cfg.host.trim().toLowerCase() : '127.0.0.1';
-    const configuredHostIsNonLoopback = !isLoopbackAddress(configuredHost) && configuredHost !== 'localhost';
+    const configuredHostIsNonLoopback = isConfiguredHostNonLoopback(cfg);
     if (!cfg.publicServer && configuredHostIsNonLoopback && !isLocalRequest(req, cfg)) {
       cfg.publicServer = true;
-      if (!hasAdminCredentials(cfg) && (!cfg.setupTokenHash || typeof cfg.setupTokenHash !== 'string')) {
-        const setupToken = generateSetupToken();
-        cfg.setupTokenHash = hashSetupToken(setupToken);
-        const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
-        // Format must stay in sync with bin/conciliumctl parseLatestSetupToken().
-        console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
-      }
-      saveConfig(cfg);
+      const issuedToken = maybeIssueSetupToken(cfg);
+      if (!issuedToken) saveConfig(cfg);
     }
     next();
   });
