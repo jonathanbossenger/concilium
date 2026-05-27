@@ -6,7 +6,7 @@ export function enableCardDragging(cardEl, handleEl) {
   handleEl.draggable = true;
 
   handleEl.addEventListener('dragstart', (dragEvent) => {
-    const target = dragEvent.target;
+    const target = dragEvent.target instanceof Element ? dragEvent.target : dragEvent.target && dragEvent.target.parentElement;
     if (target && target.closest('button, select, input, a, .card-actions, .card-status')) {
       dragEvent.preventDefault();
       return;
