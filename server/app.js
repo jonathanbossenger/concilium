@@ -32,7 +32,6 @@ function maybeIssueSetupToken(cfg, { rotateExisting = false } = {}) {
   if (!rotateExisting && typeof cfg.setupTokenHash === 'string' && cfg.setupTokenHash) return false;
   const setupToken = generateSetupToken();
   cfg.setupTokenHash = hashSetupToken(setupToken);
-  saveConfig(cfg);
   const fingerprint = crypto.createHash('sha256').update(setupToken).digest('hex').slice(0, 12);
   // Format must stay in sync with bin/conciliumctl parseLatestSetupToken().
   console.log(`[concilium] Public-server setup token: ${setupToken} (fingerprint ${fingerprint})`);
@@ -59,12 +58,14 @@ async function logsDirSize(logDir) {
 function createApp() {
   ensureState();
   const initialCfg = getConfig();
+  let initialCfgChanged = false;
   const hostIsNonLoopback = isConfiguredHostNonLoopback(initialCfg);
   if (!initialCfg.publicServer && hostIsNonLoopback) {
     initialCfg.publicServer = true;
-    saveConfig(initialCfg);
+    initialCfgChanged = true;
   }
-  maybeIssueSetupToken(initialCfg, { rotateExisting: true });
+  if (maybeIssueSetupToken(initialCfg, { rotateExisting: true })) initialCfgChanged = true;
+  if (initialCfgChanged) saveConfig(initialCfg);
 
   // Routes are required AFTER ensureState() so store.js can open the DB.
   const agentsRoute = require('./routes/agents');
@@ -88,8 +89,8 @@ function createApp() {
     const configuredHostIsNonLoopback = isConfiguredHostNonLoopback(cfg);
     if (!cfg.publicServer && configuredHostIsNonLoopback && !isLocalRequest(req, cfg)) {
       cfg.publicServer = true;
-      const issuedToken = maybeIssueSetupToken(cfg);
-      if (!issuedToken) saveConfig(cfg);
+      maybeIssueSetupToken(cfg);
+      saveConfig(cfg);
     }
     next();
   });
