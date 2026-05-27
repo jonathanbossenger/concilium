@@ -1,5 +1,5 @@
-import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
-import { appState } from './state.js';
+import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, isLoopbackOrigin, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
+import { appState, agentsById, cards, termCards } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
 import { TerminalCard } from './terminal-card.js';
@@ -10,14 +10,6 @@ TerminalCard.prototype._openGitCheatsheet = function () { openGitCheatsheet(this
 const HISTORY_TASK_FETCH_LIMIT = 1000;
 const HISTORY_EMPTY_CELL = '—';
 
-let agentsById = new Map();
-const cards = new Set();
-const termCards = new Set();
-let draggingCardEl = null;
-let activeCardEl = null;
-
-let layoutReady = false;
-let homeDir = '';
 let authState = {
   publicServer: false,
   setupRequired: false,
@@ -82,7 +74,7 @@ async function loadHealth() {
     const response = await fetch('/api/health');
     const data = await response.json();
     $('#health').textContent = `pid ${data.pid} · up ${formatUptime(data.uptime)}`;
-    if (data.homeDir) homeDir = data.homeDir;
+    if (data.homeDir) appState.homeDir = data.homeDir;
   } catch (_) {
     $('#health').textContent = 'offline';
   }
@@ -98,10 +90,14 @@ async function loadAuthState() {
     authenticated: true,
     adminUser: '',
   }));
+  appState.publicServer = authState.publicServer === true;
+  appState.canUsePreferredEditor = !appState.publicServer && isLoopbackOrigin();
+  refreshPreferredEditorButtons();
   return authState;
 }
 
 function toTildePath(path) {
+  const homeDir = appState.homeDir;
   if (homeDir && (path === homeDir || path.startsWith(homeDir + '/'))) {
     return '~' + path.slice(homeDir.length);
   }
@@ -112,23 +108,6 @@ function issueHasCopilotAssigned(item) {
   if (!item || !Array.isArray(item.assignees)) return false;
   return item.assignees.some((assignee) => typeof assignee === 'string'
     && COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
-}
-
-function fillAgentSelect(select, currentValue) {
-  select.replaceChildren();
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = '— select agent —';
-  placeholder.disabled = true;
-  placeholder.selected = !currentValue;
-  select.appendChild(placeholder);
-  for (const agent of agentsById.values()) {
-    const option = document.createElement('option');
-    option.value = agent.id;
-    option.textContent = agent.name + (agent.interactive ? ' · interactive' : '');
-    if (currentValue === agent.id) option.selected = true;
-    select.appendChild(option);
-  }
 }
 
 function cardInsertTarget(main, clientX, clientY) {
@@ -300,6 +279,7 @@ appState.addTerminalCard = addTerminalCard;
 appState.addGitHubCard = addGitHubCard;
 appState.saveLayout = () => saveLayout();
 appState.openNewIssueDialog = (repoUrl, cb) => openNewIssueDialog(repoUrl, cb);
+appState.browseDirectory = browseDirectory;
 
 // --- session persistence ---------------------------------------------------
 
@@ -888,6 +868,7 @@ async function loadDirectoryBrowserPath(pathValue) {
 
 function toServerBrowseRelativePath(pathValue) {
   const raw = (pathValue || '').trim();
+  const homeDir = appState.homeDir;
   if (!raw || raw === '~') return '';
   if (raw.startsWith('~/')) return raw.slice(2);
   if (homeDir && (raw === homeDir || raw.startsWith(homeDir + '/'))) {
