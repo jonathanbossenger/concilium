@@ -1,9 +1,14 @@
-import { $, formatBytes, isTypingContext, isPrimaryModifierPressed, showConfirmDialog, showErrorToast } from './utils.js';
+import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
 import { appState } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';
 import { TerminalCard } from './terminal-card.js';
 import { openGitCheatsheet, getGitCheatsheetTargetCard, clearGitCheatsheetTargetCard } from './git-cheatsheet.js';
+
+// Wire up the git cheatsheet opener slot used by TerminalCard instances.
+TerminalCard.prototype._openGitCheatsheet = function () { openGitCheatsheet(this); };
+const HISTORY_TASK_FETCH_LIMIT = 1000;
+const HISTORY_EMPTY_CELL = '—';
 
 let agentsById = new Map();
 const cards = new Set();
@@ -21,12 +26,10 @@ let authState = {
   adminUser: '',
 };
 let authPromptInFlight = false;
-const IS_MAC = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 const COPILOT_ISSUE_ASSIGNEE_LOGINS = new Set(['copilot', 'copilot-swe-agent[bot]']);
 const NEW_GITHUB_REPO_URL = 'https://github.com/new';
 const GITHUB_BTN_LABEL_BROWSE = 'Browse GitHub issues and pull requests';
 const GITHUB_BTN_LABEL_CREATE = 'Create GitHub repository';
-const RESTORE_RESUME_RETRY_DELAY_MS = 500;
 const COPILOT_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7.998 15.035c-4.562 0-7.873-2.914-7.998-3.749V9.338c.085-.628.677-1.686 1.588-2.065.013-.07.024-.143.036-.218.029-.183.06-.384.126-.612-.201-.508-.254-1.084-.254-1.656 0-.87.128-1.769.693-2.484.579-.733 1.494-1.124 2.724-1.261 1.206-.134 2.262.034 2.944.765.05.053.096.108.139.165.044-.057.094-.112.143-.165.682-.731 1.738-.899 2.944-.765 1.23.137 2.145.528 2.724 1.261.566.715.693 1.614.693 2.484 0 .572-.053 1.148-.254 1.656.066.228.098.429.126.612.012.076.024.148.037.218.924.385 1.522 1.471 1.591 2.095v1.872c0 .766-3.351 3.795-8.002 3.795Zm0-1.485c2.28 0 4.584-1.11 5.002-1.433V7.862l-.023-.116c-.49.21-1.075.291-1.727.291-1.146 0-2.059-.327-2.71-.991A3.222 3.222 0 0 1 8 6.303a3.24 3.24 0 0 1-.544.743c-.65.664-1.563.991-2.71.991-.652 0-1.236-.081-1.727-.291l-.023.116v4.255c.419.323 2.722 1.433 5.002 1.433ZM6.762 2.83c-.193-.206-.637-.413-1.682-.297-1.019.113-1.479.404-1.713.7-.247.312-.369.789-.369 1.554 0 .793.129 1.171.308 1.371.162.181.519.379 1.442.379.853 0 1.339-.235 1.638-.54.315-.322.527-.827.617-1.553.117-.935-.037-1.395-.241-1.614Zm4.155-.297c-1.044-.116-1.488.091-1.681.297-.204.219-.359.679-.242 1.614.091.726.303 1.231.618 1.553.299.305.784.54 1.638.54.922 0 1.28-.198 1.442-.379.179-.2.308-.578.308-1.371 0-.765-.123-1.242-.37-1.554-.233-.296-.693-.587-1.713-.7Z"/><path d="M6.25 9.037a.75.75 0 0 1 .75.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 .75-.75Zm4.25.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 1.5 0Z"/></svg>';
 const COPILOT_ASSIGNED_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0l4.5-4.5Z"/></svg>';
 const MERGE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.27a2.751 2.751 0 1 1-1.5 0V5.607a2.751 2.751 0 1 1 1.95-.453ZM4.25 13.5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM4.25 5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>';
@@ -74,25 +77,6 @@ function currentTermTheme() {
   };
 }
 
-function formatUptime(seconds) {
-  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
-  const units = [
-    ['month', 30 * 24 * 60 * 60],
-    ['week', 7 * 24 * 60 * 60],
-    ['day', 24 * 60 * 60],
-    ['hour', 60 * 60],
-    ['minute', 60],
-    ['second', 1],
-  ];
-  for (const [label, size] of units) {
-    if (totalSeconds >= size) {
-      const value = Math.floor(totalSeconds / size);
-      return `${value} ${label}${value === 1 ? '' : 's'}`;
-    }
-  }
-  return '0 seconds';
-}
-
 async function loadHealth() {
   try {
     const response = await fetch('/api/health');
@@ -128,13 +112,6 @@ function issueHasCopilotAssigned(item) {
   if (!item || !Array.isArray(item.assignees)) return false;
   return item.assignees.some((assignee) => typeof assignee === 'string'
     && COPILOT_ISSUE_ASSIGNEE_LOGINS.has(assignee.toLowerCase()));
-}
-
-async function loadAgents() {
-  const response = await fetch('/api/agents');
-  const agents = await response.json();
-  agentsById = new Map(agents.map((agent) => [agent.id, agent]));
-  for (const card of cards) card.refreshAgentSelect();
 }
 
 function fillAgentSelect(select, currentValue) {
@@ -255,270 +232,6 @@ function handleKeyboardShortcut(keyboardEvent) {
   if (keyCode === 'KeyS') { triggerHeaderAction(keyboardEvent, '#open-settings'); return; }
   if (keyCode === 'KeyT') { triggerHeaderAction(keyboardEvent, '#theme-toggle'); return; }
   if (keyCode === 'Slash') { keyboardEvent.preventDefault(); openShortcutsDialog(); }
-}
-
-async function loadHealth() {
-  try {
-    const response = await fetch('/api/health');
-    const data = await response.json();
-    if (!response.ok) {
-      const error = data.error || 'failed';
-      this.setStatus(error, 'err');
-      return { ok: false, error };
-    }
-
-    this.taskIds.add(data.task_id);
-    this.lastTaskId = data.task_id;
-    saveLayout();
-    this.attach(data.task_id);
-    // Push our current dimensions to the freshly spawned PTY.
-    this.fitAndResize();
-    return { ok: true };
-  }
-
-  attach(taskId, taskHint = null) {
-    this.currentTaskId = taskId;
-    // A new source supersedes any previous recovery state — onopen for the new
-    // source must not overwrite the status that attach() is about to set.
-    this._reconnecting = false;
-    // When restoring a finished task, don't pretend it is still running.
-    // taskHint is the task row passed in by restoreLayout (already fetched);
-    // null means a freshly-launched task, which is always live.
-    const isLive = !taskHint || taskHint.status === 'running';
-    this.setStatus(isLive ? 'task running…' : 'task restoring…', isLive ? 'running' : undefined);
-    this.setRunning(isLive);
-
-    // Include ?since= when we already have a lastEventId (SQLite row id) so
-    // the server skips events the terminal has already rendered (avoids
-    // duplicate output on manual reconnect after the EventSource was recreated).
-    const streamUrl = this.lastEventId !== null
-      ? `/api/stream/${taskId}?since=${this.lastEventId}`
-      : `/api/stream/${taskId}`;
-    const eventSource = new EventSource(streamUrl);
-    this.currentSource = eventSource;
-
-    // Restore running status when the EventSource (re)opens successfully.
-    // Only do this when recovering from an onerror — on the initial connect
-    // attach() has already set the correct status above.
-    eventSource.onopen = () => {
-      if (this.currentTaskId === taskId && this._reconnecting) {
-        this._reconnecting = false;
-        this.setStatus('task running…', 'running');
-      }
-    };
-
-    eventSource.addEventListener('output', (messageEvent) => {
-      let outputEvent;
-      try { outputEvent = JSON.parse(messageEvent.data); } catch (_) { return; }
-      // Skip stdin events: the PTY echoes user input back as stdout, so
-      // rendering stdin would double-print every keystroke.
-      if (outputEvent.stream === 'stdin') return;
-      // Track the latest row id so we can resume from here if the stream is
-      // interrupted and the EventSource needs to be recreated (?since=).
-      if (outputEvent.id) this.lastEventId = outputEvent.id;
-      this.term.write(outputEvent.data);
-    });
-    eventSource.addEventListener('end', (messageEvent) => {
-      let exitInfo = {};
-      try { exitInfo = JSON.parse(messageEvent.data); } catch (_) {}
-      const exitLine = `\r\n\x1b[2m[exit ${exitInfo.exitCode ?? '?'}${exitInfo.signal ? ' ' + exitInfo.signal : ''}]\x1b[0m\r\n`;
-      this.term.write(exitLine);
-      this.setStatus(`task ${exitInfo.status || 'ended'}`, exitInfo.status === 'done' ? 'ok' : 'err');
-      this.setRunning(false);
-      eventSource.close();
-      if (this.currentSource === eventSource) this.currentSource = null;
-      this.currentTaskId = null;
-    });
-    eventSource.onerror = () => {
-      const capturedTaskId = this.currentTaskId;
-      if (!capturedTaskId) { this.setRunning(false); return; }
-      // Show reconnecting status but do NOT close the EventSource — the browser
-      // will automatically retry (sending Last-Event-ID so the server skips
-      // already-delivered events). This handles the common case of a laptop
-      // sleeping/locking which causes ERR_NETWORK_IO_SUSPENDED.
-      this._reconnecting = true;
-      this.setStatus('task reconnecting…', 'warn');
-      // Guard against multiple in-flight checks during extended backoff retries.
-      if (this._errorCheckPending) return;
-      this._errorCheckPending = true;
-      // Re-fetch to check whether the task still exists. Close only on 404.
-      fetch(`/api/tasks/${capturedTaskId}`).then((checkResponse) => {
-        this._errorCheckPending = false;
-        if (this.currentTaskId !== capturedTaskId) return; // superseded
-        if (!checkResponse.ok) {
-          // Task is gone — nothing to reconnect to.
-          eventSource.close();
-          if (this.currentSource === eventSource) this.currentSource = null;
-          this.setStatus('task lost connection', 'err');
-          this.currentTaskId = null;
-          this.setRunning(false);
-        }
-        // Task still alive — EventSource will reconnect on its own.
-      }).catch(() => {
-        this._errorCheckPending = false;
-        // fetch also failed — network is down; EventSource will keep retrying.
-        if (this.currentTaskId !== capturedTaskId) return; // superseded
-        this.setStatus('task reconnecting…', 'warn');
-      });
-    };
-  }
-
-  // Force-reconnect the stream for the current task. Called when the page
-  // becomes visible again or the network comes back online after a device
-  // sleep/lock, in case the EventSource ended up in a permanently closed state
-  // rather than auto-reconnecting.
-  async reconnectStream() {
-    if (!this.currentTaskId) return;
-    if (this.currentSource && this.currentSource.readyState !== EventSource.CLOSED) return;
-    if (this.currentSource) {
-      this.currentSource.close();
-      this.currentSource = null;
-    }
-    const taskId = this.currentTaskId;
-    let taskData;
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`);
-      if (this.currentTaskId !== taskId) return; // superseded
-      if (!response.ok) {
-        this.setStatus('task lost connection', 'err');
-        this.currentTaskId = null;
-        this.setRunning(false);
-        return;
-      }
-      taskData = await response.json();
-    } catch (_) {
-      if (this.currentTaskId !== taskId) return; // superseded
-      // Network still down — attach optimistically; onerror will keep retrying.
-      taskData = { status: 'running' };
-    }
-    if (this.currentTaskId !== taskId) return; // superseded
-    // Re-attach using the real task status. lastEventId is preserved so the new
-    // EventSource URL includes ?since= and avoids duplicate terminal output.
-    this.attach(taskId, taskData);
-  }
-
-  toggleExpand() {
-    const main = $('#cards');
-    const willExpand = !this.el.classList.contains('expanded');
-    const applyExpand = () => {
-      for (const card of cards) card.el.classList.remove('expanded');
-      for (const card of termCards) card.el.classList.remove('expanded');
-      if (willExpand) {
-        this.el.classList.add('expanded');
-        main.classList.add('has-expanded');
-        this.expandBtn.innerHTML = '&#x2921;';
-        this.expandBtn.title = 'Collapse';
-      } else {
-        main.classList.remove('has-expanded');
-        this.expandBtn.innerHTML = '&#x2922;';
-        this.expandBtn.title = 'Expand';
-      }
-    };
-    if (!document.startViewTransition) { applyExpand(); return; }
-    this.el.style.viewTransitionName = 'card-active';
-    const transition = document.startViewTransition(applyExpand);
-    transition.finished.finally(() => { this.el.style.viewTransitionName = ''; });
-  }
-
-  async browseCwd() {
-    this.cwdBrowse.disabled = true;
-    try {
-      if (authState.publicServer) {
-        const picked = await browseDirectory(this.cwd.value.trim());
-        if (picked) {
-          this.cwd.value = toTildePath(picked);
-          saveLayout();
-          this.checkGitHub();
-        }
-        return;
-      }
-      const response = await fetch('/api/system/pick-directory', { method: 'POST' });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { this.setStatus(data.error || 'browse failed', 'err'); return; }
-      if (data.path) { this.cwd.value = toTildePath(data.path); saveLayout(); this.checkGitHub(); }
-    } finally {
-      this.cwdBrowse.disabled = false;
-    }
-  }
-
-  scheduleCheckGitHub() {
-    clearTimeout(this._checkGitHubTimer);
-    this._checkGitHubTimer = setTimeout(() => this.checkGitHub(), 150);
-  }
-
-  async checkGitHub() {
-    const directoryPath = this.cwd.value.trim();
-    if (!directoryPath) { this.githubUrl = ''; this.setGitHubBtnMode('hidden'); return; }
-    // Cancel any in-flight request so stale responses don't overwrite newer results.
-    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
-    this._githubAbortCtrl = new AbortController();
-    const { signal } = this._githubAbortCtrl;
-    try {
-      const response = await fetch('/api/system/github-url', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: directoryPath }),
-        signal,
-      });
-      if (!response.ok) { this.githubUrl = ''; this.setGitHubBtnMode('create'); return; }
-      const data = await response.json().catch(() => ({}));
-      if (data.url) {
-        this.githubUrl = data.url;
-        this.setGitHubBtnMode('browse');
-      } else {
-        this.githubUrl = '';
-        this.setGitHubBtnMode('create');
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.error('[concilium] checkGitHub failed:', err);
-      this.githubUrl = '';
-      this.setGitHubBtnMode('create');
-    }
-  }
-
-  openGitHubCard() {
-    if (!this.githubUrl) {
-      window.open(NEW_GITHUB_REPO_URL, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    addGitHubCard({ afterEl: this.el, repoUrl: this.githubUrl });
-  }
-
-  async kill() {
-    if (!this.currentTaskId) return;
-    await fetch(`/api/tasks/${this.currentTaskId}/kill`, { method: 'POST' });
-  }
-
-  sendRaw(data) {
-    if (!this.currentTaskId) return;
-    fetch(`/api/tasks/${this.currentTaskId}/input`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ data }),
-    }).catch(() => {});
-  }
-
-  async close() {
-    clearTimeout(this._checkGitHubTimer);
-    if (this._githubAbortCtrl) this._githubAbortCtrl.abort();
-    if (this.currentSource) { this.currentSource.close(); this.currentSource = null; }
-    if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
-    if (this.term) { try { this.term.dispose(); } catch (_) {} this.term = null; }
-    if (this.el.classList.contains('expanded')) {
-      $('#cards').classList.remove('has-expanded');
-    }
-    const ids = [...this.taskIds];
-    this.taskIds.clear();
-    cards.delete(this);
-    clearActiveCardIfMatch(this.el);
-    this.el.remove();
-    saveLayout();
-    // Fire-and-forget deletes; server will kill any still-running tasks first.
-    await Promise.all(ids.map((id) =>
-      fetch(`/api/tasks/${id}`, { method: 'DELETE' }).catch(() => {})
-    ));
-  }
 }
 
 async function loadAgents() {
