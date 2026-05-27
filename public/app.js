@@ -1,4 +1,4 @@
-import { $, IS_MAC, formatUptime, formatBytes, isTypingContext, isPrimaryModifierPressed, isLoopbackOrigin, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
+import { $, IS_MAC, formatUptime, isTypingContext, isPrimaryModifierPressed, isLoopbackOrigin, RESTORE_RESUME_RETRY_DELAY_MS, LAYOUT_SAVE_DEBOUNCE_MS, SAVED_FLASH_DURATION_MS, HEALTH_POLL_INTERVAL_MS, showConfirmDialog, showErrorToast } from './utils.js';
 import { appState, agentsById, cards, termCards } from './state.js';
 import { Card } from './card.js';
 import { GitHubCard } from './github-card.js';

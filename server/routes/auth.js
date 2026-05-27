@@ -49,8 +49,8 @@ router.post('/auth/setup', authRateLimiter, (req, res) => {
   }
 
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
-  const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : '';
   const setupToken = typeof req.body?.setupToken === 'string' ? req.body.setupToken : '';
   if (!ADMIN_USERNAME_PATTERN.test(username)) {
     return res.status(400).json({ error: 'username must be 3-64 characters and contain only letters, numbers, underscores, or dashes' });
@@ -90,7 +90,7 @@ router.post('/auth/login', authRateLimiter, (req, res) => {
   }
 
   const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
-  const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
   if (password.length > MAX_AUTH_PASSWORD_LENGTH) {
     return res.status(400).json({ error: `password must be ${MAX_AUTH_PASSWORD_LENGTH} characters or fewer` });
