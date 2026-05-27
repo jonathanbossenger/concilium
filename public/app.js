@@ -406,6 +406,7 @@ const onboardingBackBtn = $('#onboarding-back');
 const onboardingNextBtn = $('#onboarding-next');
 const onboardingFinishBtn = $('#onboarding-finish');
 const agentForm = $('#agent-form');
+const preferredEditorSection = $('#preferred-editor-section');
 const preferredEditorHeading = $('#preferred-editor-heading');
 const preferredEditorForm = $('#preferred-editor-form');
 const preferredEditorCommandInput = $('#preferred-editor-command');
@@ -738,6 +739,7 @@ async function loadGitHubToken() {
 }
 
 async function loadPreferredEditorSettings() {
+  preferredEditorSection.hidden = !appState.canUsePreferredEditor;
   preferredEditorHeading.hidden = !appState.canUsePreferredEditor;
   preferredEditorForm.hidden = !appState.canUsePreferredEditor;
   preferredEditorCommandInput.value = '';
@@ -748,6 +750,7 @@ async function loadPreferredEditorSettings() {
   if (!response.ok) { refreshPreferredEditorButtons(); return; }
   const data = await response.json().catch(() => ({}));
   if (data.available !== true) {
+    preferredEditorSection.hidden = true;
     preferredEditorHeading.hidden = true;
     preferredEditorForm.hidden = true;
     appState.canUsePreferredEditor = false;
