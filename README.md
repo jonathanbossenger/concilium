@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/jonathanbossenger/concilium)
+
 # Concilium
 
 Concilium is a locally-installed dashboard for running multiple CLI AI coding
