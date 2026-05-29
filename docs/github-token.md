@@ -3,10 +3,16 @@
 Concilium can make authenticated GitHub API calls if you provide a personal
 access token.
 
-A token is **required for the New Project flow** (⧉ in the header) because
-repository creation uses authenticated `POST /user/repos`. For read-only
-features (for example the active-agent indicator on PR rows), a token is
-optional, but unauthenticated requests are rate-limited more aggressively.
+A token is **required** for:
+
+- the **New Project** flow (⧉ in the header), because repository creation uses
+  authenticated `POST /user/repos`
+- GitHub browser card write actions such as merge, close, mark ready, create
+  issue, and assign to Copilot
+
+For read-only GitHub browsing, a token is optional, but unauthenticated
+requests are rate-limited more aggressively and linked issue/pull-request
+cross-references are unavailable.
 
 ## Token type
 
@@ -25,12 +31,13 @@ Create a classic token at <https://github.com/settings/tokens/new>.
 1. **Note** — any memorable name (for example `Concilium`).
 2. **Expiration** — set an expiry date.
 3. **Select scopes** — tick **`repo`** (full private repo scope). This covers
-   current Concilium features, including reading issues/PRs and creating repos.
-   If you only need public repos, **`public_repo`** is enough. Optionally add
-   **`delete_repo`** if you want Concilium to delete an orphaned repo when a
-   post-create `git clone` fails (rare — usually only flaky networks); without
-   it, the orphaned repo stays on GitHub and the UI shows its URL so you can
-   delete it manually.
+   current Concilium features, including reading issues/PRs, creating repos,
+   creating issues, merging/closing pull requests, and closing or assigning
+   issues. If you only need public repos, **`public_repo`** is enough.
+   Optionally add **`delete_repo`** if you want Concilium to delete an orphaned
+   repo when a post-create `git clone` fails (rare — usually only flaky
+   networks); without it, the orphaned repo stays on GitHub and the UI shows
+   its URL so you can delete it manually.
 4. Click **Generate token**, copy it, then paste it into **Settings (⚙) → GitHub token**.
    Submit an empty value to clear it.
 
