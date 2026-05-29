@@ -163,6 +163,11 @@ If you just want to get going quickly:
 4. Open <http://127.0.0.1:7878>, complete the onboarding wizard, then create a
    session and run your first prompt.
 
+For public-server deployments, follow
+[docs/server-mode-setup.md](docs/server-mode-setup.md) instead of the local
+loopback quickstart. That flow uses the server log's setup token to create the
+first admin user, then requires sign-in before you reach the dashboard.
+
 For full install, setup, and usage details, see the documentation section below.
 
 ## Concilium user documentation

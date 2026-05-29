@@ -86,6 +86,19 @@ the dashboard opens an onboarding wizard instead of the main UI. The wizard
 walks through adding a first agent, optionally adding more, and optionally
 saving a GitHub token, then drops you into the dashboard.
 
+### Public server mode
+
+When Concilium is running in public-server mode on a non-loopback host, remote
+clients do not go straight into the local onboarding flow. Instead:
+
+- if no admin user exists yet, the first screen is a setup form that requires
+  the setup token printed by `conciliumctl start` / `conciliumctl logs`
+- after the first admin is created, users must sign in before they can access
+  the same dashboard, session cards, terminals, and GitHub browser cards
+
+See [server-mode-setup.md](server-mode-setup.md) for the full remote-deployment
+setup steps.
+
 Terminal cards (opened with **>_** from a session card) include a small git
 icon in the header that opens a **Git commands reference** dialog. Clicking
 any command in the reference pastes it into the terminal.
