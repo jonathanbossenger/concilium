@@ -10,6 +10,9 @@
 Use **>_** to open a side terminal in the same working directory. If you save a
 preferred editor in Settings, use **`</>`** to open that directory in your editor
 from the local loopback UI.
+Use **⧉** to clone a session card and start it immediately, and **⤢** to expand a
+single card for focused work. You can also drag cards by their headers to
+reorder them on the grid.
 
 ## Running Concilium
 
