@@ -160,7 +160,8 @@ If you just want to get going quickly:
    ```bash
    conciliumctl start
    ```
-4. Open <http://127.0.0.1:7878>, create a session, and run your first prompt.
+4. Open <http://127.0.0.1:7878>, complete the onboarding wizard, then create a
+   session and run your first prompt.
 
 For full install, setup, and usage details, see the documentation section below.
 
