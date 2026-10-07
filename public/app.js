@@ -1334,6 +1334,105 @@ newProjectForm.addEventListener('submit', async (submitEvent) => {
   }
 });
 
+// --- existing project -------------------------------------------------------
+
+const existingProjectDlg = $('#existing-project-dialog');
+const existingProjectForm = $('#existing-project-form');
+const existingProjectModeInput = $('#existing-project-mode');
+const existingProjectUrlRow = $('#existing-project-url-row');
+const existingProjectUrlInput = $('#existing-project-url');
+const existingProjectTargetLabel = $('#existing-project-target-label');
+const existingProjectTargetInput = $('#existing-project-target');
+const existingProjectBrowseBtn = $('#existing-project-target-browse');
+const existingProjectOpenBtn = $('#existing-project-open');
+const existingProjectStatusEl = $('#existing-project-status');
+
+function setExistingProjectStatus(text, cls = '') {
+  existingProjectStatusEl.textContent = text;
+  existingProjectStatusEl.classList.remove('ok', 'warn', 'err');
+  if (cls) existingProjectStatusEl.classList.add(cls);
+}
+
+function existingProjectIsGitHub() { return existingProjectModeInput.value === 'github'; }
+
+function updateExistingProjectState() {
+  const github = existingProjectIsGitHub();
+  existingProjectUrlRow.hidden = !github;
+  existingProjectTargetLabel.textContent = github ? 'Target location' : 'Project directory';
+  existingProjectOpenBtn.textContent = github ? 'Clone & Open' : 'Open';
+  existingProjectOpenBtn.disabled = !(existingProjectTargetInput.value.trim() && (!github || existingProjectUrlInput.value.trim()));
+}
+
+function toHomeRelative(p) {
+  const h = appState.homeDir;
+  return h && (p === h || p.startsWith(h + '/')) ? '~' + p.slice(h.length) : p;
+}
+
+async function browseExistingProjectTarget() {
+  existingProjectBrowseBtn.disabled = true;
+  try {
+    if (authState.publicServer) {
+      const picked = await browseDirectory(existingProjectTargetInput.value.trim());
+      if (picked) existingProjectTargetInput.value = toTildePath(picked);
+    } else {
+      const response = await fetch('/api/system/pick-directory', { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setExistingProjectStatus(data.error || 'browse failed', 'err'); return; }
+      if (data.path) existingProjectTargetInput.value = toHomeRelative(data.path);
+    }
+    updateExistingProjectState();
+  } finally {
+    existingProjectBrowseBtn.disabled = false;
+  }
+}
+
+$('#existing-project-btn').addEventListener('click', () => {
+  existingProjectForm.reset();
+  if (appState.homeDir) existingProjectTargetInput.value = '~';
+  setExistingProjectStatus('Enter a GitHub repository URL and target location.');
+  updateExistingProjectState();
+  existingProjectDlg.showModal();
+  existingProjectUrlInput.focus();
+});
+$('#close-existing-project').addEventListener('click', () => existingProjectDlg.close());
+existingProjectModeInput.addEventListener('change', () => {
+  if (!existingProjectIsGitHub()) existingProjectTargetInput.value = '';
+  else if (appState.homeDir && !existingProjectTargetInput.value) existingProjectTargetInput.value = '~';
+  setExistingProjectStatus(existingProjectIsGitHub()
+    ? 'Enter a GitHub repository URL and target location.'
+    : 'Select a local project directory.');
+  updateExistingProjectState();
+});
+existingProjectUrlInput.addEventListener('input', updateExistingProjectState);
+existingProjectTargetInput.addEventListener('input', updateExistingProjectState);
+existingProjectBrowseBtn.addEventListener('click', browseExistingProjectTarget);
+existingProjectForm.addEventListener('submit', async (submitEvent) => {
+  submitEvent.preventDefault();
+  if (existingProjectOpenBtn.disabled) return;
+  if (!existingProjectIsGitHub()) {
+    addCard({ cwd: existingProjectTargetInput.value.trim() });
+    existingProjectDlg.close();
+    return;
+  }
+  existingProjectOpenBtn.disabled = true;
+  setExistingProjectStatus('Cloning repository via SSH\u2026');
+  try {
+    const response = await fetch('/api/system/existing-project', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: existingProjectUrlInput.value.trim(), targetPath: existingProjectTargetInput.value.trim() }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setExistingProjectStatus(data.error || 'Clone failed.', 'err'); return; }
+    addCard({ cwd: toHomeRelative(typeof data.cwd === 'string' ? data.cwd : '') });
+    existingProjectDlg.close();
+  } catch (err) {
+    console.error('[concilium] existing project clone failed:', err);
+    setExistingProjectStatus('Clone failed.', 'err');
+  } finally {
+    updateExistingProjectState();
+  }
+});
+
 $('#close-new-issue').addEventListener('click', () => newIssueDlg.close());
 newIssueDlg.addEventListener('close', () => { newIssueRepoUrl = ''; newIssueCreatedHook = null; });
 newIssueTitleInput.addEventListener('input', updateNewIssueCreateState);

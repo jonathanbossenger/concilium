@@ -1164,3 +1164,5 @@ dialog#git-cheatsheet-dialog::backdrop { background: var(--backdrop); }
   opacity: 1;
   transform: translateY(0);
 }
+
+#existing-project-url-row[hidden] { display: none; }
