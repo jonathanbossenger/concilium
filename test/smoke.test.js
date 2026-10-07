@@ -433,3 +433,23 @@ test('github-items includes warning: null with a github token', async (t) => {
     linkedIssues: [12],
   }]);
 });
+
+test('existing-project validates url and target before cloning', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'concilium-existing-'));
+  const { api } = bootstrap(home);
+
+  await withLocalHost(api.post('/api/system/existing-project').send({ targetPath: home })).expect(400);
+  await withLocalHost(api.post('/api/system/existing-project').send({
+    url: 'https://example.com/octo/demo', targetPath: home,
+  })).expect(400);
+  await withLocalHost(api.post('/api/system/existing-project').send({
+    url: 'https://github.com/octo/demo',
+  })).expect(400);
+  await withLocalHost(api.post('/api/system/existing-project').send({
+    url: 'git@github.com:octo/demo.git', targetPath: path.join(home, 'missing'),
+  })).expect(400);
+  fs.mkdirSync(path.join(home, 'demo'));
+  await withLocalHost(api.post('/api/system/existing-project').send({
+    url: 'https://github.com/octo/demo', targetPath: home,
+  })).expect(409);
+});

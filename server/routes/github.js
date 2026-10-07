@@ -843,4 +843,78 @@ router.post('/new-project', newProjectRateLimiter, async (req, res) => {
   }
 });
 
+router.post('/existing-project', newProjectRateLimiter, async (req, res) => {
+  try {
+    const rawUrl = req.body && req.body.url;
+    if (!rawUrl || typeof rawUrl !== 'string') return res.status(400).json({ error: 'url is required' });
+    const trimmedUrl = rawUrl.trim();
+    if (trimmedUrl.length > MAX_GITHUB_URL_LENGTH) {
+      return res.status(400).json({ error: `url must be ${MAX_GITHUB_URL_LENGTH} characters or fewer` });
+    }
+    const normalizedUrl = parseGitHubUrl(trimmedUrl);
+    const repo = parseGitHubRepo(normalizedUrl);
+    if (!repo) return res.status(400).json({ error: 'url must be a GitHub repository URL' });
+
+    const rawTarget = req.body && req.body.targetPath;
+    if (!rawTarget || typeof rawTarget !== 'string') {
+      return res.status(400).json({ error: 'targetPath is required' });
+    }
+
+    const cfg = getConfig();
+    const homeRealPath = await fs.promises.realpath(os.homedir());
+    const targetPath = cfg.publicServer === true
+      ? resolvePathWithinHome(rawTarget, homeRealPath)
+      : path.resolve(expandTilde(rawTarget.trim()));
+    if (!targetPath) return res.status(400).json({ error: 'targetPath is required' });
+
+    let stats;
+    try {
+      stats = await fs.promises.stat(targetPath);
+    } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+        return res.status(400).json({ error: 'target location does not exist' });
+      }
+      throw err;
+    }
+    if (!stats.isDirectory()) return res.status(400).json({ error: 'target location must be a directory' });
+    try {
+      await fs.promises.access(targetPath, fs.constants.W_OK);
+    } catch (err) {
+      if (err && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'target location is not writable' });
+      }
+      throw err;
+    }
+
+    const repoName = repo.repo.replace(/\.git$/, '');
+    const destination = path.join(targetPath, repoName);
+    if (!repoName || !isWithinBaseDirectory(targetPath, destination) || destination === targetPath) {
+      return res.status(400).json({ error: 'invalid target project directory' });
+    }
+    try {
+      await fs.promises.stat(destination);
+      return res.status(409).json({ error: 'target project directory already exists' });
+    } catch (err) {
+      if (!err || err.code !== 'ENOENT') throw err;
+    }
+
+    const sshUrl = `git@github.com:${repo.owner}/${repoName}.git`;
+    try {
+      await execFileWithOutput('git', ['clone', '--', sshUrl, destination], { timeout: GIT_CLONE_TIMEOUT_MS });
+    } catch (err) {
+      try {
+        await fs.promises.rm(destination, { recursive: true, force: true });
+      } catch (cleanupErr) {
+        console.error('[concilium] partial clone cleanup failed:', cleanupErr && cleanupErr.message ? cleanupErr.message : cleanupErr);
+      }
+      const stderr = err && typeof err.stderr === 'string' ? err.stderr.trim() : '';
+      return res.status(502).json({ error: `git clone failed: ${stderr || err.message || 'unknown error'}` });
+    }
+
+    res.json({ ok: true, cwd: destination, repoUrl: normalizedUrl });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || String(err) });
+  }
+});
+
 module.exports = router;
