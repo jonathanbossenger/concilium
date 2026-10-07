@@ -23,11 +23,59 @@ function pickDirectoryMac() {
   });
 }
 
-function pickDirectoryLinux() {
+const GUI_ENV_KEYS = [
+  'DISPLAY',
+  'WAYLAND_DISPLAY',
+  'XAUTHORITY',
+  'XDG_RUNTIME_DIR',
+  'DBUS_SESSION_BUS_ADDRESS',
+];
+
+// A daemon started at boot (systemd --user / autostart) can run before the
+// graphical session exists, so its inherited env has no DISPLAY/WAYLAND_DISPLAY.
+// Resolve the current GUI session env at pick time instead of trusting the
+// stale one captured at process start.
+function readSystemdUserEnv() {
+  return new Promise((resolve) => {
+    execFile('systemctl', ['--user', 'show-environment'], (err, stdout) => {
+      const out = {};
+      if (err) return resolve(out);
+      for (const line of stdout.toString().split('\n')) {
+        const i = line.indexOf('=');
+        if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
+      }
+      resolve(out);
+    });
+  });
+}
+
+async function resolveLinuxGuiEnv() {
+  const env = { ...process.env };
+  const sysEnv = await readSystemdUserEnv();
+  // Prefer the live session values: the ones inherited at start may be stale
+  // (e.g. an X display number from before the reboot).
+  for (const key of GUI_ENV_KEYS) {
+    if (sysEnv[key]) env[key] = sysEnv[key];
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  if (!env.XDG_RUNTIME_DIR && uid !== null) env.XDG_RUNTIME_DIR = `/run/user/${uid}`;
+  if (!env.DBUS_SESSION_BUS_ADDRESS && env.XDG_RUNTIME_DIR) {
+    env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${env.XDG_RUNTIME_DIR}/bus`;
+  }
+  if (!env.WAYLAND_DISPLAY && !env.DISPLAY) {
+    // Last resort: guess the conventional first display.
+    env.DISPLAY = ':0';
+  }
+  return env;
+}
+
+async function pickDirectoryLinux() {
+  const env = await resolveLinuxGuiEnv();
   return new Promise((resolve, reject) => {
     execFile(
       'zenity',
       ['--file-selection', '--directory', '--title=Select working directory'],
+      { env },
       (err, stdout) => {
         if (err) {
           // zenity exits 1 on cancel — treat as "no selection".
